@@ -1,0 +1,9 @@
+build/
+dist/
+plugin.so
+plugin.dylib
+plugin.dll
+test/run
+test/*.o
+*.vcvplugin
+.DS_Store

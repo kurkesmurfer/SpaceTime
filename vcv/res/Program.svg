@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="91.44mm" height="128.5mm" viewBox="0 0 91.44 128.5">
+  <!-- SpaceTime PROGRAM — 18HP, Bone design system (Collide family).
+       Background art only: all text labels are drawn via NanoVG
+       (PanelText / paneltheme.hpp) because NanoSVG ignores <text>. -->
+  <rect width="91.44" height="128.5" fill="#1d1713"/>
+
+  <!-- screws -->
+  <circle cx="1.870" cy="1.870" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="89.570" cy="1.870" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="1.870" cy="126.630" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="89.570" cy="126.630" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+
+  <!-- red accent rules flanking the subtitle -->
+  <rect x="4" y="10.05" width="16" height="0.27" fill="#c13c36" opacity="0.7"/>
+  <rect x="71.4" y="10.05" width="16" height="0.27" fill="#c13c36" opacity="0.7"/>
+
+  <!-- stage count display window -->
+  <rect x="8" y="16.5" width="12" height="7" rx="0.8" fill="#0d0a08" stroke="#4a3f34" stroke-width="0.3"/>
+
+  <!-- section divider rules -->
+  <rect x="6" y="28.0" width="16" height="0.27" fill="#362c24"/>
+  <rect x="52" y="28.0" width="16" height="0.27" fill="#362c24"/>
+  <rect x="6" y="66.0" width="14" height="0.27" fill="#362c24"/>
+  <rect x="58" y="66.0" width="14" height="0.27" fill="#362c24"/>
+  <rect x="6" y="87.9" width="16" height="0.27" fill="#362c24"/>
+  <rect x="56" y="87.9" width="16" height="0.27" fill="#362c24"/>
+  <rect x="6" y="104.2" width="10" height="0.27" fill="#362c24"/>
+  <rect x="62" y="104.2" width="10" height="0.27" fill="#362c24"/>
+
+  <!-- POLY OUT box -->
+  <rect x="78" y="102" width="12" height="17.5" rx="1.5" fill="#262019" stroke="#6e6150" stroke-width="0.25"/>
+</svg>

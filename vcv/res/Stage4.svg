@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="50.8mm" height="128.5mm" viewBox="0 0 50.8 128.5">
+  <!-- SpaceTime STAGE4 — 10HP, Bone design system (Collide family).
+       Background art only: labels drawn via NanoVG (paneltheme.hpp). -->
+  <rect width="50.8" height="128.5" fill="#1d1713"/>
+
+  <!-- screws -->
+  <circle cx="1.870" cy="1.870" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="48.930" cy="1.870" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="1.870" cy="126.630" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+  <circle cx="48.930" cy="126.630" r="0.735" fill="#6e6150" stroke="#362c24" stroke-width="0.3"/>
+
+  <!-- red accent rules flanking the subtitle -->
+  <rect x="4" y="10.05" width="10" height="0.27" fill="#c13c36" opacity="0.7"/>
+  <rect x="36.8" y="10.05" width="10" height="0.27" fill="#c13c36" opacity="0.7"/>
+
+  <!-- section divider rules -->
+  <rect x="4" y="15.7" width="7" height="0.27" fill="#362c24"/>
+  <rect x="39.8" y="15.7" width="7" height="0.27" fill="#362c24"/>
+  <rect x="4" y="63.9" width="8.5" height="0.27" fill="#362c24"/>
+  <rect x="38.3" y="63.9" width="8.5" height="0.27" fill="#362c24"/>
+
+  <!-- LED cluster backplates, one per stage column -->
+  <rect x="4.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
+  <rect x="15.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
+  <rect x="26.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
+  <rect x="37.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
+</svg>

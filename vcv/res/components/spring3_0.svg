@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5mm" height="12mm" viewBox="0 0 5 12">
+  <!-- SpaceTime SpringSwitch3 frame 0 (0=down 1=center 2=up) -->
+  <rect x="1.4" y="0.6" width="2.2" height="10.8" rx="1.1" fill="#0d0a08" stroke="#4a3f34" stroke-width="0.25"/>
+  <rect x="0.2" y="7.6" width="4.6" height="3.2" rx="0.9" fill="#b7ac9d" stroke="#4a3f34" stroke-width="0.3"/>
+  <rect x="0.9" y="8.95" width="3.2" height="0.5" rx="0.25" fill="#7b6f62"/>
+</svg>

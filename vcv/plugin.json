@@ -1,0 +1,48 @@
+{
+  "slug": "SpaceTime",
+  "name": "SpaceTime",
+  "version": "2.0.0",
+  "license": "GPL-3.0-or-later",
+  "brand": "Towering Inferno",
+  "author": "Peet Siemensz",
+  "authorEmail": "peet@siemensz.com",
+  "description": "Multi-playhead arbitrary function generator family inspired by the Buchla 248 MARF",
+  "pluginUrl": "",
+  "authorUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "Program",
+      "name": "PROGRAM",
+      "description": "Programming section anchor: stage select, voltage/time/mode modifiers, presets, external inputs, poly out",
+      "tags": ["Sequencer", "Polyphonic"]
+    },
+    {
+      "slug": "Stage4",
+      "name": "STAGE4",
+      "description": "4-stage slider block, chainable right of PROGRAM",
+      "tags": ["Sequencer", "Expander"]
+    },
+    {
+      "slug": "Head",
+      "name": "HEAD",
+      "description": "Function Generator playhead, chainable left of PROGRAM",
+      "tags": ["Function generator", "Sequencer", "Expander"]
+    },
+    {
+      "slug": "Midi",
+      "name": "MIDI",
+      "description": "MIDI controller expander mockup for incoming clock, transport, preset and CC control",
+      "tags": ["MIDI", "Expander"]
+    },
+    {
+      "slug": "WidgetTest",
+      "name": "WidgetTest",
+      "description": "Development widget exerciser — not for patches",
+      "tags": ["Utility"],
+      "hidden": true
+    }
+  ]
+}
