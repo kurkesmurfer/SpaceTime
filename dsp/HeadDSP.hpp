@@ -183,6 +183,7 @@ public:
 		allTimer_ = eocTimer_ = 0.f;
 		retrig1_ = retrig2_ = 0.f;
 		prevContStage_ = -1;
+		pulseRetrigEnabled_ = true;
 	}
 
 	// One control tick of dt seconds.
@@ -194,6 +195,9 @@ public:
 		eocTimer_ = std::fmax(0.f, eocTimer_ - dt);
 		retrig1_ = std::fmax(0.f, retrig1_ - dt);
 		retrig2_ = std::fmax(0.f, retrig2_ - dt);
+		pulseRetrigEnabled_ = g.pulseRetrig;
+		if (!pulseRetrigEnabled_)
+			retrig1_ = retrig2_ = 0.f;
 
 		if (table.count == 0) {
 			out.runState = RUN_STOPPED;
@@ -245,7 +249,8 @@ public:
 			enableWait_ = false;
 			stoppedOnStop_ = false;
 		}
-		if (startEdge) {
+		// Stop is authoritative if Start and Stop arrive in the same DSP tick.
+		if (startEdge && !stopEdge) {
 			if (stoppedOnStop_) {
 				advance(table, cfg.loopMode, cfg.direction);  // release the stop stage
 				stoppedOnStop_ = false;
@@ -336,6 +341,7 @@ private:
 	float allTimer_, eocTimer_;
 	float retrig1_, retrig2_;
 	int prevContStage_;
+	bool pulseRetrigEnabled_;
 
 	static bool edge(bool now, bool& prev) {
 		bool e = now && !prev;
@@ -397,6 +403,8 @@ private:
 	// (incl. re-entering the same stage on a wrap), drop the gate briefly so
 	// each stage produces a fresh edge (hardware-verified behaviour).
 	void pulseRetrig(const StageTable& t, int oldStage, int newStage) {
+		if (!pulseRetrigEnabled_)
+			return;
 		if (oldStage < 0 || oldStage >= t.count || newStage < 0 || newStage >= t.count)
 			return;
 		if (t.program[oldStage].pulse1() && t.program[newStage].pulse1())

@@ -86,6 +86,54 @@ inline void addIoLabel(ModuleWidget* w, float xmm, float ymm, const std::string&
 inline void addMicroLabel(ModuleWidget* w, float xmm, float ymm, const std::string& text) {
 	addLabel(w, xmm, ymm, text, fontLabelSemiBold(), 5.5f, colorLabelCV(), 0.4f);
 }
+
+// Scalable Towering Inferno corner mark, derived from the Collide panel set.
+// The source layers already contain the letter coloring and flame gradients.
+struct CornerMark : Widget {
+	int lettersImage = -1;
+	int flameImage = -1;
+
+	CornerMark(float panelWidthMm, float panelHeightMm, float scale = 1.f,
+	           float rightMarginMm = 3.21f, float bottomMarginMm = 9.36f) {
+		float w = 8.56f * scale;
+		float h = 29.41f * scale;
+		box.pos = mm2px(Vec(panelWidthMm - rightMarginMm - w,
+		                       panelHeightMm - bottomMarginMm - h));
+		box.size = mm2px(Vec(w, h));
+	}
+
+	void draw(const DrawArgs& args) override {
+		if (lettersImage <= 0)
+			lettersImage = nvgCreateImage(args.vg,
+				asset::plugin(pluginInstance, "res/corner-mark-letters.png").c_str(), 0);
+		if (flameImage <= 0)
+			flameImage = nvgCreateImage(args.vg,
+				asset::plugin(pluginInstance, "res/corner-mark-flame.png").c_str(), 0);
+		if (lettersImage <= 0 || flameImage <= 0)
+			return;
+
+		float w = box.size.x;
+		float h = box.size.y;
+		nvgSave(args.vg);
+		nvgGlobalAlpha(args.vg, 0.65f);
+		nvgTranslate(args.vg, w, h);
+		nvgScale(args.vg, 1.35f, 1.f);
+		nvgTranslate(args.vg, -w, -h);
+
+		NVGpaint letters = nvgImagePattern(args.vg, 0, 0, w, h, 0, lettersImage, 1.f);
+		nvgBeginPath(args.vg);
+		nvgRect(args.vg, 0, 0, w, h);
+		nvgFillPaint(args.vg, letters);
+		nvgFill(args.vg);
+
+		NVGpaint flame = nvgImagePattern(args.vg, 0, 0, w, h, 0, flameImage, 1.f);
+		nvgBeginPath(args.vg);
+		nvgRect(args.vg, 0, 0, w, h);
+		nvgFillPaint(args.vg, flame);
+		nvgFill(args.vg);
+		nvgRestore(args.vg);
+	}
+};
 #endif
 
 } // namespace spacetime

@@ -1,6 +1,6 @@
 # SpaceTime — Multi-Playhead Arbitrary Function Generator for VCV Rack
 
-**Plugin name:** SpaceTime (Towering Inferno) — modules PROGRAM / STAGE4 / HEAD; slugs `SpaceTime` / `Program` / `Stage4` / `Head`
+**Plugin name:** SpaceTime (Towering Inferno) — modules PROGRAM / STAGE4 / HEAD / MIDI / GLUE; slugs `SpaceTime` / `Program` / `Stage4` / `Head` / `Midi` / `GlueLeft` / `GlueRight`
 **Created:** 2026-07-06
 **Updated:** 2026-07-11 (rev 6 — MIDI addendum added for WP8b, draft at design gate; rev 5 renamed to SpaceTime; rev 4 aligned with 248t manual)
 **Status:** Concept / Specification
@@ -28,6 +28,13 @@ Per-stage programming state lives in the STAGE4 blocks (clean persistence; seque
 | HEAD | 8–10 | One Function Generator: transport, addressing, direction, clock, outputs. Chainable ×8 left of PROGRAM |
 
 Rack placement: `[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, contiguous; a gap or foreign module terminates the chain. Stage index runs left-to-right across blocks; head index 1 adjacent to PROGRAM, increasing leftward. Reordering STAGE4 blocks reorders the sequence (blocks own their stage data).
+
+VCV layout extension: a numbered GLUE RIGHT / GLUE LEFT pair may replace one
+physical adjacency. The pair transports SpaceTime's bidirectional typed
+expander protocol without adding a logical head or stage hop. It automatically
+detects HEAD-side and STAGE-side cuts; mismatched, duplicate or unpaired links
+invalidate the chain. GLUE is VCV-only and cannot bridge third-party expander
+protocols.
 
 ---
 
@@ -73,13 +80,17 @@ Blocks hold all per-stage state (slider params + program word) → JSON persiste
 
 ### Output pulses (per selected stage)
 Pulse 1 and Pulse 2: 3-pos momentaries, up adds the pulse to the stage (LED on), down removes.
+PROGRAM's global **Pulse Retrig** switch defaults On: adjacent stages carrying
+the same pulse are separated by the hardware-compatible short low notch. Off
+merges adjacent pulse stages into a continuous gate for non-retriggering use.
 
 ### Presets, scale and key
 Row of 12 buttons + Load/Save (hardware: non-volatile; VCV: 12 internal slots on top of rack save). Alternate function: Key (C..B) and Scale (Major/Minor/Chromatic) for quantized stages. Auto-tune/ART: not applicable in VCV — dropped.
 
 ### External inputs and globals
 - **EXT A–D:** vertical CV input jack column (±10 V tolerated).
-- **Globals (context menu):** slew level fractions, slope law (linear/exp), ADDRESS scaling mode, default time endpoints.
+- **Globals:** panel Pulse Retrig switch; context-menu slew level fractions,
+  slope law (linear/exp), ADDRESS scaling mode, default time endpoints.
 - **Stage-count display:** N = 4 × block count; warns on broken chain.
 - **POLY OUT:** polyphonic output carrying all heads' voltage CVs as channels 1..N.
 
@@ -102,7 +113,7 @@ Row of 12 buttons + Load/Save (hardware: non-volatile; VCV: 12 internal slots on
 | Control | Function |
 |---------|----------|
 | Direction | Forward / Reverse / Pendulum / Random / Brownian |
-| Clock source | INT (per-stage times) / EXT clock with /16..×16 div/mult |
+| Clock source | INT (per-stage times) / EXT CLK input / MIDI clock / virtual clock, with /16..×16 div/mult on clocked sources |
 | Time CV | Attenuverted CV scaling all stage times for this head |
 | Loop | Obey First/Last flags / full chain / one-shot |
 
@@ -196,7 +207,7 @@ Channel model for Part I:
 | # | Mapping | Decision |
 |---|---------|----------|
 | I-1 | **Program Change 1–12 → preset recall** | **Accepted.** Direct fit for the 12 slots; PC 1–12 on the module's control channel. |
-| I-2 | **MIDI clock → head clock** | **Accepted.** Broadcast gains appended `midiClock/Start/Stop` counters; each HEAD gets a context-menu clock source: Internal / External jack / MIDI (with the existing DIV/MULT applying to 24 PPQN). Starving MIDI clock shows the same yellow HOLD. |
+| I-2 | **MIDI clock → head clock** | **Accepted.** Broadcast gains appended `midiClock/Start/Stop` counters; each HEAD has a panel clock-source switch: Internal / External CLK input / MIDI clock / Virtual clock (with the existing DIV/MULT applying to external, MIDI and virtual clocks). Starving MIDI clock shows the same yellow HOLD. |
 | I-3 | **Start/Stop/Continue → head transport** | **Accepted with per-head opt-in.** Start/Stop/Continue are channel-less System Real-Time messages: Start/Continue = start pulse, Stop = stop pulse for heads that opt in. |
 | I-4 | **CC → stage sliders** | **Accepted.** Fixed map on the PROGRAM/stage channel: CC 0..31 = voltage sliders 1..32, CC 32..63 = time sliders 1..32 (7-bit, scaled onto 0-10 V / 0-1). Slider takeover applies, same as preset recall. DROID is programmable, so a clean fixed map beats MIDI-learn. |
 | I-5 | **CC → selected-stage modifiers** | **Implemented.** PROGRAM-section controls target the currently selected stage and honour the bulk window. |
@@ -234,9 +245,14 @@ The PROGRAM/stage channel uses fixed CC numbers (no base CC offset):
 - CC 86: Time source internal/external.
 - CC 87: Pulse 1.
 - CC 88: Pulse 2.
+- CC 89: Key C..B (12 equal bins over 0..127).
+- CC 90: Scale Major / Minor / Chromatic (3 equal bins over 0..127).
+- CC 91: Pulse Retrig Off / On (value <64 / >=64).
 
-Optional later additions, if needed: CC 89 = key (0..11), CC 90 = scale
-(0 = Major, 1 = Minor, 2 = Chromatic). Presets stay on Program Change 1..12.
+Key and Scale set the current PROGRAM state directly; they do not simulate the
+panel's modal KEY/SCALE button sequence. Pulse Retrig moves the visible PROGRAM
+switch. Key/Scale MIDI changes show one second of non-modal feedback on their
+mode and selection LEDs. Presets stay on Program Change 1..12.
 
 For gesture CCs, value >=64 means up/add/set/press; value <64 means
 down/remove/unset where that makes sense. Radio controls such as Limited
@@ -316,10 +332,22 @@ sampling is not the bottleneck; the throttle is.
 3. ~~I-6 vs I-7 default (strobe vs transpose/off) for note input — still to choose.~~ **Removed from Part I; notes are outgoing MIDI unless revived later.**
 4. ~~Part I per-head MIDI clock/transport opt-in UI~~ **Implemented.**
 5. Part I HEAD CC layout: **accepted as head channels 0..7 reusing fixed CC 0..13, including virtual clock.**
-6. Part I PROGRAM/stage CC layout: **accepted as fixed CC 0..88 on configurable PROGRAM/stage channel, default channel 15.**
+6. Part I PROGRAM/stage CC layout: **accepted as fixed CC 0..91 on configurable PROGRAM/stage channel, default channel 15.**
 7. Part II note gate/timing: **implemented first pass** as per-lane P1/P2/ALL; P1/P2 note-off on gate fall, ALL fixed 30 ms.
 8. NRPN out confirmed needed for your gear (which parameter resolution)? **Still postponed.**
 9. MIDI clock OUT: wanted at all, or trigger-notes lane only? **Still postponed.**
+
+---
+
+## MetaModule feasibility (2026-07-13)
+
+MetaModule Plugin SDK 2.2 does not support Rack expander communication. The
+PROGRAM / STAGE4 / MIDI / HEAD chain therefore cannot be ported as separate
+cooperating modules. The target is a fused 16-stage/two-head module sharing the
+Rack-free DSP and MIDI core. MIDI input/output, JSON state, context menus and
+dynamic text displays are available through the Rack adaptor; panel graphics
+must be baked PNG. See `METAMODULE_IMPLEMENTATION_PLAN.md` for the implementation
+work packages and the panel/slug review gates.
 
 ---
 
@@ -344,7 +372,7 @@ sampling is not the bottleneck; the throttle is.
 - [ ] Define `program[32]` bitfield layout in `dsp/StageTable.hpp`
 - [ ] Custom momentary 3-pos switch widget
 - [ ] Panel sketches via vcv-panel-design skill: PROGRAM first (switch-group layout), then STAGE4 column
-- [ ] Check MetaModule SDK expander support
+- [x] Check MetaModule SDK expander support — absent in SDK 2.2; use fused module
 - [ ] Cross-check against DROID-248t-Patch concept (direction set, time modifier)
 
 ---

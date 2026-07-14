@@ -23,6 +23,8 @@ actual 248t (with thanks to the demonstrations of Stazma the Junglechrist).
 | **PROGRAM** | 18 | The programming section: stage select, voltage/time/mode modifiers, pulses, Clear, presets + key/scale, external inputs A–D, poly output |
 | **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 8 blocks (4–32 stages) |
 | **HEAD** | 10 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
+| **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM |
+| **GLUE RIGHT / LEFT** | 2 each | Paired SpaceTime-only virtual expander bridge for separating chain fragments |
 
 Placement: `[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, all touching — a gap or
 foreign module ends the chain on that side. Stage numbering runs
@@ -31,6 +33,23 @@ upward leftward. Blocks own their stage data: reordering STAGE4 modules
 reorders the sequence, and a block carries its programming with it.
 PROGRAM's display shows the stage count and appends `!` when the chain looks
 broken.
+
+### GLUE virtual bridge
+
+GLUE RIGHT sits immediately to the right of the left fragment; its matching
+GLUE LEFT sits immediately to the left of the right fragment. Select the same
+link number (1–8) from both context menus. The pair automatically recognizes a
+HEAD-side or STAGE-side cut and is transparent to numbering:
+
+`HEAD HEAD [GLUE RIGHT] ... [GLUE LEFT] MIDI PROGRAM STAGE4`
+
+`HEAD MIDI PROGRAM STAGE4 [GLUE RIGHT] ... [GLUE LEFT] STAGE4 STAGE4`
+
+The link LED is green when paired and compatible, red while waiting, duplicated
+or mismatched, and off without a valid SpaceTime neighbour. The readout shows
+the link number plus `H` for HEAD-side, `S` for STAGE-side, or `-` when no side
+is detected. GLUE only transports SpaceTime's internal expander protocol inside
+one VCV Rack patch; it is not a generic bridge for third-party expanders.
 
 ## Quick start
 
@@ -75,8 +94,10 @@ stage's **time slider selects the input**, and an unpatched input gives the
 fastest value of the range.
 
 **Pulses.** PULSE 1/2 add a gate on the stage, high for the stage's full
-interval. Consecutive flagged stages retrigger — each stage produces a fresh
-edge (hardware-verified).
+interval. PROGRAM's PULSE RETRIG switch defaults to a short low-going notch
+between consecutive flagged stages, so each stage produces a fresh edge
+(hardware-verified). Switch it off to merge adjacent pulse stages into one
+continuous gate.
 
 **Presets, key, scale.** LOAD or SAVE, then a numbered button (12 slots,
 stored in the patch). KEY then 1–12 selects C…B; SCALE then 10/11/12 selects
@@ -119,7 +140,7 @@ stopped, the address sweeps the stages, red status), latches center for
 stage once).
 
 **Playback extensions (not on the hardware):** DIRECTION
-(forward/reverse/pendulum/random/brownian), clock source INT/EXT with
+(forward/reverse/pendulum/random/brownian), clock source INT/EXT/MIDI/VIRTUAL with
 /16…×16 DIV/MULT, TIME CV attenuverter scaling all stage times, and a loop
 lever: ALL (full chain) / F-L (obey First/Last) / 1-SHOT.
 
@@ -165,6 +186,6 @@ unit-tested, golden traces in `test/golden/`); the manual integration patch
 suite is documented in `test/patches/README.md`.
 
 Library submission checklist: slugs frozen (`SpaceTime`/`Program`/`Stage4`/
-`Head`); version major 2; WidgetTest hidden; licence and font notices
+`Head`/`Midi`/`GlueLeft`/`GlueRight`); version major 2; WidgetTest hidden; licence and font notices
 included; panel screenshots at 100 % zoom; `pluginUrl`/`sourceUrl` to be
 filled in once the repository is published.

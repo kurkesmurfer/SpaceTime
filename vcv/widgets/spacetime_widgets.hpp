@@ -4,6 +4,7 @@
 // Contents:
 //   kHeadColors[8]       — family head colour set (single source of truth)
 //   SpringSwitch3        — three-position spring-return momentary
+//   Switch4              — four-position latching selector
 //   addStageLedCluster() — edit-select LED + 8 colour-coded head dots
 //   addLimitedBank()     — five-button limited-range octave bank
 //   addPresetRow()       — 12 slot buttons + Load/Save/Key/Scale mode row
@@ -110,6 +111,32 @@ struct LatchSpringSwitch3 : SpringSwitch3 {
 		if (pq && pq->getValue() < 0.5f)
 			pq->setValue(latched);  // spring back from down only
 	}
+};
+
+// ---- Switch4 ---------------------------------------------------------------
+// Four-position latching selector with the same visual family as SpringSwitch3.
+// Clicking the top quarter selects 3, then 2, 1, bottom quarter selects 0.
+struct Switch4 : app::SvgSwitch {
+	Switch4() {
+		momentary = false;
+		addFrame(Svg::load(asset::plugin(pluginInstance, "res/components/switch4_0.svg")));
+		addFrame(Svg::load(asset::plugin(pluginInstance, "res/components/switch4_1.svg")));
+		addFrame(Svg::load(asset::plugin(pluginInstance, "res/components/switch4_2.svg")));
+		addFrame(Svg::load(asset::plugin(pluginInstance, "res/components/switch4_3.svg")));
+	}
+
+	void onButton(const ButtonEvent& e) override {
+		ParamWidget::onButton(e);
+		if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+			engine::ParamQuantity* pq = getParamQuantity();
+			if (pq) {
+				int zone = clamp((int)std::floor(e.pos.y / box.size.y * 4.f), 0, 3);
+				pq->setValue((float)(3 - zone));
+			}
+		}
+	}
+
+	void onDragStart(const DragStartEvent& e) override {}
 };
 
 // ---- Stage LED cluster -----------------------------------------------------

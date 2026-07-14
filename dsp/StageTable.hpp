@@ -231,9 +231,16 @@ struct EditOp {
 	uint8_t stageIndex;  // 0..count-1
 	Field field;
 	float value;  // program fields: non-negative integral; sliders: V / normalized
+	uint8_t flags;
 
-	EditOp() : stageIndex(0), field(Field::Quantize), value(0.f) {}
-	EditOp(uint8_t s, Field f, float v) : stageIndex(s), field(f), value(v) {}
+	EditOp() : stageIndex(0), field(Field::Quantize), value(0.f), flags(0) {}
+	EditOp(uint8_t s, Field f, float v, uint8_t opFlags = 0)
+		: stageIndex(s), field(f), value(v), flags(opFlags) {}
+};
+
+enum EditOpFlags : uint8_t {
+	EDIT_OP_NONE = 0,
+	EDIT_OP_MOVE_SLIDER = 1u << 0
 };
 
 // Apply an edit op. Returns false (table unmodified) if the stage index is

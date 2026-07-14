@@ -96,7 +96,6 @@ struct Head : Module {
 	uint32_t lastHeadCcSeq[spacetime::kMidiHeadControls] = {};
 	float midiClockTimer = 0.f, virtualClockTimer = 0.f;
 	float midiStartTimer = 0.f, midiStopTimer = 0.f, midiAdvanceTimer = 0.f;
-	int midiClockSource = -1;  // -1 = panel switch, 0 internal, 1 jack, 2 MIDI clock, 3 virtual clock
 	bool followMidiTransport = false;
 	int lastMidiCc = -1;
 	float lastMidiCcValue = 0.f;
@@ -119,8 +118,8 @@ struct Head : Module {
 			 "Continuous (address sweeps stages)"});
 		configSwitch(DIRECTION_PARAM, 0.f, 4.f, 0.f, "Direction",
 			{"Forward", "Reverse", "Pendulum", "Random", "Brownian"});
-		configSwitch(CLK_SOURCE_PARAM, 0.f, 1.f, 0.f, "Clock source",
-			{"Internal (per-stage times)", "External (CLK input)"});
+		configSwitch(CLK_SOURCE_PARAM, 0.f, 3.f, 0.f, "Clock source",
+			{"Internal (per-stage times)", "External CLK input", "MIDI clock", "Virtual clock"});
 		configSwitch(CLK_DIV_PARAM, 0.f, 8.f, 4.f, "Clock div/mult",
 			{"/16", "/8", "/4", "/2", "×1", "×2", "×4", "×8", "×16"});
 		configParam(TIMECV_PARAM, -1.f, 1.f, 0.f, "Time CV amount", "%", 0.f, 100.f);
@@ -186,7 +185,7 @@ struct Head : Module {
 				break;
 			}
 			case 8: params[DIRECTION_PARAM].setValue((float)clamp((int)std::round(value), 0, 4)); break;
-			case 9: midiClockSource = clamp((int)std::round(value), 0, 3); break;
+			case 9: params[CLK_SOURCE_PARAM].setValue((float)clamp((int)std::round(value), 0, 3)); break;
 			case 10: params[CLK_DIV_PARAM].setValue((float)clamp((int)std::round(value), 0, 8)); break;
 			case 11: params[TIMECV_PARAM].setValue(clamp(value, -1.f, 1.f)); break;
 			case 12: params[LOOP_PARAM].setValue((float)clamp((int)std::round(value), 0, 2)); break;
@@ -202,7 +201,7 @@ struct Head : Module {
 			float dt = args.sampleTime * divider.getDivision();
 
 			// ---- Broadcast in (anchor side)
-			bool rightIsChain = modelIs(rightExpander.module, modelHead, modelProgram) ||
+			bool rightIsChain = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
 				modelIs(rightExpander.module, modelMidi);
 			const AnchorToHeadsMsg* bm = rightPort.consume(rightExpander);
 			chainOk = rightIsChain && bm->valid;
@@ -219,16 +218,19 @@ struct Head : Module {
 					lastMidiClockSeq = bm->midiClockSeq;
 					midiClockTimer = 1e-3f;
 				}
-				if (followMidiTransport && bm->midiStartSeq != lastMidiStartSeq) {
-					lastMidiStartSeq = bm->midiStartSeq;
+				bool midiStartChanged = bm->midiStartSeq != lastMidiStartSeq;
+				bool midiContinueChanged = bm->midiContinueSeq != lastMidiContinueSeq;
+				bool midiStopChanged = bm->midiStopSeq != lastMidiStopSeq;
+				lastMidiStartSeq = bm->midiStartSeq;
+				lastMidiContinueSeq = bm->midiContinueSeq;
+				lastMidiStopSeq = bm->midiStopSeq;
+				if (followMidiTransport && midiStartChanged) {
 					midiStartTimer = 1e-3f;
 				}
-				if (followMidiTransport && bm->midiContinueSeq != lastMidiContinueSeq) {
-					lastMidiContinueSeq = bm->midiContinueSeq;
+				if (followMidiTransport && midiContinueChanged) {
 					midiStartTimer = 1e-3f;
 				}
-				if (followMidiTransport && bm->midiStopSeq != lastMidiStopSeq) {
-					lastMidiStopSeq = bm->midiStopSeq;
+				if (followMidiTransport && midiStopChanged) {
 					midiStopTimer = 1e-3f;
 				}
 				if (headId >= 0 && headId < kMaxHeads) {
@@ -261,9 +263,7 @@ struct Head : Module {
 			cfg.addrExt = params[ADDR_SOURCE_PARAM].getValue() > 0.5f;
 			cfg.addressKnob = params[ADDRESS_PARAM].getValue();
 			cfg.direction = (uint8_t)std::round(params[DIRECTION_PARAM].getValue());
-			int clockSource = midiClockSource;
-			if (clockSource < 0)
-				clockSource = params[CLK_SOURCE_PARAM].getValue() > 0.5f ? 1 : 0;
+			int clockSource = clamp((int)std::round(params[CLK_SOURCE_PARAM].getValue()), 0, 3);
 			cfg.clkExt = clockSource != 0;
 			cfg.clkDivIndex = (uint8_t)std::round(params[CLK_DIV_PARAM].getValue());
 			cfg.timeCvAmount = params[TIMECV_PARAM].getValue();
@@ -276,9 +276,9 @@ struct Head : Module {
 				strobePending = true;
 
 			// ---- Relay the broadcast to the next head (leftward)
-			if (modelIs(leftExpander.module, modelHead)) {
+			if (modelIs(leftExpander.module, modelHead, modelGlueLeft)) {
 				AnchorToHeadsMsg* lo = leftNeighborProducer<AnchorToHeadsMsg>(
-					this, modelHead);
+					this, modelHead, modelGlueLeft);
 				if (lo) {
 					if (chainOk)
 						headRelayLeft(*bm, *lo);
@@ -289,11 +289,11 @@ struct Head : Module {
 			}
 
 			// ---- Status out (rightward, merged with further heads)
-			bool rightTakesStatus = modelIs(rightExpander.module, modelHead, modelProgram) ||
+			bool rightTakesStatus = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
 				modelIs(rightExpander.module, modelMidi);
 			if (rightTakesStatus) {
 				HeadsToAnchorMsg* ro = rightNeighborProducer<HeadsToAnchorMsg>(
-					this, modelHead, modelProgram);
+					this, modelHead, modelProgram, modelGlueRight);
 				if (!ro)
 					ro = rightNeighborProducer<HeadsToAnchorMsg>(this, modelMidi);
 				if (ro) {
@@ -309,7 +309,7 @@ struct Head : Module {
 						table.program[out.currentStage].quantize()) ? 1 : 0;
 					own.phase = out.phase;
 					own.cv = out.cv;
-					bool leftIsHead = modelIs(leftExpander.module, modelHead);
+					bool leftIsHead = modelIs(leftExpander.module, modelHead, modelGlueLeft);
 					const HeadsToAnchorMsg* lm = leftPort.consume(leftExpander);
 					headRelayRight(own, (leftIsHead && lm->valid) ? lm : NULL, *ro);
 					flipRightNeighbor(this);
@@ -338,9 +338,7 @@ struct Head : Module {
 		sig.strobe = std::fmax(inputs[STROBE_INPUT].getVoltage(),
 			strobePending ? 10.f : 0.f);
 		sig.addressCv = inputs[ADDRESS_INPUT].getVoltage();
-		int clockSource = midiClockSource;
-		if (clockSource < 0)
-			clockSource = params[CLK_SOURCE_PARAM].getValue() > 0.5f ? 1 : 0;
+		int clockSource = clamp((int)std::round(params[CLK_SOURCE_PARAM].getValue()), 0, 3);
 		if (clockSource == 2)
 			sig.extClock = pulseGate(midiClockTimer, args.sampleTime);
 		else if (clockSource == 3)
@@ -365,15 +363,20 @@ struct Head : Module {
 
 	json_t* dataToJson() override {
 		json_t* root = json_object();
-		json_object_set_new(root, "midiClockSource", json_integer(midiClockSource));
 		json_object_set_new(root, "followMidiTransport", json_boolean(followMidiTransport));
 		return root;
 	}
 
 	void dataFromJson(json_t* root) override {
 		json_t* j;
-		if ((j = json_object_get(root, "midiClockSource")))
-			midiClockSource = clamp((int)json_integer_value(j), -1, 3);
+		// Migration from the earlier MIDI Part I context-menu override. Values
+		// 0..3 become the visible four-way clock-source switch; -1 meant "use
+		// panel switch", so the saved Rack param already carries the setting.
+		if ((j = json_object_get(root, "midiClockSource"))) {
+			int src = clamp((int)json_integer_value(j), -1, 3);
+			if (src >= 0)
+				params[CLK_SOURCE_PARAM].setValue((float)src);
+		}
 		if ((j = json_object_get(root, "followMidiTransport")))
 			followMidiTransport = json_boolean_value(j);
 	}
@@ -412,8 +415,10 @@ struct HeadWidget : ModuleWidget {
 
 		spacetime::addSectionHeading(this, CX, 56.2f, "PLAYBACK");
 		spacetime::addCvLabel(this, DIR_X, 71.8f, "DIRECTION");
-		spacetime::addMicroLabel(this, CLKSRC_X, 59.8f, "EXT");
-		spacetime::addMicroLabel(this, CLKSRC_X, 69.4f, "INT");
+		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 58.6f, "VCLK");
+		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 62.0f, "MIDI");
+		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 65.4f, "CV");
+		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 68.8f, "INT");
 		spacetime::addCvLabel(this, CLKDIV_X, 71.8f, "DIV / MULT");
 		spacetime::addCvLabel(this, TIMECV_X, 83.8f, "TIME CV");
 		spacetime::addMicroLabel(this, LOOP_X + 5.6f, 74.f, "ALL");
@@ -452,7 +457,7 @@ struct HeadWidget : ModuleWidget {
 		addParam(createParamCentered<spacetime::LatchSpringSwitch3>(mm2px(Vec(ADDR_MODE_X, ADDR_Y)), module, Head::ADDR_MODE_PARAM));
 
 		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(DIR_X, PLAY_Y)), module, Head::DIRECTION_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(CLKSRC_X, PLAY_Y)), module, Head::CLK_SOURCE_PARAM));
+		addParam(createParamCentered<spacetime::Switch4>(mm2px(Vec(CLKSRC_X, PLAY_Y)), module, Head::CLK_SOURCE_PARAM));
 		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(CLKDIV_X, PLAY_Y)), module, Head::CLK_DIV_PARAM));
 		addParam(createParamCentered<Trimpot>(mm2px(Vec(TIMECV_X, PLAY2_Y)), module, Head::TIMECV_PARAM));
 		addParam(createParamCentered<CKSSThree>(mm2px(Vec(LOOP_X, PLAY2_Y)), module, Head::LOOP_PARAM));
@@ -483,10 +488,6 @@ struct HeadWidget : ModuleWidget {
 			menu->addChild(createMenuLabel("Settings appear when module exists"));
 			return;
 		}
-		menu->addChild(createIndexSubmenuItem("MIDI clock source",
-			{"Panel switch", "Internal", "External jack", "MIDI clock", "Virtual clock"},
-			[=]() { return module->midiClockSource + 1; },
-			[=](int i) { module->midiClockSource = i - 1; }));
 		menu->addChild(createMenuLabel(string::f("Head id/channel: %d",
 			module->headId + 1)));
 		menu->addChild(createMenuLabel(string::f("Last head CC: %d value %.3f seq %u",

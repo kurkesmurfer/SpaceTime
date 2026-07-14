@@ -670,6 +670,40 @@ TEST_CASE("consecutive flagged stages retrigger P1 (hardware-verified)") {
 	CHECK(edges2 >= 3);  // one edge per pass of the looping single stage
 }
 
+TEST_CASE("pulse retrigger compatibility can be disabled globally") {
+	Sim s;
+	s.makeTable(4);
+	s.cfg.loopMode = LOOP_FULL_CHAIN;
+	s.g.pulseRetrig = false;
+	s.t.program[1].setPulse1(true);
+	s.t.program[2].setPulse1(true);
+	s.pulseStart();
+
+	REQUIRE(s.runToStage(1));
+	bool fellBetweenFlaggedStages = false;
+	while (s.out.currentStage == 1) {
+		s.step();
+		if (!s.out.pulse1)
+			fellBetweenFlaggedStages = true;
+	}
+	CHECK(s.out.currentStage == 2);
+	CHECK(s.out.pulse1);
+	CHECK_FALSE(fellBetweenFlaggedStages);
+}
+
+TEST_CASE("stop wins when start and stop edges coincide") {
+	Sim s;
+	s.makeTable(4);
+	s.pulseStart();
+	REQUIRE(s.dsp.isRunning());
+
+	s.in.start = 10.f;
+	s.in.stop = 10.f;
+	s.step();
+	CHECK_FALSE(s.dsp.isRunning());
+	CHECK(s.out.runState == RUN_STOPPED);
+}
+
 TEST_CASE("external clock starvation shows HOLD, recovers on edges") {
 	Sim s;
 	s.makeTable(4);

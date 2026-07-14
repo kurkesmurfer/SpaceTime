@@ -1,8 +1,8 @@
 # SpaceTime — Implementation Plan (work packages for the agent street)
 
 **Created:** 2026-07-06
-**Updated:** 2026-07-11 (WP8b MIDI control inserted after WP8; WP0–WP7 complete, panel gate passed)
-**Status:** Plan / awaiting spec contemplation (see `marf-vcv.md` rev 4)
+**Updated:** 2026-07-13 (WP9 feasibility completed; MetaModule implementation plan added)
+**Status:** WP0–WP8b implemented and under manual verification; WP9 complete
 **Spec:** `marf-vcv.md` (this directory) — rev 4 is the contract; open questions Q1–Q4 are hardware-observable and non-blocking (see WP5 note)
 **Repo target:** `~/Development/SpaceTime/` — standard DSP plugin development directory:
 
@@ -178,6 +178,14 @@ separately gated after Part I. Both share the one MIDI chain module.
 
 **Scope:** Verify expander message support in the current MetaModule SDK; if absent, estimate the fused-monolith fallback (PROGRAM + 4 blocks + 2 heads in one module). Timeboxed; outcome is a written go/no-go note appended to the spec, not code.
 **Depends on:** WP0 only.
+
+**Completed 2026-07-13 — qualified GO.** MetaModule Plugin SDK 2.2 explicitly
+does not support Rack expander communication, so the VCV chain is a no-go as
+separate modules. A fused 16-stage/two-head module is feasible: Rack-style
+params/state, raw MIDI input/output, context menus and dynamic text displays are
+available. SVG/NanoVG artwork must become baked PNG. The proposed architecture,
+work packages, test matrix and decision gates are in
+`METAMODULE_IMPLEMENTATION_PLAN.md`.
 
 ---
 

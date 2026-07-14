@@ -38,6 +38,18 @@
       "tags": ["MIDI", "Expander"]
     },
     {
+      "slug": "GlueLeft",
+      "name": "GLUE LEFT",
+      "description": "SpaceTime virtual expander bridge for the right-hand chain fragment",
+      "tags": ["Expander", "Utility"]
+    },
+    {
+      "slug": "GlueRight",
+      "name": "GLUE RIGHT",
+      "description": "SpaceTime virtual expander bridge for the left-hand chain fragment",
+      "tags": ["Expander", "Utility"]
+    },
+    {
       "slug": "WidgetTest",
       "name": "WidgetTest",
       "description": "Development widget exerciser — not for patches",

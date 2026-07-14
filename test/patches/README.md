@@ -1,8 +1,9 @@
 # SpaceTime — WP7 integration patch suite
 
 Manual verification patches for the integrated plugin. Run after
-`make install` from `vcv/`. All chains must be contiguous:
-`[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`.
+`make install` from `vcv/`. Chains are normally contiguous:
+`[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`; Patch 9 covers the explicit GLUE
+exception.
 
 ## Patch 1 — MARF-equivalent (2 heads / 4 blocks)
 
@@ -103,22 +104,37 @@ transparent for head enumeration: PROGRAM still shows two heads and 8 stages.
 1. MIDI module context menu shows the Rack MIDI input device menu. The
    PROGRAM/stage channel defaults to MIDI channel 16 and can be changed;
    HEAD channels are fixed to MIDI channels 1-8.
-2. On the PROGRAM/stage channel, send CC 0..7: effective voltage values for
-   stages 1..8 update with normal takeover behaviour. The Rack slider handles
-   do not move until manually crossed. Send CC 32..39: effective time values
-   for stages 1..8 update the same way.
+2. With `Move stage sliders with CC` enabled in the MIDI context menu, send CC
+   0..7 and 32..39 on the PROGRAM/stage channel: voltage/time for stages 1..8
+   update and the Rack slider handles move. Disable the option and repeat: the
+   effective values update with normal takeover behaviour while the handles
+   stay put until manually crossed. Preset recall remains takeover-based in
+   both modes.
 3. Send Program Change 1..12 on the PROGRAM/stage channel: preset slots load.
 4. Send PROGRAM modifier CCs 64..88: selected-stage edit, bulk-arm, Clear,
-   Limited, Time range and Pulse edits behave like panel gestures.
+   Limited, Time range and Pulse edits behave like panel gestures. Send CC 89
+   across 12 values to select C..B, CC 90 across three values to select
+   Major/Minor/Chromatic, and CC 91 low/high to move PROGRAM Pulse Retrig Off/On.
+   CC 89 briefly lights KEY plus the selected note LED; CC 90 briefly lights
+   SCALE plus LED 10/11/12. Neither MIDI message arms the panel's modal mode.
+   **Passed 2026-07-13:** CC 89, 90 and 91 visual behavior confirmed in VCV.
 5. Send HEAD CCs 0..13 on MIDI channels 1 and 2: the two heads respond
-   independently. Verify virtual clock on CC 0 with each head's MIDI clock
-   source set to Virtual.
-6. Set one head's MIDI clock source to MIDI clock and send MIDI Clock: it
+   independently. Verify virtual clock on CC 0 with each head's four-way
+   clock-source switch set to Virtual.
+6. Set one head's four-way clock-source switch to MIDI clock and send MIDI Clock: it
    advances with the existing DIV/MULT control. Stop the MIDI clock and
    verify the same HOLD indication used by other missing clocks.
 7. Enable "Follow MIDI transport" on one head only. MIDI Start/Continue
    starts that head, MIDI Stop stops it, and the other head is unaffected.
-8. Remove the MIDI module and verify the original non-MIDI chain still works.
+8. With Follow disabled, send Start and Stop, then enable Follow. Neither stale
+   event is replayed. Send a fresh Start and Stop; Stop wins even if both
+   messages arrive in the same processing interval.
+9. Remove the MIDI module and verify the original non-MIDI chain still works.
+
+Pulse compatibility check: enable P1 on two adjacent stages. With PROGRAM
+PULSE RETRIG On, observe a short low notch at their boundary. With it Off,
+the P1 gate stays continuously high across the boundary. New patches default
+to On and existing patches retain the previous hardware-compatible behavior.
 
 ## Patch 7 — MIDI stress / MetaModule portability note
 
@@ -150,6 +166,37 @@ device set to an IAC bus, DAW, hardware synth, or MIDI monitor.
 6. Disable the lane. Expected: no further output; any active note is released.
 
 Later gates not covered here: 14-bit CC, NRPN, and MIDI-clock-out.
+
+## Patch 9 — GLUE virtual chain bridge
+
+Both GLUE modules default to link 1. GLUE RIGHT terminates the left fragment;
+GLUE LEFT begins the right fragment. A green LED means the pair and detected
+side agree; red means waiting, duplicate or mismatched.
+
+**Passed 2026-07-14:** paired GLUE transport tested and verified working in
+VCV Rack.
+
+1. **Stage split:** arrange
+   `HEAD MIDI PROGRAM STAGE4 GLUE-R ... GLUE-L STAGE4 STAGE4`.
+   Both readouts show `1S`, both LEDs turn green, and PROGRAM shows 12 stages
+   without `!`. Start the head and verify that positions, voltage/time values,
+   modifiers and MIDI slider CCs work across the remote blocks.
+2. Select a remote stage and make several fast PROGRAM edits. Each edit must be
+   applied once; neither missed operations nor queue drops should appear in the
+   GLUE context menus.
+3. **Head split:** arrange
+   `HEAD HEAD GLUE-R ... GLUE-L MIDI PROGRAM STAGE4`.
+   Both readouts show `1H`, PROGRAM counts both heads, head IDs retain their
+   normal nearest-first order, and transport/DISP/MIDI controls cross the link.
+4. Split between MIDI and PROGRAM:
+   `HEAD MIDI GLUE-R ... GLUE-L PROGRAM STAGE4`. MIDI remains transparent and
+   incoming/outgoing MIDI behavior is unchanged.
+5. Save and reopen the patch. Link numbers and green status return without
+   manual reconnection. Copy/paste a pair, assign it link 2 and verify both
+   pairs operate independently.
+6. Set one endpoint to a different link, duplicate one side on the same link,
+   reverse an endpoint, or remove a partner. Affected LEDs turn red and the
+   chain becomes invalid rather than connecting to the wrong fragment.
 
 ## Known WP7 interpretation notes
 

@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 1;
+static const uint32_t kChainProtocolVersion = 2;
 static const int kMidiHeadControls = 14;
 static const int kMaxMidiProgramEvents = 64;
 
@@ -37,8 +37,11 @@ struct Globals {
 	float slewFrac2;      // slew level 2: fraction of stage interval
 	uint8_t slopeLaw;     // 0 = linear, 1 = exponential
 	uint8_t addressScale; // 0 = self-normalizing 0-10 V, 1 = fixed 0.5 V/stage
+	bool pulseRetrig;     // hardware-compatible P1/P2 low notch at stage boundaries
 
-	Globals() : slewFrac1(0.25f), slewFrac2(0.5f), slopeLaw(0), addressScale(0) {}
+	Globals()
+		: slewFrac1(0.25f), slewFrac2(0.5f), slopeLaw(0), addressScale(0),
+		  pulseRetrig(true) {}
 };
 
 struct ScaleKey {
@@ -79,7 +82,10 @@ enum MidiProgramEventType {
 	MIDI_PROG_LIMITED = 6,
 	MIDI_PROG_TIME_RANGE = 7,
 	MIDI_PROG_SLIDER = 8,
-	MIDI_PROG_PRESET_LOAD = 9
+	MIDI_PROG_PRESET_LOAD = 9,
+	MIDI_PROG_SET_KEY = 10,
+	MIDI_PROG_SET_SCALE = 11,
+	MIDI_PROG_SET_PULSE_RETRIG = 12
 };
 
 struct MidiProgramEvent {
@@ -88,9 +94,10 @@ struct MidiProgramEvent {
 	uint8_t index;   // field/button/stage/slot index, depending on type
 	uint8_t value;   // raw MIDI value or small enum
 	float fvalue;    // scaled slider value when type == MIDI_PROG_SLIDER
+	uint8_t flags;   // EDIT_OP_* presentation/takeover behavior for slider events
 
 	MidiProgramEvent()
-		: seq(0), type(MIDI_PROG_NONE), index(0), value(0), fvalue(0.f) {}
+		: seq(0), type(MIDI_PROG_NONE), index(0), value(0), fvalue(0.f), flags(0) {}
 };
 
 // ---- Messages ----------------------------------------------------------------

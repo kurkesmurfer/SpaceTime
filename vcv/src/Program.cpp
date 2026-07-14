@@ -43,6 +43,7 @@ constexpr float PROW2_Y = 120.5f;
 constexpr float LOAD_X = 14.f, SAVE_X = 28.f, KEY_X = 42.f, SCALE_X = 56.f;
 constexpr float EXT_X = 84.f;
 constexpr float EXT_Y0 = 20.f, EXT_PITCH = 9.5f;
+constexpr float PULSE_RETRIG_X = 84.f, PULSE_RETRIG_Y = 73.f;
 constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 } // namespace Layout
 
@@ -69,6 +70,7 @@ struct Program : Module {
 		SAVE_PARAM,
 		KEY_PARAM,
 		SCALE_PARAM,
+		PULSE_RETRIG_PARAM,  // appended for patch compatibility
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -137,6 +139,10 @@ struct Program : Module {
 	uint8_t lastMidiValue = 0;
 	float lastMidiFValue = 0.f;
 	uint8_t lastMidiOpCount = 0;
+	float midiKeyFeedback = 0.f;
+	float midiScaleFeedback = 0.f;
+	uint8_t midiKeyFeedbackIndex = 0;
+	uint8_t midiScaleFeedbackIndex = 0;
 
 	// For the stage-count display widget.
 	int displayCount = 0;
@@ -185,6 +191,9 @@ struct Program : Module {
 		configButton(SAVE_PARAM, "Save preset (then press 1-12)");
 		configButton(KEY_PARAM, "Key select (then press 1-12)");
 		configButton(SCALE_PARAM, "Scale select (then 10=Major 11=Minor 12=Chromatic)");
+		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f,
+			"Pulse retrigger", {"Continuous across adjacent pulse stages",
+			"Hardware-compatible retrigger notch"});
 		for (int i = 0; i < 4; i++)
 			configInput(EXT_INPUTS + i, string::f("External %c", 'A' + i));
 		configOutput(POLY_OUTPUT, "Heads CV (polyphonic, channel per head)");
@@ -223,9 +232,12 @@ struct Program : Module {
 			return;
 		float dt = args.sampleTime * divider.getDivision();
 		using namespace spacetime;
+		globals.pulseRetrig = params[PULSE_RETRIG_PARAM].getValue() > 0.5f;
+		midiKeyFeedback = std::fmax(0.f, midiKeyFeedback - dt);
+		midiScaleFeedback = std::fmax(0.f, midiScaleFeedback - dt);
 
-		bool rightIsBlock = modelIs(rightExpander.module, modelStage4);
-		bool leftIsStatusChain = modelIs(leftExpander.module, modelHead, modelMidi);
+		bool rightIsBlock = modelIs(rightExpander.module, modelStage4, modelGlueRight);
+		bool leftIsStatusChain = modelIs(leftExpander.module, modelHead, modelMidi, modelGlueLeft);
 
 		// ---- Table in (from the block chain)
 		const BlockToAnchorMsg* tm = rightPort.consume(rightExpander);
@@ -357,11 +369,30 @@ struct Program : Module {
 				else if (ev.type == MIDI_PROG_PRESET_LOAD) {
 					logic.loadPreset(ev.index, table);
 				}
+				else if (ev.type == MIDI_PROG_SET_KEY) {
+					ScaleKey sk = logic.scaleKey();
+					sk.key = ev.index < 12 ? ev.index : 11;
+					logic.setScaleKey(sk);
+					midiKeyFeedbackIndex = sk.key;
+					midiKeyFeedback = 1.f;
+					midiScaleFeedback = 0.f;
+				}
+				else if (ev.type == MIDI_PROG_SET_SCALE) {
+					ScaleKey sk = logic.scaleKey();
+					sk.scale = ev.index < 3 ? ev.index : 2;
+					logic.setScaleKey(sk);
+					midiScaleFeedbackIndex = sk.scale;
+					midiScaleFeedback = 1.f;
+					midiKeyFeedback = 0.f;
+				}
+				else if (ev.type == MIDI_PROG_SET_PULSE_RETRIG) {
+					params[PULSE_RETRIG_PARAM].setValue(ev.index ? 1.f : 0.f);
+				}
 				else if (ev.type == MIDI_PROG_SLIDER) {
 					if (ev.index < 32)
-						pushOp(om, EditOp(ev.index, Field::Voltage, ev.fvalue));
+						pushOp(om, EditOp(ev.index, Field::Voltage, ev.fvalue, ev.flags));
 					else if (ev.index < 64)
-						pushOp(om, EditOp((uint8_t)(ev.index - 32), Field::Time, ev.fvalue));
+						pushOp(om, EditOp((uint8_t)(ev.index - 32), Field::Time, ev.fvalue, ev.flags));
 				}
 				else if (ev.type == MIDI_PROG_GESTURE) {
 					Field f = midiGestureField(ev.index);
@@ -418,7 +449,8 @@ struct Program : Module {
 		om.seq = ++opSeq;
 		om.valid = true;
 		if (rightIsBlock) {
-			AnchorToBlocksMsg* bo = rightNeighborProducer<AnchorToBlocksMsg>(this, modelStage4);
+			AnchorToBlocksMsg* bo = rightNeighborProducer<AnchorToBlocksMsg>(
+				this, modelStage4, modelGlueRight);
 			if (bo) {
 				*bo = om;
 				flipRightNeighbor(this);
@@ -427,7 +459,8 @@ struct Program : Module {
 
 		// ---- Broadcast out to the heads
 		if (leftIsStatusChain) {
-			AnchorToHeadsMsg* ho = leftNeighborProducer<AnchorToHeadsMsg>(this, modelHead, modelMidi);
+			AnchorToHeadsMsg* ho = leftNeighborProducer<AnchorToHeadsMsg>(
+				this, modelHead, modelMidi, modelGlueLeft);
 			if (ho) {
 				ho->table = table;
 				for (int i = 0; i < 4; i++) {
@@ -486,10 +519,15 @@ struct Program : Module {
 		// ---- Preset row LEDs: armed mode + used slots
 		for (int i = 0; i < 4; i++)
 			lights[LOAD_LIGHT + i].setBrightnessSmooth(
-				presetRow.mode() == modes[i] ? 1.f : 0.f, dt);
-		for (int i = 0; i < 12; i++)
+				(presetRow.mode() == modes[i] ||
+				 (i == 2 && midiKeyFeedback > 0.f) ||
+				 (i == 3 && midiScaleFeedback > 0.f)) ? 1.f : 0.f, dt);
+		for (int i = 0; i < 12; i++) {
+			bool feedback = (midiKeyFeedback > 0.f && i == midiKeyFeedbackIndex) ||
+				(midiScaleFeedback > 0.f && i == 9 + midiScaleFeedbackIndex);
 			lights[PRESET_LIGHTS + i].setBrightnessSmooth(
-				logic.slotUsed(i) ? 0.35f : 0.f, dt);
+				feedback ? 1.f : (logic.slotUsed(i) ? 0.35f : 0.f), dt);
+		}
 	}
 
 	// ---- Persistence: presets, key/scale, globals --------------------------
@@ -686,6 +724,10 @@ struct ProgramWidget : ModuleWidget {
 			static const char* extNames[4] = {"A", "B", "C", "D"};
 			spacetime::addIoLabel(this, EXT_X - 5.7f, EXT_Y0 + EXT_PITCH * i, extNames[i]);
 		}
+		spacetime::addIoLabel(this, PULSE_RETRIG_X, 58.f, "PULSE");
+		spacetime::addIoLabel(this, PULSE_RETRIG_X, 62.f, "RETRIG");
+		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 69.f, "ON");
+		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 77.f, "OFF");
 		spacetime::addIoLabel(this, POLY_X, 104.9f, "POLY");
 		spacetime::addIoLabel(this, POLY_X, 117.9f, "OUT");
 #endif
@@ -744,6 +786,8 @@ struct ProgramWidget : ModuleWidget {
 
 		for (int i = 0; i < 4; i++)
 			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(EXT_X, EXT_Y0 + EXT_PITCH * i)), module, Program::EXT_INPUTS + i));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(PULSE_RETRIG_X, PULSE_RETRIG_Y)),
+			module, Program::PULSE_RETRIG_PARAM));
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(POLY_X, POLY_Y)), module, Program::POLY_OUTPUT));
 	}
 

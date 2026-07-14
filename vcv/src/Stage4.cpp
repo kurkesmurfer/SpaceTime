@@ -92,8 +92,8 @@ struct Stage4 : Module {
 		float dt = args.sampleTime * divider.getDivision();
 		using namespace spacetime;
 
-		bool leftIsChain = modelIs(leftExpander.module, modelStage4, modelProgram);
-		bool rightIsBlock = modelIs(rightExpander.module, modelStage4);
+		bool leftIsChain = modelIs(leftExpander.module, modelStage4, modelProgram, modelGlueLeft);
+		bool rightIsBlock = modelIs(rightExpander.module, modelStage4, modelGlueRight);
 
 		// ---- Consume the anchor-side message (ops, selection, statuses)
 		const AnchorToBlocksMsg* am = leftPort.consume(leftExpander);
@@ -122,13 +122,25 @@ struct Stage4 : Module {
 					continue;
 				if (op.field == Field::Voltage) {
 					if (op.value >= kVoltageMin && op.value <= kVoltageMax) {
-						takeV[local].engage(op.value, params[VOLTAGE_PARAMS + local].getValue());
+						if (op.flags & EDIT_OP_MOVE_SLIDER) {
+							params[VOLTAGE_PARAMS + local].setValue(op.value);
+							takeV[local].release();
+						}
+						else {
+							takeV[local].engage(op.value, params[VOLTAGE_PARAMS + local].getValue());
+						}
 						appliedNow++;
 					}
 				}
 				else if (op.field == Field::Time) {
 					if (op.value >= kTimeSliderMin && op.value <= kTimeSliderMax) {
-						takeT[local].engage(op.value, params[TIME_PARAMS + local].getValue());
+						if (op.flags & EDIT_OP_MOVE_SLIDER) {
+							params[TIME_PARAMS + local].setValue(op.value);
+							takeT[local].release();
+						}
+						else {
+							takeT[local].engage(op.value, params[TIME_PARAMS + local].getValue());
+						}
 						appliedNow++;
 					}
 				}
@@ -144,7 +156,7 @@ struct Stage4 : Module {
 		// ---- Relay the anchor message rightward (next block dedups by seq)
 		if (rightIsBlock) {
 			AnchorToBlocksMsg* out = rightNeighborProducer<AnchorToBlocksMsg>(
-				this, modelStage4);
+				this, modelStage4, modelGlueRight);
 			if (out) {
 				if (amValid)
 					blockRelayRight(*am, *out);
@@ -157,7 +169,7 @@ struct Stage4 : Module {
 		// ---- Build and send the leftward table (own segment + sub-chain)
 		if (leftIsChain) {
 			BlockToAnchorMsg* out = leftNeighborProducer<BlockToAnchorMsg>(
-				this, modelStage4, modelProgram);
+				this, modelStage4, modelProgram, modelGlueLeft);
 			if (out) {
 				BlockSegment seg;
 				for (int s = 0; s < 4; s++) {
@@ -271,6 +283,7 @@ struct Stage4Widget : ModuleWidget {
 		for (int s = 0; s < 4; s++)
 			spacetime::addKnobLabel(this, COL_X0 + COL_PITCH * s, 100.5f,
 				string::f("%d", s + 1));
+		addChild(new spacetime::CornerMark(50.8f, 128.5f, 0.70f, 3.21f, 4.f));
 #endif
 
 		for (int s = 0; s < 4; s++) {

@@ -26,6 +26,7 @@
 //            writes AnchorToHeadsMsg  into left  neighbour (Head).
 
 #include <rack.hpp>
+#include "plugin.hpp"
 #include "Chain.hpp"
 
 namespace spacetime {
@@ -49,26 +50,30 @@ struct MessagePort {
 
 // Does this module match one of the expected models?
 inline bool modelIs(rack::engine::Module* m, rack::plugin::Model* m1,
-                    rack::plugin::Model* m2 = NULL) {
-	return m && (m->model == m1 || (m2 && m->model == m2));
+                    rack::plugin::Model* m2 = NULL,
+                    rack::plugin::Model* m3 = NULL) {
+	return m && (m->model == m1 || (m2 && m->model == m2) ||
+		(m3 && m->model == m3));
 }
 
 // Sender-side: producer buffer of the RIGHT neighbour (its leftExpander faces
 // us). Returns NULL if the neighbour is absent or not an expected model.
 template <typename T>
 T* rightNeighborProducer(rack::engine::Module* self, rack::plugin::Model* m1,
-                         rack::plugin::Model* m2 = NULL) {
+                         rack::plugin::Model* m2 = NULL,
+                         rack::plugin::Model* m3 = NULL) {
 	rack::engine::Module* n = self->rightExpander.module;
-	if (!modelIs(n, m1, m2))
+	if (!modelIs(n, m1, m2, m3))
 		return NULL;
 	return (T*)n->leftExpander.producerMessage;
 }
 
 template <typename T>
 T* leftNeighborProducer(rack::engine::Module* self, rack::plugin::Model* m1,
-                        rack::plugin::Model* m2 = NULL) {
+                        rack::plugin::Model* m2 = NULL,
+                        rack::plugin::Model* m3 = NULL) {
 	rack::engine::Module* n = self->leftExpander.module;
-	if (!modelIs(n, m1, m2))
+	if (!modelIs(n, m1, m2, m3))
 		return NULL;
 	return (T*)n->rightExpander.producerMessage;
 }
@@ -113,17 +118,28 @@ struct RackNeighborView : NeighborView {
 		return ModuleType::Foreign;
 	}
 
+	rack::engine::Module* next(rack::engine::Module* m, bool right) const {
+		if (!m)
+			return NULL;
+		rack::engine::Module* neighbor = right ? m->rightExpander.module :
+			m->leftExpander.module;
+		if ((right && neighbor && neighbor->model == modelGlueRight) ||
+		    (!right && neighbor && neighbor->model == modelGlueLeft))
+			return gluePartnerOutward(neighbor);
+		return neighbor;
+	}
+
 	ModuleType rightAt(int n) const override {
 		rack::engine::Module* m = anchor;
 		for (int i = 0; i < n && m; i++)
-			m = m->rightExpander.module;
+			m = next(m, true);
 		return classify(m);
 	}
 
 	ModuleType leftAt(int n) const override {
 		rack::engine::Module* m = anchor;
 		for (int i = 0; i < n && m; i++)
-			m = m->leftExpander.module;
+			m = next(m, false);
 		return classify(m);
 	}
 };

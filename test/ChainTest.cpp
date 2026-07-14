@@ -250,12 +250,14 @@ TEST_CASE("blockRelayRight increments hop index, payload intact") {
 	in.status[1].headId = 1;
 	in.status[1].currentStage = 30;
 	CHECK(pushOp(in, EditOp(9, Field::Stop, 1.f)));
+	CHECK(pushOp(in, EditOp(10, Field::Voltage, 7.f, EDIT_OP_MOVE_SLIDER)));
 
 	AnchorToBlocksMsg out;
 	blockRelayRight(in, out);
 	CHECK(out.hopIndex == 1);
 	CHECK(out.selectedStage == 13);
-	CHECK(out.opCount == 1);
+	CHECK(out.opCount == 2);
+	CHECK((out.ops[1].flags & EDIT_OP_MOVE_SLIDER) != 0);
 	CHECK(out.status[1].currentStage == 30);
 }
 

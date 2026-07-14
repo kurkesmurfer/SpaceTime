@@ -9,5 +9,7 @@ void init(Plugin* p) {
 	p->addModel(modelStage4);
 	p->addModel(modelHead);
 	p->addModel(modelMidi);
+	p->addModel(modelGlueLeft);
+	p->addModel(modelGlueRight);
 	p->addModel(modelWidgetTest);
 }
