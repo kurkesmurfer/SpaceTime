@@ -1,5 +1,5 @@
 // Shared "Bone" panel design system for the SpaceTime plugin family.
-// Towering Inferno
+// Kurkesmurfer
 // License: GPL-3.0-or-later
 //
 // Ported from the Collide plugin (vcv/paneltheme.hpp there), which applies
@@ -87,51 +87,25 @@ inline void addMicroLabel(ModuleWidget* w, float xmm, float ymm, const std::stri
 	addLabel(w, xmm, ymm, text, fontLabelSemiBold(), 5.5f, colorLabelCV(), 0.4f);
 }
 
-// Scalable Towering Inferno corner mark, derived from the Collide panel set.
-// The source layers already contain the letter coloring and flame gradients.
-struct CornerMark : Widget {
-	int lettersImage = -1;
-	int flameImage = -1;
-
+// Kurkesmurfer's bent-corkscrew mark is deliberately a single continuous
+// spiral with a K-like handle. The panel SVG is the subdued Rack treatment:
+// 65% spiral opacity and 75% handle/joint opacity. Keep the full-strength
+// canonical logo for manuals and other supporting material.
+//
+// Position from the painted right and bottom edges. Stage4 uses the helper's
+// 3.21 mm right margin; the 2 HP Glue panels override it with 1.04 mm. Both
+// use a 4 mm bottom margin at their call sites. The 0.70 call-site scale
+// resolves to the approved 5.41 x 10.94 mm painted mark.
+struct CornerMark : SvgWidget {
 	CornerMark(float panelWidthMm, float panelHeightMm, float scale = 1.f,
 	           float rightMarginMm = 3.21f, float bottomMarginMm = 9.36f) {
-		float w = 8.56f * scale;
-		float h = 29.41f * scale;
+		float w = 7.7286f * scale;
+		float h = 15.6286f * scale;
 		box.pos = mm2px(Vec(panelWidthMm - rightMarginMm - w,
 		                       panelHeightMm - bottomMarginMm - h));
 		box.size = mm2px(Vec(w, h));
-	}
-
-	void draw(const DrawArgs& args) override {
-		if (lettersImage <= 0)
-			lettersImage = nvgCreateImage(args.vg,
-				asset::plugin(pluginInstance, "res/corner-mark-letters.png").c_str(), 0);
-		if (flameImage <= 0)
-			flameImage = nvgCreateImage(args.vg,
-				asset::plugin(pluginInstance, "res/corner-mark-flame.png").c_str(), 0);
-		if (lettersImage <= 0 || flameImage <= 0)
-			return;
-
-		float w = box.size.x;
-		float h = box.size.y;
-		nvgSave(args.vg);
-		nvgGlobalAlpha(args.vg, 0.65f);
-		nvgTranslate(args.vg, w, h);
-		nvgScale(args.vg, 1.35f, 1.f);
-		nvgTranslate(args.vg, -w, -h);
-
-		NVGpaint letters = nvgImagePattern(args.vg, 0, 0, w, h, 0, lettersImage, 1.f);
-		nvgBeginPath(args.vg);
-		nvgRect(args.vg, 0, 0, w, h);
-		nvgFillPaint(args.vg, letters);
-		nvgFill(args.vg);
-
-		NVGpaint flame = nvgImagePattern(args.vg, 0, 0, w, h, 0, flameImage, 1.f);
-		nvgBeginPath(args.vg);
-		nvgRect(args.vg, 0, 0, w, h);
-		nvgFillPaint(args.vg, flame);
-		nvgFill(args.vg);
-		nvgRestore(args.vg);
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance,
+			"res/kurkesmurfer-panel-logo.svg")));
 	}
 };
 #endif

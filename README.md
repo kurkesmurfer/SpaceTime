@@ -1,7 +1,7 @@
 # SpaceTime
 
 **A multi-playhead arbitrary function generator family for VCV Rack 2**
-Towering Inferno · GPL-3.0-or-later
+Kurkesmurfer · GPL-3.0-or-later
 
 SpaceTime is a behavioural reinterpretation of the Buchla Model 248 "MARF"
 (Multiple Arbitrary Function Generator, 1977) and its Eurorack incarnation,
@@ -53,7 +53,7 @@ one VCV Rack patch; it is not a generic bridge for third-party expanders.
 
 ## Quick start
 
-Place HEAD–PROGRAM–STAGE4 (12 stages? add more blocks as you like). Set a
+Place HEAD–PROGRAM–STAGE4 (four stages; add more blocks as you like). Set a
 few voltage sliders to taste, press START on the head, and patch its CV OUT
 to a pitch input and REF OUT to an LPG or VCA. The head walks the stages at
 the times set by the lower sliders (2–30 s by default — press a TIME RANGE
@@ -172,10 +172,24 @@ retrigger notch length (1 ms).
 
 ## Licence and credits
 
-Code and artwork GPL-3.0-or-later, © Peet Siemensz / Towering Inferno.
+Code and artwork GPL-3.0-or-later, © Peet Siemensz / Kurkesmurfer.
 Bundled fonts Fraunces and Barlow Condensed under the SIL Open Font License
 (see `vcv/res/fonts/`). Inspired by Don Buchla's Model 248 and the Tiptop
 Audio/Buchla 248t; no original assets or firmware were used.
+
+## Branding
+
+The panel mark is Kurkesmurfer's continuous bent-corkscrew logo: its handle
+also suggests a `K`. SpaceTime uses the subdued VCV treatment from
+`vcv/res/kurkesmurfer-panel-logo.svg`, with a 65% spiral and 75% handle and
+reinforced joint. The full-strength canonical logo belongs in manuals,
+repository artwork, and other supporting material instead of on panels.
+
+The shared `CornerMark` helper in `vcv/src/paneltheme.hpp` positions the logo
+from its painted right and bottom bounds. Stage4 uses a 3.21 mm right margin;
+the narrow Glue panels use 1.04 mm. Both use a 4 mm bottom margin. These
+placements are intentional and should be changed only after checking Rack
+screenshots at 100% and 200% zoom.
 
 ## Development
 
@@ -186,6 +200,6 @@ unit-tested, golden traces in `test/golden/`); the manual integration patch
 suite is documented in `test/patches/README.md`.
 
 Library submission checklist: slugs frozen (`SpaceTime`/`Program`/`Stage4`/
-`Head`/`Midi`/`GlueLeft`/`GlueRight`); version major 2; WidgetTest hidden; licence and font notices
-included; panel screenshots at 100 % zoom; `pluginUrl`/`sourceUrl` to be
-filled in once the repository is published.
+`Head`/`Midi`/`GlueLeft`/`GlueRight`); version major 2; WidgetTest hidden;
+licence and font notices included; panel screenshots at 100% zoom; release
+metadata points to the Kurkesmurfer site and planned public repository.

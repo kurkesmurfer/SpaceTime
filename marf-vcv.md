@@ -1,11 +1,11 @@
 # SpaceTime — Multi-Playhead Arbitrary Function Generator for VCV Rack
 
-**Plugin name:** SpaceTime (Towering Inferno) — modules PROGRAM / STAGE4 / HEAD / MIDI / GLUE; slugs `SpaceTime` / `Program` / `Stage4` / `Head` / `Midi` / `GlueLeft` / `GlueRight`
+**Plugin name:** SpaceTime (Kurkesmurfer) — modules PROGRAM / STAGE4 / HEAD / MIDI / GLUE; slugs `SpaceTime` / `Program` / `Stage4` / `Head` / `Midi` / `GlueLeft` / `GlueRight`
 **Created:** 2026-07-06
 **Updated:** 2026-07-11 (rev 6 — MIDI addendum added for WP8b, draft at design gate; rev 5 renamed to SpaceTime; rev 4 aligned with 248t manual)
 **Status:** Concept / Specification
 **Inspired by:** Buchla Model 248 / Tiptop Audio & Buchla 248t MARF (Multiple Arbitrary Function Generator)
-**Brand:** Towering Inferno
+**Brand:** Kurkesmurfer
 **Primary source:** `Buchla__Tiptop_Audio_248t.pdf` (this directory) — Tiptop function reference
 **Related:** `DROID-248t-Patch` (memory graph) — DROID-based sibling concept
 
@@ -147,7 +147,7 @@ Default: 0–10 V spans the full current chain (self-normalizing). Menu alternat
 
 ## DSP / Implementation Notes
 
-- Repo `~/Development/SpaceTime/`: `dsp/` generic Rack-free headers (`StageTable.hpp`, `HeadDSP.hpp`, `ProgramLogic.hpp`, `Chain.hpp`), `vcv/` plugin base, `test/` host-side runner — see `marf-vcv-plan.md`. Manifest `"brand": "Towering Inferno"`, plugin slug `SpaceTime`.
+- Repo `~/Development/SpaceTime/`: `dsp/` generic Rack-free headers (`StageTable.hpp`, `HeadDSP.hpp`, `ProgramLogic.hpp`, `Chain.hpp`), `vcv/` plugin base, `test/` host-side runner — see `marf-vcv-plan.md`. Manifest `"brand": "Kurkesmurfer"`, plugin slug `SpaceTime`.
 - Program scanning at control rate (every 16 samples); slew/ramp/pulse at audio rate in heads.
 - Custom 3-pos spring-return momentary widget, reused across the programming section.
 - Quantizer: 1 V/oct semitone snap with Major/Minor/Chromatic scale + key from PROGRAM.

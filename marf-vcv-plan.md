@@ -45,7 +45,7 @@ WP2 can start immediately in parallel with the mockups. WP3–WP6 are mutually i
 
 ## WP0 — Repository scaffold
 
-**Scope:** Repo at `~/Development/SpaceTime` with the layout above. `vcv/plugin.json`: plugin slug **`SpaceTime`** (permanent), plugin name "SpaceTime", `"brand": "Towering Inferno"`; module slugs **`Program`**, **`Stage4`**, **`Head`** (permanent; display names PROGRAM / STAGE4 / HEAD — no MARF in slugs or names, trademark question moot). Rack `Makefile` in `vcv/` with `RACK_DIR ?= ~/Development/Rack-SDK` and `../dsp` on the include path. `test/Makefile` building host-side unit tests (doctest single-header, vendored) compiling only `dsp/` + `test/` — no Rack SDK include path. Empty `dsp/` headers with include guards. CI-style script `./check.sh` at repo root: builds plugin, builds and runs tests.
+**Scope:** Repo at `~/Development/SpaceTime` with the layout above. `vcv/plugin.json`: plugin slug **`SpaceTime`** (permanent), plugin name "SpaceTime", `"brand": "Kurkesmurfer"`; module slugs **`Program`**, **`Stage4`**, **`Head`** (permanent; display names PROGRAM / STAGE4 / HEAD — no MARF in slugs or names, trademark question moot). Rack `Makefile` in `vcv/` with `RACK_DIR ?= ~/Development/Rack-SDK` and `../dsp` on the include path. `test/Makefile` building host-side unit tests (doctest single-header, vendored) compiling only `dsp/` + `test/` — no Rack SDK include path. Empty `dsp/` headers with include guards. CI-style script `./check.sh` at repo root: builds plugin, builds and runs tests.
 
 **Depends on:** —
 **Deliverables:** building, loadable empty plugin; green empty test run.

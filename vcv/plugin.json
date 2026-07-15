@@ -3,15 +3,15 @@
   "name": "SpaceTime",
   "version": "2.0.0",
   "license": "GPL-3.0-or-later",
-  "brand": "Towering Inferno",
+  "brand": "Kurkesmurfer",
   "author": "Peet Siemensz",
-  "authorEmail": "peet@siemensz.com",
+  "authorEmail": "peet@kurkesmurfer.com",
   "description": "Multi-playhead arbitrary function generator family inspired by the Buchla 248 MARF",
-  "pluginUrl": "",
-  "authorUrl": "",
-  "manualUrl": "",
-  "sourceUrl": "",
-  "changelogUrl": "",
+  "pluginUrl": "https://www.kurkesmurfer.com/spacetime/",
+  "authorUrl": "https://www.kurkesmurfer.com/",
+  "manualUrl": "https://www.kurkesmurfer.com/spacetime/manual/",
+  "sourceUrl": "https://github.com/kurkesmurfer/SpaceTime",
+  "changelogUrl": "https://github.com/kurkesmurfer/SpaceTime/releases",
   "modules": [
     {
       "slug": "Program",
@@ -34,7 +34,7 @@
     {
       "slug": "Midi",
       "name": "MIDI",
-      "description": "MIDI controller expander mockup for incoming clock, transport, preset and CC control",
+      "description": "MIDI gateway for clock, transport, preset, CC control and outgoing instrument messages",
       "tags": ["MIDI", "Expander"]
     },
     {

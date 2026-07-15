@@ -12,7 +12,7 @@ make -C test test
 
 if [ -d "$RACK_DIR" ]; then
 	echo "== Plugin build (RACK_DIR=$RACK_DIR) =="
-	make -C vcv RACK_DIR="$RACK_DIR" -j4
+	make RACK_DIR="$RACK_DIR" -j4
 else
 	echo "!! Rack SDK not found at $RACK_DIR — skipping plugin build" >&2
 	exit 1

@@ -1,5 +1,5 @@
 // SpaceTime — reusable widget library (WP3).
-// Towering Inferno — Bone design system (see src/paneltheme.hpp).
+// Kurkesmurfer — Bone design system (see src/paneltheme.hpp).
 //
 // Contents:
 //   kHeadColors[8]       — family head colour set (single source of truth)
