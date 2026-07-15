@@ -389,10 +389,10 @@ struct Program : Module {
 					params[PULSE_RETRIG_PARAM].setValue(ev.index ? 1.f : 0.f);
 				}
 				else if (ev.type == MIDI_PROG_SLIDER) {
-					if (ev.index < 32)
+					if (ev.index < kMaxStages)
 						pushOp(om, EditOp(ev.index, Field::Voltage, ev.fvalue, ev.flags));
-					else if (ev.index < 64)
-						pushOp(om, EditOp((uint8_t)(ev.index - 32), Field::Time, ev.fvalue, ev.flags));
+					else if (ev.index < 2 * kMaxStages)
+						pushOp(om, EditOp((uint8_t)(ev.index - kMaxStages), Field::Time, ev.fvalue, ev.flags));
 				}
 				else if (ev.type == MIDI_PROG_GESTURE) {
 					Field f = midiGestureField(ev.index);

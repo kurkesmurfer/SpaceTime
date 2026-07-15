@@ -28,7 +28,7 @@ without solving a problem that the adaptor leaves open.
 
 The first release target is a fixed **16-stage, two-head SpaceTime**. This matches
 the hardware-scale instrument and the fallback already named in WP9. The shared
-engine remains dimensioned for 32 stages and eight heads, so larger variants do
+engine remains dimensioned for 64 stages and eight heads, so larger variants do
 not require a DSP rewrite.
 
 The recommended panel is a compact, banked monolith rather than an 82 HP literal

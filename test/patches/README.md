@@ -30,11 +30,12 @@ Layout: `HEAD HEAD PROGRAM STAGE4 STAGE4 STAGE4 STAGE4` (16 stages).
    modifiers.
 10. POLY OUT: 2 channels, channel 1 = head 1 CV, channel 2 = head 2 CV.
 
-## Patch 2 — 8-head stress
+## Patch 2 — 64-stage / 8-head stress
 
-`HEAD ×8, PROGRAM, STAGE4 ×8` (32 stages, 8 heads).
+`HEAD ×8, PROGRAM, STAGE4 ×16` (64 stages, 8 heads). Use one or more GLUE
+pairs to split the stage surface into practical rack fragments.
 
-- Display shows 32. All 8 head-id LEDs show distinct colours
+- Display shows 64. All 8 head-id LEDs show distinct colours
   (red green blue yellow magenta cyan orange white, nearest first).
 - Start all heads with mixed directions incl. random/brownian; all 8 dot
   colours move on the blocks; POLY OUT has 8 channels.
@@ -102,16 +103,18 @@ sits directly left of PROGRAM, between the anchor and the heads. It is
 transparent for head enumeration: PROGRAM still shows two heads and 8 stages.
 
 1. MIDI module context menu shows the Rack MIDI input device menu. The
-   PROGRAM/stage channel defaults to MIDI channel 16 and can be changed;
-   HEAD channels are fixed to MIDI channels 1-8.
+   PROGRAM-controls channel defaults to MIDI channel 16 and the stage-slider
+   channel defaults to channel 15; both can be changed but must differ. HEAD
+   channels are fixed to MIDI channels 1-8. The readout shows `P16` / `S15`.
 2. With `Move stage sliders with CC` enabled in the MIDI context menu, send CC
-   0..7 and 32..39 on the PROGRAM/stage channel: voltage/time for stages 1..8
+   0..7 and 64..71 on the stage-slider channel: voltage/time for stages 1..8
    update and the Rack slider handles move. Disable the option and repeat: the
    effective values update with normal takeover behaviour while the handles
    stay put until manually crossed. Preset recall remains takeover-based in
    both modes.
-3. Send Program Change 1..12 on the PROGRAM/stage channel: preset slots load.
-4. Send PROGRAM modifier CCs 64..88: selected-stage edit, bulk-arm, Clear,
+3. Send Program Change 1..12 on the PROGRAM-controls channel: preset slots load.
+4. Send PROGRAM modifier CCs 64..88 on the PROGRAM-controls channel:
+   selected-stage edit, bulk-arm, Clear,
    Limited, Time range and Pulse edits behave like panel gestures. Send CC 89
    across 12 values to select C..B, CC 90 across three values to select
    Major/Minor/Chromatic, and CC 91 low/high to move PROGRAM Pulse Retrig Off/On.
@@ -138,13 +141,14 @@ to On and existing patches retain the previous hardware-compatible behavior.
 
 ## Patch 7 — MIDI stress / MetaModule portability note
 
-Layout: `HEAD x8, MIDI, PROGRAM, STAGE4 x8` (32 stages, 8 heads).
+Layout: `HEAD x8, MIDI, PROGRAM, STAGE4 x16` (64 stages, 8 heads), split with
+GLUE where useful.
 
 - Send MIDI clock plus several CC lanes from the controller/DAW while all
   heads run. No broken-chain mark; head ids and stage dots stay correct.
-- CPU check on the tested M3 laptop: MIDI, HEAD and STAGE4 modules each show
-  0.1%; PROGRAM shows 0.2%. This is well within the expected MetaModule
-  portability budget.
+- Record CPU for the full 16-block chain. The earlier 8-block patch measured
+  0.1% for MIDI, HEAD and STAGE4 modules and 0.2% for PROGRAM on the tested M3
+  laptop; the expanded maximum needs a fresh whole-patch figure.
 
 ## Patch 8 — MIDI Part II output smoke
 
@@ -203,5 +207,5 @@ VCV Rack.
 - Strobe via the panel: flipping the CONT/SEQ/STRB switch DOWN fires one
   strobe (latching stub); the STROBE jack is the precise path. A latch-up/
   spring-down widget variant is a WP8 polish item.
-- The broken-chain `!` relies on count mismatch or >8 modules; Rack expander
+- The broken-chain `!` relies on count mismatch or >16 stage modules; Rack expander
   links cannot see across a physical gap.

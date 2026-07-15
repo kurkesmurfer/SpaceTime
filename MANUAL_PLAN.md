@@ -55,7 +55,7 @@ called out as a deliberate compatibility choice or extension.
 The following topics cannot be derived from the original manual and need
 first-class explanations based on this implementation:
 
-- Up to 32 stages, eight independent heads, and dynamic expander discovery.
+- Up to 64 stages, eight independent heads, and dynamic expander discovery.
 - Direction, loop, per-head clock source, div/mult, and TIME CV extensions.
 - MIDI channels, CC mapping, realtime clock/transport, virtual clock messages,
   stateful controls, visual feedback, and outgoing MIDI behavior.

@@ -140,6 +140,22 @@ TEST_CASE("plain 4-stage forward loop: order, CV, ramp, ALL and EOC") {
 	checkGolden("plain_4stage_loop", s.trace.str());
 }
 
+TEST_CASE("64-stage chain advances through stage 64 and wraps") {
+	Sim s;
+	s.makeTable(kMaxStages);
+	for (int i = 0; i < kMaxStages; i++)
+		s.t.voltage[i] = 0.f;
+	s.cfg.loopMode = LOOP_FULL_CHAIN;
+	s.pulseStart();
+	REQUIRE(s.out.currentStage == 0);
+	for (int stage = 1; stage < kMaxStages; stage++) {
+		s.pulseAdvance();
+		CHECK(s.out.currentStage == stage);
+	}
+	s.pulseAdvance();
+	CHECK(s.out.currentStage == 0);
+}
+
 // ---------------------------------------------------------------------------
 // 2. First/Last subrange
 // ---------------------------------------------------------------------------

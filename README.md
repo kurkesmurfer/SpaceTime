@@ -21,7 +21,7 @@ actual 248t (with thanks to the demonstrations of Stazma the Junglechrist).
 | Module | HP | Role |
 |---|---|---|
 | **PROGRAM** | 18 | The programming section: stage select, voltage/time/mode modifiers, pulses, Clear, presets + key/scale, external inputs A–D, poly output |
-| **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 8 blocks (4–32 stages) |
+| **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 16 blocks (4–64 stages) |
 | **HEAD** | 10 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
 | **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM |
 | **GLUE RIGHT / LEFT** | 2 each | Paired SpaceTime-only virtual expander bridge for separating chain fragments |
@@ -159,7 +159,7 @@ head strobed to 9 loops 9–16 — independent sequencers on one surface
 
 ## Deviations from the hardware
 
-VCV extensions: up to 32 stages (8 blocks) and 8 heads instead of 16/2;
+VCV extensions: up to 64 stages (16 blocks) and 8 heads instead of 16/2;
 direction modes; external clock with div/mult; per-head TIME CV; loop mode
 selection; EOC output; POLY OUT; presets stored per patch; DISP is latching
 instead of momentary; bulk edit via context menu. Dropped: ART outputs and

@@ -36,7 +36,7 @@ struct TestView : NeighborView {
 // ---------------------------------------------------------------------------
 // Enumeration
 // ---------------------------------------------------------------------------
-TEST_CASE("enumerateChain counts 0..8 contiguous blocks and heads") {
+TEST_CASE("enumerateChain counts 0..16 blocks and 0..8 heads") {
 	for (int nb = 0; nb <= kMaxBlocks; nb++) {
 		for (int nh = 0; nh <= kMaxHeads; nh += 4) {
 			TestView v;
@@ -88,12 +88,12 @@ TEST_CASE("gap (empty space) terminates the chain; stranded blocks warn") {
 	CHECK_FALSE(lay.brokenRight);
 }
 
-TEST_CASE("more than 8 contiguous blocks/heads counts 8 and warns") {
+TEST_CASE("overlong block and head chains clamp independently and warn") {
 	TestView v;
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < kMaxBlocks + 2; i++)
 		v.right.push_back(ModuleType::Stage4);
+	for (int i = 0; i < kMaxHeads + 2; i++)
 		v.left.push_back(ModuleType::Head);
-	}
 	ChainLayout lay = enumerateChain(v);
 	CHECK(lay.blockCount == kMaxBlocks);
 	CHECK(lay.headCount == kMaxHeads);
@@ -134,10 +134,10 @@ TEST_CASE("blockRelayLeft: prepending keeps left-to-right stage order") {
 	}
 }
 
-TEST_CASE("blockRelayLeft: overlong chain clamps to 32 stages, keeps nearest blocks") {
+TEST_CASE("blockRelayLeft: overlong chain clamps to 64 stages, keeps nearest blocks") {
 	BlockToAnchorMsg msg, next;
-	blockRelayLeft(makeSegment(9), NULL, msg);
-	for (int b = 8; b >= 0; b--) {  // 10 blocks total
+	blockRelayLeft(makeSegment(kMaxBlocks + 1), NULL, msg);
+	for (int b = kMaxBlocks; b >= 0; b--) {  // 18 blocks total
 		blockRelayLeft(makeSegment(b), &msg.table, next);
 		msg = next;
 	}

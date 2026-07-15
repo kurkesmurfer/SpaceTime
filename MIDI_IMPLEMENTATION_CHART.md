@@ -1,6 +1,6 @@
 # SpaceTime MIDI implementation chart
 
-**Implementation snapshot:** 2026-07-13  
+**Implementation snapshot:** 2026-07-15
 **Purpose:** authoritative DROID remote mapping and manual MIDI test reference.  
 **Numbering:** MIDI channels are shown as users see them (1-16). CC and Program
 Change data bytes are shown as raw MIDI values (0-127).
@@ -13,15 +13,18 @@ Change data bytes are shown as raw MIDI values (0-127).
 | MIDI module | Singleton, transparent to head numbering |
 | Input device | Selected in MIDI module context menu; input channel is forced to All |
 | Output device | Selected independently in MIDI module context menu |
-| PROGRAM/stage channel | Configurable 1-16; default channel 16 |
+| PROGRAM controls channel | Configurable 1-16; default channel 16 |
+| Stage sliders channel | Configurable 1-16; default channel 15 |
 | HEAD input channels | Fixed: HEAD 1-8 use channels 1-8 |
 | Head numbering | HEAD 1 is immediately left of MIDI; numbers increase leftward |
 | Input map | Fixed CC map; no base-CC offset and no MIDI learn |
-| Persistence | Input/output devices, PROGRAM channel, and all output-lane settings are saved in the Rack patch |
+| Persistence | Input/output devices, both input channels, and all output-lane settings are saved in the Rack patch |
 
-Keep the PROGRAM/stage channel outside channels 1-8. If it is set to one of
-those channels, matching CCs are deliberately routed to both PROGRAM and that
-HEAD (`program+head`). The default channel 16 avoids this overlap.
+The PROGRAM-controls and stage-slider channels must differ; the context menu
+rejects an attempt to select the other channel. Keep both outside channels 1-8
+unless combined routing to a HEAD is intentional. The defaults, channels 16
+and 15 respectively, avoid both forms of overlap. The panel readout shows
+`P16` and `S15` for these defaults.
 
 ## 2. Message value conventions
 
@@ -36,15 +39,16 @@ HEAD (`program+head`). The default channel 16 avoids this overlap.
 
 ## 3. Incoming PROGRAM and stage MIDI
 
-All messages in this section use the configurable PROGRAM/stage channel,
-default MIDI channel 16.
+Stage-slider messages use the configurable stage-slider channel, default MIDI
+channel 15. PROGRAM commands, gestures, global controls and Program Change use
+the configurable PROGRAM-controls channel, default MIDI channel 16.
 
 ### 3.1 Stage sliders
 
 | CC | Target | Raw-to-parameter mapping | Notes |
 |---:|---|---|---|
-| 0-31 | Stage voltage sliders 1-32 | `value / 127 * 10 V` | CC number equals zero-based stage index |
-| 32-63 | Stage time sliders 1-32 | `value / 127` | CC 32 is stage 1, CC 63 is stage 32 |
+| 0-63 | Stage voltage sliders 1-64 | `value / 127 * 10 V` | CC number equals zero-based stage index |
+| 64-127 | Stage time sliders 1-64 | `value / 127` | CC 64 is stage 1, CC 127 is stage 64 |
 
 By default, MIDI changes the effective stage value and moves the visible Rack
 slider handle. `MIDI context menu -> Move stage sliders with CC` can be disabled
@@ -53,6 +57,8 @@ control resumes when it crosses the MIDI value. Preset recall always uses
 takeover and never moves the handles.
 
 ### 3.2 PROGRAM commands
+
+These messages use the PROGRAM-controls channel.
 
 | CC | Control | Accepted values | Effect |
 |---:|---|---|---|
@@ -325,9 +331,11 @@ when that work starts.
 | CLK LED | Received `F8` MIDI Clock |
 | MIDI OUT LED | A Note On, Note Off, or CC message was emitted |
 | MIDI context `Last` | Last decoded status/channel/number/value and route |
-| Route `program` | Message matched PROGRAM/stage channel |
+| Route `program` | Message matched PROGRAM-controls channel |
+| Route `stage` | Message matched stage-slider channel |
 | Route `head` | CC matched HEAD channel 1-8 |
 | Route `program+head` | PROGRAM channel overlaps a HEAD channel |
+| Route `stage+head` | Stage-slider channel overlaps a HEAD channel |
 | HEAD context diagnostic | Last applied HEAD CC, scaled value, and sequence |
 | PROGRAM context diagnostic | Last consumed PROGRAM MIDI event and op count |
 
@@ -339,7 +347,8 @@ transport or CC interleaving.
 
 ### Input/controller side
 
-- [ ] Use PROGRAM/stage channel 16 unless deliberately testing overlap.
+- [ ] Use PROGRAM-controls channel 16 and stage-slider channel 15 unless
+      deliberately testing HEAD overlap.
 - [ ] Use channels 1-8 for HEAD 1-8.
 - [ ] Configure PROGRAM gesture controls as two-direction actions, not ordinary
       press/release buttons.

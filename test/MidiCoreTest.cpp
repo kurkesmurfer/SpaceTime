@@ -20,7 +20,7 @@ struct TestMidiSink : MidiOutputSink {
 
 TEST_CASE("MIDI core routes PROGRAM CCs and new global controls") {
 	MidiCore core;
-	core.handleMessage(0xBF, 0, 127);
+	core.handleMessage(0xBE, 0, 127);
 	core.handleMessage(0xBF, 68, 127);
 	core.handleMessage(0xBF, 89, 127);
 	core.handleMessage(0xBF, 90, 64);
@@ -44,14 +44,45 @@ TEST_CASE("MIDI core routes PROGRAM CCs and new global controls") {
 TEST_CASE("MIDI stage slider visibility option controls edit flags") {
 	MidiCore core;
 	core.moveStageSliders = false;
-	core.handleMessage(0xBF, 0, 64);
+	core.handleMessage(0xBE, 0, 64);
 	REQUIRE(core.programEventCount == 1);
 	CHECK(core.programEvents[0].flags == EDIT_OP_NONE);
 
 	core.moveStageSliders = true;
-	core.handleMessage(0xBF, 32, 64);
+	core.handleMessage(0xBE, 64, 64);
 	REQUIRE(core.programEventCount == 2);
 	CHECK((core.programEvents[1].flags & EDIT_OP_MOVE_SLIDER) != 0);
+}
+
+TEST_CASE("MIDI slider channel spans all 64 voltage and time stages") {
+	MidiCore core;
+	CHECK(core.sliderChannel == 14);
+	CHECK(core.controlChannel == 15);
+	core.handleMessage(0xBE, 0, 127);
+	core.handleMessage(0xBE, 63, 64);
+	core.handleMessage(0xBE, 64, 32);
+	core.handleMessage(0xBE, 127, 127);
+
+	REQUIRE(core.programEventCount == 4);
+	CHECK(core.programEvents[0].index == 0);
+	CHECK(core.programEvents[0].fvalue == doctest::Approx(10.f));
+	CHECK(core.programEvents[1].index == 63);
+	CHECK(core.programEvents[1].fvalue == doctest::Approx(64.f / 127.f * 10.f));
+	CHECK(core.programEvents[2].index == 64);
+	CHECK(core.programEvents[2].fvalue == doctest::Approx(32.f / 127.f));
+	CHECK(core.programEvents[3].index == 127);
+	CHECK(core.programEvents[3].fvalue == doctest::Approx(1.f));
+	CHECK(core.lastRoute == MIDI_ROUTE_STAGE);
+}
+
+TEST_CASE("MIDI PROGRAM and slider channels keep overlapping CCs separate") {
+	MidiCore core;
+	core.handleMessage(0xBE, 68, 127);
+	core.handleMessage(0xBF, 68, 127);
+	REQUIRE(core.programEventCount == 2);
+	CHECK(core.programEvents[0].type == MIDI_PROG_SLIDER);
+	CHECK(core.programEvents[0].index == 68);
+	CHECK(core.programEvents[1].type == MIDI_PROG_GESTURE);
 }
 
 TEST_CASE("MIDI core routes per-head controls and realtime counters") {

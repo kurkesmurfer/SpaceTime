@@ -146,6 +146,7 @@ struct Midi : Module {
 	json_t* dataToJson() override {
 		json_t* root = json_object();
 		json_object_set_new(root, "controlChannel", json_integer(core.controlChannel));
+		json_object_set_new(root, "sliderChannel", json_integer(core.sliderChannel));
 		json_object_set_new(root, "moveStageSliders", json_boolean(core.moveStageSliders));
 		json_object_set_new(root, "midiInput", midiInput.toJson());
 		json_object_set_new(root, "midiOutput", midiOutput.toJson());
@@ -166,6 +167,10 @@ struct Midi : Module {
 		json_t* j;
 		if ((j = json_object_get(root, "controlChannel")))
 			core.controlChannel = clamp((int)json_integer_value(j), 0, 15);
+		if ((j = json_object_get(root, "sliderChannel")))
+			core.sliderChannel = clamp((int)json_integer_value(j), 0, 15);
+		if (core.sliderChannel == core.controlChannel)
+			core.sliderChannel = core.controlChannel == 15 ? 14 : 15;
 		if ((j = json_object_get(root, "moveStageSliders")))
 			core.moveStageSliders = json_boolean_value(j);
 		if ((j = json_object_get(root, "midiInput")))
@@ -204,12 +209,14 @@ struct MidiReadout : Widget {
 			asset::system("res/fonts/ShareTechMono-Regular.ttf"));
 		if (!font)
 			return;
-		std::string text = module ? string::f("CH%02d", module->core.controlChannel + 1) : "CH16";
+		std::string program = module ? string::f("P%02d", module->core.controlChannel + 1) : "P16";
+		std::string sliders = module ? string::f("S%02d", module->core.sliderChannel + 1) : "S15";
 		nvgFontFaceId(args.vg, font->handle);
-		nvgFontSize(args.vg, 11.f);
+		nvgFontSize(args.vg, 9.f);
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgFillColor(args.vg, nvgRGB(0xc1, 0x3c, 0x36));
-		nvgText(args.vg, box.size.x / 2.f, box.size.y / 2.f, text.c_str(), NULL);
+		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.32f, program.c_str(), NULL);
+		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.72f, sliders.c_str(), NULL);
 	}
 };
 #endif
@@ -265,14 +272,25 @@ struct MidiWidget : ModuleWidget {
 		for (int i = 1; i <= 16; i++)
 			chLabels.push_back(string::f("%d", i));
 		menu->addChild(new MenuSeparator);
-		menu->addChild(createIndexSubmenuItem("PROGRAM/stage channel",
+		menu->addChild(createIndexSubmenuItem("PROGRAM controls channel",
 			chLabels,
 			[=]() { return module->core.controlChannel; },
-			[=](int i) { module->core.controlChannel = i; }));
+			[=](int i) {
+				if (i != module->core.sliderChannel)
+					module->core.controlChannel = i;
+			}));
+		menu->addChild(createIndexSubmenuItem("Stage sliders channel",
+			chLabels,
+			[=]() { return module->core.sliderChannel; },
+			[=](int i) {
+				if (i != module->core.controlChannel)
+					module->core.sliderChannel = i;
+			}));
 		menu->addChild(createBoolPtrMenuItem("Move stage sliders with CC", "",
 			&module->core.moveStageSliders));
 
 		menu->addChild(createMenuLabel("HEAD channels fixed: 1-8"));
+		menu->addChild(createMenuLabel("PROGRAM and stage channels must differ"));
 		menu->addChild(createMenuLabel("CC maps fixed; no base offset"));
 		if (module->core.lastStatus >= 0) {
 			std::string last = module->core.lastChannel >= 0 ?

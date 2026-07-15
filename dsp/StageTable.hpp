@@ -36,8 +36,8 @@ namespace spacetime {
 
 // ---- Sizes -----------------------------------------------------------------
 static const int kStagesPerBlock = 4;
-static const int kMaxBlocks = 8;
-static const int kMaxStages = kStagesPerBlock * kMaxBlocks;  // 32
+static const int kMaxBlocks = 16;
+static const int kMaxStages = kStagesPerBlock * kMaxBlocks;  // 64
 static const int kMaxHeads = 8;
 
 static const uint32_t kProgramLayoutVersion = 1;
@@ -208,7 +208,7 @@ struct StageTable {
 	float voltage[kMaxStages];
 	float time[kMaxStages];
 	ProgramWord program[kMaxStages];
-	uint8_t count;  // valid stages, 0..32 (= 4 x block count)
+	uint8_t count;  // valid stages, 0..64 (= 4 x block count)
 
 	StageTable() : count(0) {
 		for (int i = 0; i < kMaxStages; i++) {

@@ -72,11 +72,11 @@ WP2 can start immediately in parallel with the mockups. WP3–WP6 are mutually i
 
 ## WP2 — Stage table and data model (`dsp/StageTable.hpp`)
 
-**Scope:** The shared data contract. `program[32]` bitfield layout (quantize, slew level 0–2, range full/half/limited×5, voltage source, stop, sustain, enable, first, last, pulse1, pulse2, time range 0–3, time source) with typed accessors. Edit-op struct `{stageIndex, field, value}` + apply function. Stage-table concatenation from per-block segments. Defaults matching the hardware Clear state (Continuous, Full Range, Internal, time range 2–30 s, pulses off). Fixed-size everything.
+**Scope:** The shared data contract. `program[64]` bitfield layout (quantize, slew level 0–2, range full/half/limited×5, voltage source, stop, sustain, enable, first, last, pulse1, pulse2, time range 0–3, time source) with typed accessors. Edit-op struct `{stageIndex, field, value}` + apply function. Stage-table concatenation from per-block segments. Defaults matching the hardware Clear state (Continuous, Full Range, Internal, time range 2–30 s, pulses off). Fixed-size everything.
 
 **Depends on:** WP0.
 **Deliverables:** header + exhaustive unit tests.
-**Tests:** bitfield round-trip for every field and boundary value; edit-op application incl. out-of-range rejection; concatenation of 1–8 blocks; Clear-state conformance table copied from the manual.
+**Tests:** bitfield round-trip for every field and boundary value; edit-op application incl. out-of-range rejection; concatenation of 1–16 blocks; Clear-state conformance table copied from the manual.
 **Agent notes:** this header is the interface for WP4/5/6 — freeze it early, version any later change explicitly.
 
 ---
@@ -94,11 +94,11 @@ WP2 can start immediately in parallel with the mockups. WP3–WP6 are mutually i
 
 ## WP4 — Expander protocol
 
-**Scope:** Message structs (fixed size): leftward stage table `{voltage[32], time[32], program[32], count}`, rightward edit-ops + selected-stage, rightward head status `{headId, currentStage, phase, runState}` merge/relay. Chain enumeration and renumbering on `onExpanderChange` as **pure functions over an abstract neighbour interface** so the logic unit-tests without Rack; thin Rack adapter using `leftExpander/rightExpander` + `requestMessageFlip()`.
+**Scope:** Message structs (fixed size): leftward stage table `{voltage[64], time[64], program[64], count}`, rightward edit-ops + selected-stage, rightward head status `{headId, currentStage, phase, runState}` merge/relay. Chain enumeration and renumbering on `onExpanderChange` as **pure functions over an abstract neighbour interface** so the logic unit-tests without Rack; thin Rack adapter using `leftExpander/rightExpander` + `requestMessageFlip()`.
 
 **Depends on:** WP2.
 **Deliverables:** `dsp/Chain.hpp` (pure logic) + `vcv/src/ChainAdapter.hpp` + tests.
-**Tests:** unit: enumeration for chains of 0–8 blocks/heads, gap detection, foreign-module termination, reorder renumbering, status merge with 8 heads; simulated per-hop one-sample latency (assert data coherence after N ticks). Integration: manual patch — add/remove/reorder blocks live, verify stage-count display and LED continuity.
+**Tests:** unit: enumeration for chains of 0–16 blocks and 0–8 heads, gap detection, foreign-module termination, reorder renumbering, status merge with 8 heads; simulated per-hop one-sample latency (assert data coherence after N ticks). Integration: manual patch — add/remove/reorder blocks live, verify stage-count display and LED continuity.
 **Agent notes:** producer/consumer buffers allocated in constructors; never in `process()`.
 
 ---

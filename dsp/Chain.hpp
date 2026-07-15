@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 2;
+static const uint32_t kChainProtocolVersion = 3;
 static const int kMidiHeadControls = 14;
 static const int kMaxMidiProgramEvents = 64;
 
@@ -56,7 +56,7 @@ enum RunState { RUN_STOPPED = 0, RUN_RUNNING = 1, RUN_HOLDING = 2 };
 
 struct HeadStatus {
 	uint8_t headId;        // 0..7, 0 adjacent to PROGRAM
-	uint8_t currentStage;  // global stage index 0..31
+	uint8_t currentStage;  // global stage index 0..63
 	uint8_t runState;      // RunState
 	uint8_t display;       // 1 = this head requests Display (manual: FG "display" switch)
 	uint8_t pulse1;        // current Pulse 1 gate level, for MIDI out
@@ -163,7 +163,8 @@ struct HeadsToAnchorMsg {
 
 // Rightward, anchor -> blocks, relayed block-to-block: edit ops, selected
 // stage for the edit LEDs, merged head statuses for the position dots.
-static const int kMaxOpsPerTick = 64;  // bulk edit = up to 32 ops in one tick
+// A Limited-range bulk gesture can emit Range + octave for every stage.
+static const int kMaxOpsPerTick = 2 * kMaxStages;
 
 struct AnchorToBlocksMsg {
 	EditOp ops[kMaxOpsPerTick];
@@ -297,7 +298,7 @@ struct NeighborView {
 };
 
 struct ChainLayout {
-	uint8_t blockCount;  // contiguous STAGE4 blocks to the right, 0..8
+	uint8_t blockCount;  // contiguous STAGE4 blocks to the right, 0..16
 	uint8_t headCount;   // contiguous HEADs to the left, 0..8
 	// True if a further chain module sits beyond the counted run but is
 	// separated by a gap/foreign module (or exceeds the maximum) — the panel

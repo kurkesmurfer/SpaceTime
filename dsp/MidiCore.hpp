@@ -28,8 +28,10 @@ enum MidiRoute {
 	MIDI_ROUTE_CONTINUE,
 	MIDI_ROUTE_STOP,
 	MIDI_ROUTE_PROGRAM,
+	MIDI_ROUTE_STAGE,
 	MIDI_ROUTE_HEAD,
-	MIDI_ROUTE_PROGRAM_HEAD
+	MIDI_ROUTE_PROGRAM_HEAD,
+	MIDI_ROUTE_STAGE_HEAD
 };
 
 struct MidiOutLaneConfig {
@@ -50,6 +52,7 @@ struct MidiOutputSink {
 class MidiCore {
 public:
 	int controlChannel;
+	int sliderChannel;
 	bool moveStageSliders;
 
 	uint32_t midiClockSeq, midiStartSeq, midiStopSeq, midiContinueSeq;
@@ -67,8 +70,9 @@ public:
 	uint32_t outNoteCount, outCcCount;
 
 	MidiCore()
-		: controlChannel(15), moveStageSliders(true), midiClockSeq(0), midiStartSeq(0), midiStopSeq(0),
-		  midiContinueSeq(0), programEventCount(0), programEventSeq(0),
+		: controlChannel(15), sliderChannel(14), moveStageSliders(true),
+		  midiClockSeq(0), midiStartSeq(0), midiStopSeq(0), midiContinueSeq(0),
+		  programEventCount(0), programEventSeq(0),
 		  lastStatus(-1), lastChannel(-1), lastNumber(-1), lastValue(-1),
 		  lastRoute(MIDI_ROUTE_NONE), outNoteCount(0), outCcCount(0) {
 		for (int h = 0; h < kMaxHeads; h++) {
@@ -102,8 +106,10 @@ public:
 			case MIDI_ROUTE_CONTINUE: return "continue";
 			case MIDI_ROUTE_STOP: return "stop";
 			case MIDI_ROUTE_PROGRAM: return "program";
+			case MIDI_ROUTE_STAGE: return "stage";
 			case MIDI_ROUTE_HEAD: return "head";
 			case MIDI_ROUTE_PROGRAM_HEAD: return "program+head";
+			case MIDI_ROUTE_STAGE_HEAD: return "stage+head";
 			default: return "none";
 		}
 	}
@@ -145,13 +151,18 @@ public:
 			lastNumber = data1;
 			lastValue = data2;
 			bool toProgram = channel == controlChannel;
+			bool toStage = channel == sliderChannel;
 			bool toHead = channel < kMaxHeads;
 			if (toProgram)
 				handleProgramCc(data1, data2);
+			if (toStage)
+				handleSliderCc(data1, data2);
 			if (toHead)
 				handleHeadCc(channel, data1, data2);
 			lastRoute = toProgram && toHead ? MIDI_ROUTE_PROGRAM_HEAD :
-				(toProgram ? MIDI_ROUTE_PROGRAM : (toHead ? MIDI_ROUTE_HEAD : MIDI_ROUTE_IGNORED));
+				(toStage && toHead ? MIDI_ROUTE_STAGE_HEAD :
+				 (toProgram ? MIDI_ROUTE_PROGRAM :
+				  (toStage ? MIDI_ROUTE_STAGE : (toHead ? MIDI_ROUTE_HEAD : MIDI_ROUTE_IGNORED))));
 		}
 		else if (status == 0xC && channel == controlChannel) {
 			lastNumber = data1;
@@ -272,14 +283,15 @@ private:
 		event.flags = flags;
 	}
 
+	void handleSliderCc(uint8_t cc, uint8_t value) {
+		float scaled = cc < kMaxStages ? ((float)value / 127.f) * 10.f :
+			(float)value / 127.f;
+		pushProgramEvent(MIDI_PROG_SLIDER, cc, value, scaled,
+			moveStageSliders ? EDIT_OP_MOVE_SLIDER : EDIT_OP_NONE);
+	}
+
 	void handleProgramCc(uint8_t cc, uint8_t value) {
-		if (cc < 32)
-			pushProgramEvent(MIDI_PROG_SLIDER, cc, value, ((float)value / 127.f) * 10.f,
-				moveStageSliders ? EDIT_OP_MOVE_SLIDER : EDIT_OP_NONE);
-		else if (cc < 64)
-			pushProgramEvent(MIDI_PROG_SLIDER, cc, value, (float)value / 127.f,
-				moveStageSliders ? EDIT_OP_MOVE_SLIDER : EDIT_OP_NONE);
-		else if (cc == 64 && value >= 64)
+		if (cc == 64 && value >= 64)
 			pushProgramEvent(MIDI_PROG_SELECT_PREV, 0, value);
 		else if (cc == 65 && value >= 64)
 			pushProgramEvent(MIDI_PROG_SELECT_NEXT, 0, value);

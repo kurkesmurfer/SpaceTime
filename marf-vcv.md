@@ -13,7 +13,7 @@
 
 ## Management Summary
 
-A VCV Rack 2 plugin that reinterprets the 248t MARF as a fully modular family, mirroring the hardware's actual architecture. The 248t consists of three sections: a stage surface (dual slider rows), a **shared programming section** (one set of modifier switches plus a stage-select scroll; modifier LEDs display the selected stage's programming), and two Function Generators. The VCV family maps these onto: **PROGRAM** (anchor — the complete programming section, external inputs A–D, presets/scale/key, globals), **STAGE4** blocks (pure slider surface, 4 stages each, chained as right-side expanders, 1–8 blocks for 4–32 stages), and **HEAD** playhead expanders (the Function Generators, up to 8 on the left, each with independent transport, addressing, direction and clocking plus full output complement). The hardware's two FGs are the degenerate case (anchor + 4 blocks + 2 heads).
+A VCV Rack 2 plugin that reinterprets the 248t MARF as a fully modular family, mirroring the hardware's actual architecture. The 248t consists of three sections: a stage surface (dual slider rows), a **shared programming section** (one set of modifier switches plus a stage-select scroll; modifier LEDs display the selected stage's programming), and two Function Generators. The VCV family maps these onto: **PROGRAM** (anchor — the complete programming section, external inputs A–D, presets/scale/key, globals), **STAGE4** blocks (pure slider surface, 4 stages each, chained as right-side expanders, 1–16 blocks for 4–64 stages), and **HEAD** playhead expanders (the Function Generators, up to 8 on the left, each with independent transport, addressing, direction and clocking plus full output complement). The hardware's two FGs are the degenerate case (anchor + 4 blocks + 2 heads).
 
 Per-stage programming state lives in the STAGE4 blocks (clean persistence; sequence travels with the block); the anchor edits it via expander edit-ops. Interpolation per the owner's hardware: three-position momentary, stepped / slew 1 / slew 2, slew time proportional to the stage interval (manual describes binary sloped/stepped; hardware shows two levels — owner-verified). External-source selection follows the hardware mechanism: the modifier is binary INT/EXT and the stage's voltage slider selects which of inputs A–D is active. Target: VCV Rack 2 first, MetaModule stretch goal. Codebase per Siren canon (`dsp/` headers, `vcv/` subtree).
 
@@ -24,7 +24,7 @@ Per-stage programming state lives in the STAGE4 blocks (clean persistence; seque
 | Module | HP (est.) | Role |
 |--------|-----------|------|
 | PROGRAM | 14–18 | Programming section: stage-select scroll, voltage/time/mode modifier switches with LEDs, pulses, Clear, presets + scale/key, EXT A–D input column, globals, POLY OUT |
-| STAGE4 | 10–12 | 4 stages: voltage slider, time slider, stage LED (selection + playhead positions). Chainable ×8 right of PROGRAM |
+| STAGE4 | 10–12 | 4 stages: voltage slider, time slider, stage LED (selection + playhead positions). Chainable ×16 right of PROGRAM |
 | HEAD | 8–10 | One Function Generator: transport, addressing, direction, clock, outputs. Chainable ×8 left of PROGRAM |
 
 Rack placement: `[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, contiguous; a gap or foreign module terminates the chain. Stage index runs left-to-right across blocks; head index 1 adjacent to PROGRAM, increasing leftward. Reordering STAGE4 blocks reorders the sequence (blocks own their stage data).
@@ -38,7 +38,7 @@ protocols.
 
 ---
 
-## STAGE4 (stage block, ×1–8)
+## STAGE4 (stage block, ×1–16)
 
 Per stage column:
 - **Voltage slider** — output level 0..10 V (subject to Range modifier). In EXT voltage-source mode, the slider instead **selects which external input (A–D) is active** for this stage (quartile mapping), per hardware.
@@ -138,7 +138,7 @@ Default: 0–10 V spans the full current chain (self-normalizing). Menu alternat
 ## Expander Protocol (VCV Rack)
 
 - Standard `Module::leftExpander`/`rightExpander` producer/consumer with `requestMessageFlip()`; fixed-size structs, **no dynamic allocation**.
-- **Blocks → anchor (leftward):** concatenated stage table `{ float voltage[32]; float time[32]; uint32_t program[32]; uint8_t count }`.
+- **Blocks → anchor (leftward):** concatenated stage table `{ float voltage[64]; float time[64]; uint32_t program[64]; uint8_t count }`.
 - **Anchor → blocks (rightward):** edit-ops `{ stageIndex, field, value }` from the programming section + selected-stage index for LED display; blocks apply ops to their own state.
 - **Anchor → heads (leftward):** stage table + `{ float ext[4]; globals; scaleKey }` relayed head-to-head.
 - **Heads → anchor → blocks (rightward):** status `{ headId, currentStage, phase, runState }` merged/relayed for position LEDs.
@@ -190,15 +190,14 @@ module is present, nothing changes anywhere (zero cost in the chain).
 
 Channel model for Part I:
 
-- The MIDI module has a **control channel** for PROGRAM-side commands:
-  Program Change preset recall, slider CCs, and selected-stage modifier CCs.
-  Default = MIDI channel 15 (0-based; displayed to users as channel 16), and
-  it is configurable from the MIDI module context menu.
+- The MIDI module has separate configurable channels for **PROGRAM controls**
+  and **stage sliders**. PROGRAM defaults to MIDI channel 16; sliders default
+  to MIDI channel 15. The channels must differ.
 - SpaceTime has at most eight heads; per-head channel targeting is a natural
   fit for head-specific MIDI. For Part I, each HEAD gets a target channel
   equal to its 0-based head id (head 0..7 -> MIDI channel 0..7, displayed as
   channels 1..8) and reuses the same HEAD CC map on that channel.
-  PROGRAM/stage edits remain on the module's control channel.
+  PROGRAM and stage-slider edits remain on their respective module channels.
 - MIDI Start/Stop/Continue are System Real-Time messages and carry **no MIDI
   channel**. Heads therefore respond by per-head opt-in, not by channel.
 
@@ -209,7 +208,7 @@ Channel model for Part I:
 | I-1 | **Program Change 1–12 → preset recall** | **Accepted.** Direct fit for the 12 slots; PC 1–12 on the module's control channel. |
 | I-2 | **MIDI clock → head clock** | **Accepted.** Broadcast gains appended `midiClock/Start/Stop` counters; each HEAD has a panel clock-source switch: Internal / External CLK input / MIDI clock / Virtual clock (with the existing DIV/MULT applying to external, MIDI and virtual clocks). Starving MIDI clock shows the same yellow HOLD. |
 | I-3 | **Start/Stop/Continue → head transport** | **Accepted with per-head opt-in.** Start/Stop/Continue are channel-less System Real-Time messages: Start/Continue = start pulse, Stop = stop pulse for heads that opt in. |
-| I-4 | **CC → stage sliders** | **Accepted.** Fixed map on the PROGRAM/stage channel: CC 0..31 = voltage sliders 1..32, CC 32..63 = time sliders 1..32 (7-bit, scaled onto 0-10 V / 0-1). Slider takeover applies, same as preset recall. DROID is programmable, so a clean fixed map beats MIDI-learn. |
+| I-4 | **CC → stage sliders** | **Accepted.** Fixed map on the stage-slider channel: CC 0..63 = voltage sliders 1..64, CC 64..127 = time sliders 1..64 (7-bit, scaled onto 0-10 V / 0-1). Slider takeover applies, same as preset recall. DROID is programmable, so a clean fixed map beats MIDI-learn. |
 | I-5 | **CC → selected-stage modifiers** | **Implemented.** PROGRAM-section controls target the currently selected stage and honour the bulk window. |
 | I-6 | **CC → HEAD controls** | **Implemented.** Each HEAD receives the fixed 14-CC map, including virtual clock, on its own head channel. This is distinct from channel-less MIDI realtime transport. |
 | I-7 | **Notes → strobe/transpose** | **Postponed/rejected for Part I.** Controller MIDI starts with PC/CC/clock/transport. Note input can be reconsidered later only if a concrete controller workflow needs it; generated notes belong to outgoing MIDI Part II. |
@@ -223,10 +222,13 @@ from a selected gate lane.
 
 ### Part I CC layout
 
-The PROGRAM/stage channel uses fixed CC numbers (no base CC offset):
+The stage-slider channel uses the complete fixed CC range (no base offset):
 
-- CC 0..31: voltage sliders 1..32.
-- CC 32..63: time sliders 1..32.
+- CC 0..63: voltage sliders 1..64.
+- CC 64..127: time sliders 1..64.
+
+The separate PROGRAM-controls channel uses:
+
 - CC 64: select previous stage.
 - CC 65: select next stage.
 - CC 66: Clear.
@@ -332,7 +334,7 @@ sampling is not the bottleneck; the throttle is.
 3. ~~I-6 vs I-7 default (strobe vs transpose/off) for note input — still to choose.~~ **Removed from Part I; notes are outgoing MIDI unless revived later.**
 4. ~~Part I per-head MIDI clock/transport opt-in UI~~ **Implemented.**
 5. Part I HEAD CC layout: **accepted as head channels 0..7 reusing fixed CC 0..13, including virtual clock.**
-6. Part I PROGRAM/stage CC layout: **accepted as fixed CC 0..91 on configurable PROGRAM/stage channel, default channel 15.**
+6. Part I PROGRAM/stage CC layout: **implemented on two configurable channels:** stage sliders use CC 0..127 on default channel 15; PROGRAM controls use CC 64..91 and Program Change on default channel 16. The channels must differ.
 7. Part II note gate/timing: **implemented first pass** as per-lane P1/P2/ALL; P1/P2 note-off on gate fall, ALL fixed 30 ms.
 8. NRPN out confirmed needed for your gear (which parameter resolution)? **Still postponed.**
 9. MIDI clock OUT: wanted at all, or trigger-notes lane only? **Still postponed.**
@@ -369,7 +371,7 @@ work packages and the panel/slug review gates.
 - [ ] Verify slew level behaviour and Continuous-mode interpolation on the 248t hardware (Q1, Q2)
 - [ ] Read Limited range offsets from panel (Q3)
 - [ ] Prototype dual-direction expander relay: anchor + 2 blocks + 2 heads; edit-op round trip and onExpanderChange renumbering
-- [ ] Define `program[32]` bitfield layout in `dsp/StageTable.hpp`
+- [x] Define `program[64]` bitfield layout in `dsp/StageTable.hpp`
 - [ ] Custom momentary 3-pos switch widget
 - [ ] Panel sketches via vcv-panel-design skill: PROGRAM first (switch-group layout), then STAGE4 column
 - [x] Check MetaModule SDK expander support — absent in SDK 2.2; use fused module

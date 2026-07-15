@@ -15,9 +15,9 @@ TEST_CASE("program word layout is frozen (version 1)") {
 	// Clear word: limited octave = 2 at bits 5-7, time range = 3 at bits 16-17.
 	CHECK(kClearWord == 0x30040u);
 	CHECK(sizeof(ProgramWord) == sizeof(uint32_t));
-	CHECK(kMaxStages == 32);
+	CHECK(kMaxStages == 64);
 	CHECK(kStagesPerBlock == 4);
-	CHECK(kMaxBlocks == 8);
+	CHECK(kMaxBlocks == 16);
 	CHECK(kMaxHeads == 8);
 }
 
@@ -200,7 +200,7 @@ TEST_CASE("edit op: out-of-range stage index is rejected") {
 	StageTable t;
 	t.count = 4;
 	CHECK_FALSE(apply(t, EditOp(4, Field::Pulse1, 1.f)));   // == count
-	CHECK_FALSE(apply(t, EditOp(31, Field::Pulse1, 1.f)));  // < kMaxStages but >= count
+	CHECK_FALSE(apply(t, EditOp(63, Field::Pulse1, 1.f)));  // < kMaxStages but >= count
 	t.count = 0;
 	CHECK_FALSE(apply(t, EditOp(0, Field::Pulse1, 1.f)));   // empty table
 }
@@ -247,7 +247,7 @@ static BlockSegment makeBlock(int b) {
 	return seg;
 }
 
-TEST_CASE("concatenation of 1..8 blocks preserves order and contents") {
+TEST_CASE("concatenation of 1..16 blocks preserves order and contents") {
 	for (int n = 1; n <= kMaxBlocks; n++) {
 		BlockSegment blocks[kMaxBlocks];
 		for (int b = 0; b < n; b++)
@@ -276,8 +276,8 @@ TEST_CASE("concatenation edge cases: 0 blocks, clamped block count") {
 	BlockSegment blocks[kMaxBlocks];
 	for (int b = 0; b < kMaxBlocks; b++)
 		blocks[b] = makeBlock(b);
-	// Requesting more than kMaxBlocks is clamped to 8.
-	CHECK(concatenate(blocks, 12, t) == kMaxStages);
+	// Requesting more than kMaxBlocks is clamped to 16.
+	CHECK(concatenate(blocks, kMaxBlocks + 4, t) == kMaxStages);
 	CHECK(t.count == kMaxStages);
 }
 

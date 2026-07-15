@@ -192,23 +192,23 @@ TEST_CASE("time range buttons are radio selects") {
 
 TEST_CASE("bulk edit while scrolling emits ops for all stages") {
 	ProgramLogic p;
-	StageTable t = makeTable(8);
+	StageTable t = makeTable(kMaxStages);
 	EditOp ops[kMaxOpsPerTick];
 
-	p.tickScroll(+1, 0.01f, 8);  // held -> bulk window
+	p.tickScroll(+1, 0.01f, kMaxStages);  // held -> bulk window
 	REQUIRE(p.scrollActive());
 	int n = p.emitModifier(Field::Pulse1, +1, t, ops, kMaxOpsPerTick);
-	CHECK(n == 8);
+	CHECK(n == kMaxStages);
 	for (int i = 0; i < n; i++) {
 		CHECK(ops[i].stageIndex == i);
 		REQUIRE(apply(t, ops[i]));
 	}
-	for (int s = 0; s < 8; s++)
+	for (int s = 0; s < kMaxStages; s++)
 		CHECK(t.program[s].pulse1());
 
 	// Bulk limited bank: 2 ops per stage, still within the tick budget.
 	n = p.emitLimited(0, t, ops, kMaxOpsPerTick);
-	CHECK(n == 16);
+	CHECK(n == 2 * kMaxStages);
 }
 
 TEST_CASE("select override (FG Display) redirects gestures and display") {
@@ -319,17 +319,17 @@ TEST_CASE("loading onto a shorter chain restores only existing stages") {
 	StageTable b = makeTable(8);  // chain shrank to 2 blocks
 	REQUIRE(p.loadPreset(0, b));
 	CHECK(p.pendingOps() == 3 * 8);
-	// A 32-stage load takes two drains at the 64-op budget.
-	StageTable c = makeTable(32);
-	StageTable saved = makeTable(32);
-	for (int s = 0; s < 32; s++)
+	// A 64-stage load takes two drains at the 128-op budget.
+	StageTable c = makeTable(64);
+	StageTable saved = makeTable(64);
+	for (int s = 0; s < 64; s++)
 		saved.voltage[s] = 9.f;
 	p.savePreset(1, saved, ScaleKey());
 	REQUIRE(p.loadPreset(1, c));
 	EditOp ops[kMaxOpsPerTick];
 	CHECK(p.drainPendingOps(ops, kMaxOpsPerTick) == kMaxOpsPerTick);
-	CHECK(p.pendingOps() == 96 - kMaxOpsPerTick);
-	CHECK(p.drainPendingOps(ops, kMaxOpsPerTick) == 96 - kMaxOpsPerTick);
+	CHECK(p.pendingOps() == 192 - kMaxOpsPerTick);
+	CHECK(p.drainPendingOps(ops, kMaxOpsPerTick) == 192 - kMaxOpsPerTick);
 	CHECK(p.pendingOps() == 0);
 }
 
