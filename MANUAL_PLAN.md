@@ -13,6 +13,12 @@ and patches. Credit the Buchla 248 and Tiptop Audio/Buchla 248t as inspiration
 and identify hardware-verified behaviour where relevant. Do not copy hardware
 manual artwork, page design, or substantial passages.
 
+Include this credit line in the published manual:
+
+> SpaceTime is an independent software instrument inspired by the Buchla Model
+> 248 and the Tiptop Audio/Buchla 248t, with full credit to Buchla and Tiptop
+> Audio for the hardware instruments.
+
 ## Source Hierarchy
 
 1. Current SpaceTime implementation and automated tests.
