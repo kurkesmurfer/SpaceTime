@@ -23,9 +23,12 @@ The installable probe is written to
 
 1. Install `SpaceTimeProbe.mmplugin` and add one BUS PROBE CORE and one BUS
    PROBE REMOTE to a patch.
-2. Set both Instrument IDs to A. Their displays must change from `WAIT Cn` to
-   `LINK Cn`; both STATUS outputs must read +5 V. `C1` and `C2` identify the
-   processor core actually running that probe.
+2. Both probes default to Instrument ID A. To change it, open the probe's module
+   view, rotate through its element list to `Instrument ID`, press the rotary,
+   and choose A-D. This is an alternate parameter, so it appears in the element
+   list rather than on the panel image. With matching IDs, the displays must
+   change from `WAIT Cn` to `LINK Cn`; both STATUS outputs must read +5 V. `C1`
+   and `C2` identify the processor core actually running that probe.
 3. Patch a changing voltage into CORE PUBLISH. REMOTE SEEN CORE must reproduce
    it without a virtual cable between the probes.
 4. Patch a different voltage into REMOTE SEND. CORE SEEN REMOTE must reproduce
