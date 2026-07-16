@@ -104,10 +104,11 @@ cables or return to a fused Core rather than weakening synchronization.
 Observed on firmware 2.2.0: Core and Remote were automatically distributed one
 per processor core; bidirectional values were inspected on a scope with Sweet
 Sixteen driving both inputs; `LINK`, `DUP` and mismatched-ID `WAIT` states worked;
-IDs A and B remained isolated; save/reload recovered correctly. Reported load
-was 25% for the two-core probe/scope test patch (scope: 18vert). Endpoint
-deletion/reinsertion, duplicate-owner removal and repeated plugin unload/reload
-remain robustness checks for the product bus rather than blockers for MM1.
+IDs A and B remained isolated; save/reload and endpoint deletion/reinsertion/
+reconnection recovered correctly. Reported load was 25% for the two-core
+probe/scope test patch (scope: 18vert). IDs C/D, duplicate-owner removal and
+repeated plugin unload/reload remain robustness checks for the product bus
+rather than blockers for MM1.
 
 ### MM1 - Core engine
 
