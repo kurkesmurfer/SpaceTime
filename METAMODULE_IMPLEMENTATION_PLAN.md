@@ -112,6 +112,8 @@ checks for the product bus rather than blockers for MM1.
 
 ### MM1 - Core engine
 
+**Status:** engine and host coverage implemented; first hardware trace comparison pending.
+
 Implement `SpaceTimeEngine` and host tests. Start with four stages/one head in
 tests, then exercise the full dimensions of 64/eight. Reuse `StageTable`,
 `ProgramLogic`, `HeadDSP`, `PresetRowLogic` and `MidiCore`; do not duplicate their
@@ -122,6 +124,8 @@ sources, transport, key/scale, preset recall and MIDI edits.
 
 ### MM2 - Core panel mockup
 
+**Status:** 16 HP Core panel packaged; 240/180 px hardware review pending.
+
 Produce the smallest useful Core panel with fixed I/O, status and setup. MIDI
 must be sufficient to program and operate the engine without remote panels.
 Convert at 240 px high and inspect both 240 px and 180 px display scales. Freeze
@@ -130,6 +134,8 @@ the Core slug only after this review.
 **Exit:** human layout gate; every control and jack has a stable ID and label.
 
 ### MM3 - Core control and stage integration
+
+**Status:** first adapter includes all 64 stages, Program edits, presets and lossless table persistence; hardware verification pending.
 
 Wire PROGRAM, stage bank, selected-stage feedback, slider takeover, presets,
 key/scale and pulse-retrigger behavior. Keep MIDI updates visually reflected in
@@ -140,6 +146,8 @@ MIDI; save/reload is lossless; changing banks does not alter values.
 
 ### MM4 - Heads and I/O
 
+**Status:** all eight fused heads process continuously and accept the four clock modes through MIDI; compact Core currently exposes Head 1 monitor outputs only.
+
 Wire all eight heads, all four clock modes, dedicated CV inputs/outputs, status
 lights and head selection. Verify that banking edits only the selected head
 while every head continues processing continuously.
@@ -148,6 +156,8 @@ while every head continues processing continuously.
 and virtual-clock tests, including tick-for-tick virtual-clock verification.
 
 ### MM5 - MIDI completion
+
+**Status:** accepted input map and 7-bit note/CC output lanes are integrated and persisted; MetaModule hardware routing and DROID verification pending. Fourteen-bit CV remains later.
 
 Port the accepted implementation chart unchanged: channel 16 default for
 PROGRAM/stages, head channels 1-8, CC 0-91, realtime clock/transport and outgoing

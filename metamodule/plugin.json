@@ -1,12 +1,17 @@
 {
-  "slug": "SpaceTimeProbe",
-  "name": "SpaceTime Bus Probe",
-  "version": "0.1.0",
+  "slug": "SpaceTime",
+  "name": "SpaceTime",
+  "version": "0.2.0",
   "license": "GPL-3.0-or-later",
   "brand": "Kurkesmurfer",
   "author": "Peet Siemensz",
   "authorEmail": "",
   "modules": [
+    {
+      "slug": "Core",
+      "name": "SpaceTime Core",
+      "description": "64-stage, eight-head SpaceTime engine with integrated MIDI"
+    },
     {
       "slug": "BusProbeCore",
       "name": "BUS PROBE CORE",

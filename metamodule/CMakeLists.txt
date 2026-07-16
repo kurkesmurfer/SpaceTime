@@ -14,23 +14,24 @@ endif()
 
 include(${METAMODULE_SDK_DIR}/plugin.cmake)
 
-project(SpaceTimeBusProbe
-        VERSION 0.1
-        DESCRIPTION "SpaceTime shared-memory bus probe"
+project(SpaceTimeMetaModule
+        VERSION 0.2
+        DESCRIPTION "SpaceTime Core and shared-memory bus probes"
         LANGUAGES C CXX ASM)
 
-add_library(SpaceTimeProbe STATIC)
-target_sources(SpaceTimeProbe PRIVATE
+add_library(SpaceTime STATIC)
+target_sources(SpaceTime PRIVATE
+        src/Core.cpp
         src/Probe.cpp
         src/plugin.cpp)
-target_include_directories(SpaceTimeProbe PRIVATE
+target_include_directories(SpaceTime PRIVATE
         src
         ../dsp)
-set_property(TARGET SpaceTimeProbe PROPERTY CXX_STANDARD 20)
+set_property(TARGET SpaceTime PROPERTY CXX_STANDARD 20)
 
 create_plugin(
-        SOURCE_LIB SpaceTimeProbe
-        PLUGIN_NAME SpaceTimeProbe
+        SOURCE_LIB SpaceTime
+        PLUGIN_NAME SpaceTime
         PLUGIN_JSON ${CMAKE_CURRENT_LIST_DIR}/plugin.json
         SOURCE_ASSETS ${CMAKE_CURRENT_LIST_DIR}/assets
         DESTINATION ${INSTALL_DIR})

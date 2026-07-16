@@ -2,8 +2,9 @@
   "MetaModulePluginMaintainer": "Kurkesmurfer",
   "MetaModulePluginMaintainerEmail": "",
   "MetaModulePluginMaintainerUrl": "https://www.kurkesmurfer.com/",
-  "MetaModuleDescription": "Disposable SpaceTime shared-memory bus proof for MetaModule",
+  "MetaModuleDescription": "SpaceTime Core development plugin with shared-bus probes",
   "MetaModuleIncludedModules": [
+    { "slug": "Core", "name": "SpaceTime Core" },
     { "slug": "BusProbeCore", "name": "BUS PROBE CORE" },
     { "slug": "BusProbeRemote", "name": "BUS PROBE REMOTE" }
   ]

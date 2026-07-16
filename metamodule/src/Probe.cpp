@@ -240,9 +240,9 @@ void registerProbe(const char* slug, const char* description, const char* panel)
 } // namespace
 
 void initProbeCore() {
-	registerProbe<ProbeCore>("BusProbeCore", "SpaceTime shared-bus Core probe", "SpaceTimeProbe/ProbeCore.png");
+	registerProbe<ProbeCore>("BusProbeCore", "SpaceTime shared-bus Core probe", "SpaceTime/ProbeCore.png");
 }
 
 void initProbeRemote() {
-	registerProbe<ProbeRemote>("BusProbeRemote", "SpaceTime shared-bus Remote probe", "SpaceTimeProbe/ProbeRemote.png");
+	registerProbe<ProbeRemote>("BusProbeRemote", "SpaceTime shared-bus Remote probe", "SpaceTime/ProbeRemote.png");
 }
