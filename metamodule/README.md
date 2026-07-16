@@ -57,6 +57,8 @@ Principle accepted on 2026-07-16 with firmware 2.2.0:
 - Sweet Sixteen drove both inputs and both received outputs were inspected on an
   18vert scope.
 - `LINK`, `DUP` and mismatched-ID `WAIT` states behaved correctly.
+- STATUS output was verified at +5 V for `LINK`, 0 V for `WAIT` and -5 V for
+  `DUP`.
 - Instrument IDs A and B were verified.
 - Save and reload recovered the link and state.
 - Endpoint deletion, reinsertion and reconnection recovered correctly.
