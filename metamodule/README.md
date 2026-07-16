@@ -23,16 +23,18 @@ The installable probe is written to
 
 1. Install `SpaceTimeProbe.mmplugin` and add one BUS PROBE CORE and one BUS
    PROBE REMOTE to a patch.
-2. Set both Instrument IDs to A. Their displays must change from `WAIT` to
-   `LINK`; both STATUS outputs must read +5 V.
+2. Set both Instrument IDs to A. Their displays must change from `WAIT Cn` to
+   `LINK Cn`; both STATUS outputs must read +5 V. `C1` and `C2` identify the
+   processor core actually running that probe.
 3. Patch a changing voltage into CORE PUBLISH. REMOTE SEEN CORE must reproduce
    it without a virtual cable between the probes.
 4. Patch a different voltage into REMOTE SEND. CORE SEEN REMOTE must reproduce
    it.
-5. Open the CPU map and place the probes on different processor cores. If the
-   firmware does not permit manual placement, add enough unrelated processing
-   modules to make it assign them to different cores. Repeat both directions
-   under load and record the observed assignment.
+5. There is no user-facing CPU map or manual core assignment in firmware 2.2.
+   Check the suffix on each probe's display. For the cross-core test, one must
+   show `C1` and the other `C2`. If both show the same suffix, add processing
+   modules of different CPU weights and reload the patch until automatic load
+   balancing separates the probes. Repeat both directions under load.
 6. Save and reload the patch. Link and values must recover without intervention.
 7. Add a second Core on ID A. Displays must show `DUP` and STATUS must be -5 V.
    Remove either Core; the remaining Core must claim the bus and relink.

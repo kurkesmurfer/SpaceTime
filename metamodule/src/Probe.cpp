@@ -19,6 +19,12 @@ enum class ProbeStatus { Waiting, Linked, Duplicate };
 
 spacetime::MetaModuleBusProbeRegistry probeRegistry;
 
+uint32_t currentProcessorCore() {
+	uint32_t affinity = 0;
+	asm volatile("mrc p15, 0, %0, c0, c0, 5" : "=r"(affinity));
+	return affinity & 0xff;
+}
+
 class ProbeModule : public CoreProcessor {
 public:
 	ProbeModule(bool core)
@@ -69,14 +75,22 @@ public:
 	size_t get_display_text(int displayId, std::span<char> text) override {
 		if (displayId != StatusDisplay || text.empty())
 			return 0;
-		const char* label = status_ == ProbeStatus::Linked ? "LINK" :
+		const char* state = status_ == ProbeStatus::Linked ? "LINK" :
 			status_ == ProbeStatus::Duplicate ? "DUP" : "WAIT";
-		size_t length = std::min(text.size(), std::strlen(label));
+		char label[8] = {};
+		size_t stateLength = std::strlen(state);
+		std::memcpy(label, state, stateLength);
+		label[stateLength] = ' ';
+		label[stateLength + 1] = 'C';
+		uint32_t processorCore = processingCore_.load(std::memory_order_acquire);
+		label[stateLength + 2] = processorCore == 0 ? '?' : (char)('0' + processorCore);
+		size_t length = std::min(text.size(), stateLength + 3);
 		std::memcpy(text.data(), label, length);
 		return length;
 	}
 
 	void update() override {
+		processingCore_.store(currentProcessorCore() + 1, std::memory_order_release);
 		spacetime::MetaModuleProbeBus& bus = probeRegistry.bus(busId_);
 		tryClaim();
 
@@ -146,6 +160,7 @@ private:
 	uint32_t lastInboundSequence_ = 0;
 	float input_ = 0.f;
 	float seen_ = 0.f;
+	std::atomic<uint32_t> processingCore_{0};
 	ProbeStatus status_ = ProbeStatus::Waiting;
 };
 
