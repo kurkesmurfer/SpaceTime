@@ -111,6 +111,17 @@ TEST_CASE("SpaceTime engine runs all eight HeadDSP instances from one table") {
 		CHECK(engine.headOut(head).cv == doctest::Approx(4.f));
 }
 
+TEST_CASE("SpaceTime engine refreshes stopped heads at idle control rate") {
+	SpaceTimeEngine engine;
+	engine.table().voltage[0] = 4.f;
+	for (int sample = 0; sample < 15; sample++)
+		engine.processHeads(1.f / 48000.f);
+	CHECK(engine.headOut(0).cv == doctest::Approx(0.f));
+	for (int sample = 0; sample < 2; sample++)
+		engine.processHeads(1.f / 48000.f);
+	CHECK(engine.headOut(0).cv == doctest::Approx(4.f));
+}
+
 TEST_CASE("SpaceTime engine applies per-head MIDI transport and virtual clock") {
 	SpaceTimeEngine engine;
 	engine.table().program[0].setPulse1(true);

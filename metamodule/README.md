@@ -24,6 +24,11 @@ The installable package is written to
 
 This test is now required before further remote-panel work.
 
+Initial Core build `40813fd` loaded successfully on firmware 2.2.0 but reported
+59% CPU at startup in an otherwise empty patch. That is the performance baseline,
+not an accepted result. The following build adds stopped-head control-rate refresh
+and a disabled-MIDI-output fast path; record its empty-patch CPU before continuing.
+
 1. Remove the old `SpaceTimeProbe.mmplugin`, install `SpaceTime.mmplugin`, then
    add **SpaceTime Core**. Its defaults are Program channel 16 and stage-slider
    channel 15; head channels are fixed at 1-8.

@@ -327,6 +327,9 @@ public:
 
 	int currentStage() const { return stage_; }
 	bool isRunning() const { return running_; }
+	bool hasTransientOutput() const {
+		return allTimer_ > 0.f || eocTimer_ > 0.f || retrig1_ > 0.f || retrig2_ > 0.f;
+	}
 
 private:
 	// ---- state

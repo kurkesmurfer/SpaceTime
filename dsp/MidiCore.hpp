@@ -56,6 +56,7 @@ public:
 	bool moveStageSliders;
 
 	uint32_t midiClockSeq, midiStartSeq, midiStopSeq, midiContinueSeq;
+	uint32_t headEventSeq[kMaxHeads];
 	uint32_t headCcSeq[kMaxHeads][kMidiHeadControls];
 	float headCcValue[kMaxHeads][kMidiHeadControls];
 
@@ -76,6 +77,7 @@ public:
 		  lastStatus(-1), lastChannel(-1), lastNumber(-1), lastValue(-1),
 		  lastRoute(MIDI_ROUTE_NONE), outNoteCount(0), outCcCount(0) {
 		for (int h = 0; h < kMaxHeads; h++) {
+			headEventSeq[h] = 0;
 			outLane[h].channel = (uint8_t)h;
 			outLane[h].cc = (uint8_t)(20 + h);
 			prevGate_[h] = false;
@@ -259,6 +261,14 @@ public:
 		}
 	}
 
+	bool outputRequiresService() const {
+		for (int h = 0; h < kMaxHeads; h++) {
+			if (outLane[h].mode != MIDI_OUT_OFF || noteActive_[h])
+				return true;
+		}
+		return false;
+	}
+
 private:
 	bool prevGate_[kMaxHeads];
 	bool noteActive_[kMaxHeads];
@@ -340,6 +350,7 @@ private:
 		}
 		headCcValue[channel][cc] = scaled;
 		headCcSeq[channel][cc]++;
+		headEventSeq[channel]++;
 	}
 
 	static uint8_t cvToNote(float cv) {

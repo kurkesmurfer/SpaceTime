@@ -159,6 +159,31 @@ TEST_CASE("MIDI core emits quantized notes and gate-fall note off") {
 	CHECK(sink.sent[1].data1 == 72);
 }
 
+TEST_CASE("disabled MIDI output is idle but still clears an active note") {
+	MidiCore core;
+	TestMidiSink sink;
+	CHECK_FALSE(core.outputRequiresService());
+	core.outLane[0].mode = MIDI_OUT_NOTES;
+	core.outLane[0].gateSource = MIDI_GATE_P1;
+	CHECK(core.outputRequiresService());
+
+	HeadsToAnchorMsg status;
+	status.headCount = 1;
+	status.status[0].headId = 0;
+	status.status[0].runState = RUN_RUNNING;
+	status.status[0].quantized = 1;
+	status.status[0].pulse1 = 1;
+	core.processOutput(status, 0.001f, sink);
+	REQUIRE(sink.sent.size() == 1);
+
+	core.outLane[0].mode = MIDI_OUT_OFF;
+	CHECK(core.outputRequiresService());
+	core.processOutput(status, 0.001f, sink);
+	REQUIRE(sink.sent.size() == 2);
+	CHECK(sink.sent[1].status == 0x8);
+	CHECK_FALSE(core.outputRequiresService());
+}
+
 TEST_CASE("MIDI core emits throttled 7-bit CC from head CV") {
 	MidiCore core;
 	TestMidiSink sink;

@@ -169,6 +169,8 @@ verified on hardware. Fourteen-bit CV output remains explicitly later.
 
 ### MM6 - Performance and hardware validation
 
+**Status:** initial fused Core loaded on firmware 2.2.0 but consumed 59% CPU in an otherwise empty patch. Idle fast paths implemented; replacement hardware measurement pending.
+
 Measure release and stress configurations on actual MetaModule. Record average
 and peak CPU, MIDI-clock stability, event loss under dense CC traffic and patch
 load/save behavior. Run at supported sample rates and with all eight heads

@@ -27,6 +27,7 @@ public:
 		lastAppliedMidiIndex_ = 0;
 		lastAppliedMidiValue_ = 0;
 		appliedMidiEvents_ = 0;
+		idleHeadTime_ = 0.f;
 		for (int h = 0; h < kMaxHeads; h++) {
 			headDsp_[h].reset((uint32_t)(h + 1));
 			headConfig_[h] = HeadConfig();
@@ -85,8 +86,14 @@ public:
 
 	void processHeads(float dt) {
 		applyMidiToHeads();
+		idleHeadTime_ += dt;
+		bool refreshIdleHeads = idleHeadTime_ >= 1.f / 3000.f;
 		for (int h = 0; h < kMaxHeads; h++) {
 			HeadRuntime& runtime = headRuntime_[h];
+			bool audioRate = headDsp_[h].isRunning() || headConfig_[h].continuous ||
+				headDsp_[h].hasTransientOutput() || runtime.forceTick;
+			if (!audioRate && !refreshIdleHeads)
+				continue;
 			HeadSignals signals = headSignals_[h];
 			signals.start = maxFloat(signals.start, pulseGate(runtime.startTimer, dt));
 			signals.stop = maxFloat(signals.stop, pulseGate(runtime.stopTimer, dt));
@@ -100,13 +107,18 @@ public:
 				signals.extClock = 0.f;
 			signals.reset = signals.reset || runtime.resetPending;
 			runtime.resetPending = false;
+			runtime.forceTick = false;
 			headConfig_[h].clkExt = runtime.clockSource != 0;
 			headDsp_[h].tick(table_, ext_, globals_, program_.scaleKey(),
-				headConfig_[h], signals, dt, headOut_[h]);
+				headConfig_[h], signals, audioRate ? dt : idleHeadTime_, headOut_[h]);
 		}
+		if (refreshIdleHeads)
+			idleHeadTime_ = 0.f;
 	}
 
 	void processMidiOutput(float dt, MidiOutputSink& sink) {
+		if (!midi_.outputRequiresService())
+			return;
 		HeadsToAnchorMsg status;
 		status.headCount = kMaxHeads;
 		status.valid = true;
@@ -162,6 +174,7 @@ private:
 		int clockSource;
 		bool followMidiTransport;
 		bool resetPending;
+		bool forceTick;
 		float midiClockTimer;
 		float virtualClockTimer;
 		float startTimer;
@@ -172,13 +185,15 @@ private:
 		uint32_t lastStartSeq;
 		uint32_t lastStopSeq;
 		uint32_t lastContinueSeq;
+		uint32_t lastHeadEventSeq;
 		uint32_t lastCcSeq[kMidiHeadControls];
 
 		HeadRuntime()
-			: clockSource(0), followMidiTransport(false), resetPending(false),
+			: clockSource(0), followMidiTransport(false), resetPending(false), forceTick(false),
 			  midiClockTimer(0.f), virtualClockTimer(0.f), startTimer(0.f),
 			  stopTimer(0.f), advanceTimer(0.f), strobeTimer(0.f),
 			  lastClockSeq(0), lastStartSeq(0), lastStopSeq(0), lastContinueSeq(0) {
+			lastHeadEventSeq = 0;
 			for (int control = 0; control < kMidiHeadControls; control++)
 				lastCcSeq[control] = 0;
 		}
@@ -189,6 +204,7 @@ private:
 	uint8_t lastAppliedMidiType_ = MIDI_PROG_NONE;
 	uint8_t lastAppliedMidiIndex_ = 0;
 	uint8_t lastAppliedMidiValue_ = 0;
+	float idleHeadTime_ = 0.f;
 
 	static int clampHead(int head) {
 		return head < 0 ? 0 : (head >= kMaxHeads ? kMaxHeads - 1 : head);
@@ -234,7 +250,8 @@ private:
 	void applyMidiToHeads() {
 		for (int h = 0; h < kMaxHeads; h++) {
 			HeadRuntime& runtime = headRuntime_[h];
-			if (midi_.midiClockSeq != runtime.lastClockSeq) {
+			bool clockChanged = midi_.midiClockSeq != runtime.lastClockSeq;
+			if (clockChanged) {
 				runtime.lastClockSeq = midi_.midiClockSeq;
 				runtime.midiClockTimer = 1e-3f;
 			}
@@ -248,12 +265,19 @@ private:
 				runtime.startTimer = 1e-3f;
 			if (runtime.followMidiTransport && stopChanged)
 				runtime.stopTimer = 1e-3f;
+			if ((runtime.followMidiTransport && (startChanged || continueChanged || stopChanged)) ||
+				clockChanged)
+				runtime.forceTick = true;
+			if (midi_.headEventSeq[h] == runtime.lastHeadEventSeq)
+				continue;
+			runtime.lastHeadEventSeq = midi_.headEventSeq[h];
 			for (int control = 0; control < kMidiHeadControls; control++) {
 				uint32_t sequence = midi_.headCcSeq[h][control];
 				if (sequence == runtime.lastCcSeq[control])
 					continue;
 				runtime.lastCcSeq[control] = sequence;
 				applyHeadCc(h, control, midi_.headCcValue[h][control]);
+				runtime.forceTick = true;
 			}
 		}
 	}
