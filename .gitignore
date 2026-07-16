@@ -6,4 +6,5 @@ plugin.dll
 test/run
 test/*.o
 *.vcvplugin
+metamodule/metamodule-plugins/
 .DS_Store

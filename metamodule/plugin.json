@@ -1,0 +1,21 @@
+{
+  "slug": "SpaceTimeProbe",
+  "name": "SpaceTime Bus Probe",
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "brand": "Kurkesmurfer",
+  "author": "Peet Siemensz",
+  "authorEmail": "",
+  "modules": [
+    {
+      "slug": "BusProbeCore",
+      "name": "BUS PROBE CORE",
+      "description": "Disposable MetaModule shared-memory transport probe"
+    },
+    {
+      "slug": "BusProbeRemote",
+      "name": "BUS PROBE REMOTE",
+      "description": "Disposable MetaModule shared-memory transport probe"
+    }
+  ]
+}

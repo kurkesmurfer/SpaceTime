@@ -2,14 +2,16 @@
 
 **Created:** 2026-07-13  
 **Target SDK:** local MetaModule Plugin SDK 2.2 (`97ee128`)  
-**Feasibility:** **GO, as one fused module; NO-GO as the VCV expander chain**
+**Feasibility:** **GO as Core plus remote panels, gated by a shared-bus hardware probe**
 
 ## Feasibility result
 
 MetaModule SDK 2.2 explicitly does not support Rack expander communication.
-PROGRAM, STAGE4, MIDI and HEAD therefore cannot be ported as independent modules
-while retaining their current behavior. A single module owning the program,
-stages, heads and MIDI state has no equivalent blocker.
+The current firmware loader nevertheless loads one copy of a plugin and
+initializes its globals once. SpaceTime can potentially use that shared plugin
+memory as a private, lock-free bus between its own module instances. This is an
+implementation property rather than a supported SDK contract, so a hardware
+probe is mandatory before product code depends on it.
 
 The other relevant SDK capabilities are present:
 
@@ -26,34 +28,32 @@ without solving a problem that the adaptor leaves open.
 
 ## Product shape
 
-The first release target is a fixed **16-stage, two-head SpaceTime**. This matches
-the hardware-scale instrument and the fallback already named in WP9. The shared
-engine remains dimensioned for 64 stages and eight heads, so larger variants do
-not require a DSP rewrite.
+The first product module is **SpaceTime Core**. It owns the complete engine,
+MIDI implementation, physical I/O and persistent musical state. The engine
+remains dimensioned for 64 stages and eight heads. The initial Core panel may
+expose only essential status and setup because MIDI remote control is the
+primary operating surface.
 
-The recommended panel is a compact, banked monolith rather than an 82 HP literal
-concatenation of PROGRAM + four STAGE4 + MIDI + two HEAD panels:
+Optional smaller modules then act as control surfaces rather than DSP owners:
 
-- PROGRAM controls remain directly visible.
-- STAGES shows one four-stage bank at a time, selected by a 1-4 bank control.
-- HEAD shows one of two head control sets at a time, selected by a 1-2 control.
-- All head inputs and outputs remain dedicated, stable jacks; banking changes
-  editing only, never patch routing.
-- A small dynamic display shows stage bank, selected stage/head, key/scale and
-  MIDI activity. MIDI can still address all 16 stages and both heads directly.
+- STAGE4 Remote edits one assigned four-stage block.
+- HEAD Remote edits one assigned head.
+- PROGRAM Remote can provide a larger direct programming surface if useful.
+- All modules select a saved SpaceTime instrument ID; multiple instruments may
+  coexist in one patch without depending on adjacency.
 
-The alternative is a faithful 82 HP panel that requires horizontal panning even
-when zoomed out. It remains a valid fallback if banked editing proves confusing.
-Panel layout and the permanent module slug are review gates before registration.
+This avoids both an unusably wide literal panel and deeply banked controls. A
+missing remote never stops Core processing. A missing or duplicate Core is
+shown clearly by every remote.
 
 ## Architecture
 
-Add a platform-neutral `dsp/SpaceTimeEngine.hpp` that owns the state which is
-currently distributed through expanders:
+Add a platform-neutral `dsp/SpaceTimeEngine.hpp` owned only by Core. It contains
+the state currently distributed through expanders:
 
-- `StageTable` with 16 active stages and slider-takeover state;
+- `StageTable` with 64 active stages and slider-takeover state;
 - `ProgramLogic`, preset row, globals and key/scale;
-- two `HeadDSP` instances and their configurations/status;
+- eight `HeadDSP` instances and their configurations/status;
 - `MidiCore`, including incoming edits/transport and outgoing lanes;
 - selected stage, stage bank, selected head and display-feedback state.
 
@@ -62,7 +62,7 @@ head outputs/status. It performs no allocation in `process()` and contains no
 Rack or MetaModule headers. `Chain.hpp` remains the VCV transport only; the fused
 engine calls the same underlying logic directly and does not simulate expanders.
 
-Add a MetaModule Rack adapter under `metamodule/src/` that:
+Add a MetaModule Core adapter under `metamodule/src/` that:
 
 - maps params and virtual jacks into the engine;
 - drains raw MIDI into `MidiCore` and sends its output through `midi::Output`;
@@ -72,61 +72,74 @@ Add a MetaModule Rack adapter under `metamodule/src/` that:
   setup and bank/head selection in patch state;
 - provides MetaModule text displays and context-menu configuration where useful.
 
+The private bus uses fixed-size storage, atomic ownership tokens, lock-free
+remote-to-Core command queues, atomic Core-to-remote feedback and generation
+counters. It allocates nothing and takes no locks in the audio thread. Core is
+the sole authority for musical state; remotes persist only identity and local
+editing choices.
+
 The MetaModule target gets its own registration source. It must not compile the
-four expander models merely to reuse VCV's `plugin.cpp`.
+VCV expander transport merely to reuse `vcv/plugin.cpp`.
 
 ## Work packages
 
-### MM0 - Build skeleton and API probes
+### MM0 - Shared-bus proof
 
-Create `metamodule/CMakeLists.txt`, `plugin-mm.json`, target-local registration,
-an inert fused Rack-style module and a placeholder 240-pixel-high PNG panel.
-Compile and package against SDK 2.2. Prove MIDI input/output construction, JSON
-state round-trip and a dynamic text display in the smallest possible module.
+Create a deliberately disposable native plugin containing Core Probe and
+Remote Probe. Each module publishes one input voltage through shared plugin
+memory and exposes the voltage received from the other module. Include owner
+generation, heartbeat, duplicate-Core detection and clean unregister behavior.
 
-**Exit:** loadable `.mmplugin`; MIDI CC/clock reaches a counter; one output MIDI
-message can be observed; state and display survive patch reload.
+Exercise the probes on hardware with enough surrounding modules to invoke
+multi-core balancing. Test save/reload, module deletion/reinsertion, two plugin
+reloads, duplicate Core, stale-owner recovery and two independent bus IDs.
 
-### MM1 - Fused engine
+**Exit:** bidirectional values remain correct without virtual cables, across
+patch reload and multi-core processing; duplicate and missing endpoints fail
+visibly; no stale owner survives removal. If any item fails, use explicit LINK
+cables or return to a fused Core rather than weakening synchronization.
+
+### MM1 - Core engine
 
 Implement `SpaceTimeEngine` and host tests. Start with four stages/one head in
-tests, then exercise the release dimensions of 16/two. Reuse `StageTable`,
+tests, then exercise the full dimensions of 64/eight. Reuse `StageTable`,
 `ProgramLogic`, `HeadDSP`, `PresetRowLogic` and `MidiCore`; do not duplicate their
 algorithms.
 
 **Exit:** golden VCV-vs-fused traces match for stage CV, timing, pulses, clock
 sources, transport, key/scale, preset recall and MIDI edits.
 
-### MM2 - Panel mockup
+### MM2 - Core panel mockup
 
-Produce the compact panel with four-stage and two-head banking, fixed I/O and
-baked labels. Convert at 240 px high and inspect both 240 px and 180 px display
-scales. Freeze the module slug only after this review.
+Produce the smallest useful Core panel with fixed I/O, status and setup. MIDI
+must be sufficient to program and operate the engine without remote panels.
+Convert at 240 px high and inspect both 240 px and 180 px display scales. Freeze
+the Core slug only after this review.
 
 **Exit:** human layout gate; every control and jack has a stable ID and label.
 
-### MM3 - Control and stage integration
+### MM3 - Core control and stage integration
 
 Wire PROGRAM, stage bank, selected-stage feedback, slider takeover, presets,
 key/scale and pulse-retrigger behavior. Keep MIDI updates visually reflected in
 the currently visible bank, just as CC 89-91 now update VCV feedback.
 
-**Exit:** all 16 stages can be programmed from panel and MIDI; save/reload is
-lossless; changing banks does not alter values.
+**Exit:** all 64 stages can be programmed through banked panel controls and
+MIDI; save/reload is lossless; changing banks does not alter values.
 
 ### MM4 - Heads and I/O
 
-Wire two heads, all four clock modes, dedicated CV inputs/outputs, status lights
-and head selection. Verify that banking edits only the selected head while both
-heads continue processing continuously.
+Wire all eight heads, all four clock modes, dedicated CV inputs/outputs, status
+lights and head selection. Verify that banking edits only the selected head
+while every head continues processing continuously.
 
-**Exit:** two-head manual patch passes internal, external CV, MIDI-clock and
-virtual-clock tests, including tick-for-tick virtual-clock verification.
+**Exit:** the eight-head manual patch passes internal, external CV, MIDI-clock
+and virtual-clock tests, including tick-for-tick virtual-clock verification.
 
 ### MM5 - MIDI completion
 
 Port the accepted implementation chart unchanged: channel 16 default for
-PROGRAM/stages, head channels 1-2, CC 0-91, realtime clock/transport and outgoing
+PROGRAM/stages, head channels 1-8, CC 0-91, realtime clock/transport and outgoing
 note/CC lanes. Expose settings that cannot sensibly be inherited from the patch
 through the module action menu or compact panel controls.
 
@@ -137,13 +150,21 @@ verified on hardware. Fourteen-bit CV output remains explicitly later.
 
 Measure release and stress configurations on actual MetaModule. Record average
 and peak CPU, MIDI-clock stability, event loss under dense CC traffic and patch
-load/save behavior. Run at supported sample rates and with both heads active.
+load/save behavior. Run at supported sample rates and with all eight heads
+active.
 
 **Exit:** no audio-thread allocation, no dropped transport/clock events in the
 test patch, and documented CPU headroom. VCV's M3 figures are useful context but
 are not a substitute for this measurement.
 
-### MM7 - Packaging and manual
+### MM7 - Optional remote panels
+
+Implement STAGE4, HEAD and PROGRAM remotes only after Core is accepted. Reuse
+the proven bus primitives and give every remote explicit assignment and link
+status. Verify that adding, removing or duplicating a remote cannot change DSP
+state except through a valid command.
+
+### MM8 - Packaging and manual
 
 Finalize PNG assets, metadata, versioning, install instructions, limitations and
 the MetaModule-specific control map. Build a clean `.mmplugin` without modifying
@@ -157,25 +178,29 @@ the MetaModule-specific control map. Build a clean `.mmplugin` without modifying
 | Adapter | SDK build with warnings reviewed; package contents inspected |
 | Persistence | Save/reload/reset tests for stages, presets, banks, heads and MIDI |
 | MIDI in | CC map, PC 1-12, F8/FA/FB/FC, channel filtering, dense DROID stream |
-| MIDI out | Note-on/off for P1/P2/ALL and throttled 7-bit CC on both heads |
+| MIDI out | Note-on/off for P1/P2/ALL and throttled 7-bit CC on all eight heads |
 | Timing | External, MIDI and virtual clock edge counts compared to source logs |
 | UI | 240/180 px screenshots; bank/head state and remote feedback remain legible |
 | Performance | Average/peak CPU and event-loss test on MetaModule hardware |
 
 ## Decision gates
 
-1. Approve compact banked panel versus faithful 82 HP panel.
-2. Freeze the new fused module slug after the panel mockup.
-3. Confirm the initial release at 16 stages/two heads before MM1 is dimensioned.
-4. Decide whether a later 32-stage/eight-head variant is one larger module or a
-   separate fixed-size model after MM6 performance data exists.
+1. Accept or reject the private shared bus from MM0 hardware evidence.
+2. Freeze the Core slug after the Core panel mockup.
+3. Decide which controls, if any, Core needs beyond MIDI and essential setup.
+4. Add each remote type only in response to a demonstrated workflow need.
 
 ## Known risks
 
+- Shared plugin memory is not a documented inter-module API. Firmware changes
+  could invalidate it; keep the bus isolated and retain the explicit-cable
+  fallback.
+- MetaModule processes patches across two cores. Every shared field must use a
+  defined atomic protocol; ordinary globals are not acceptable.
 - Direct USB MIDI is supported by the adaptor API and used by a core port, but
   third-party input/output routing still needs a hardware proof in MM0.
-- Banked params improve screen fit but make hardware mappings contextual. The
-  DROID's direct MIDI map remains non-banked and is the primary remote surface.
+- The DROID's direct MIDI map remains non-banked and is the primary remote
+  surface, so Core must remain fully operable without UI remotes.
 - The current MIDI clock interpretation advances on each F8 edge. Its intended
   musical relationship to 24 PPQN must be settled by the existing DROID test;
   the MetaModule port must preserve, not silently redefine, that behavior.
