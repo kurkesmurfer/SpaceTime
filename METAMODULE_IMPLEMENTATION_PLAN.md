@@ -2,7 +2,7 @@
 
 **Created:** 2026-07-13  
 **Target SDK:** local MetaModule Plugin SDK 2.2 (`97ee128`)  
-**Feasibility:** **GO as Core plus remote panels, gated by a shared-bus hardware probe**
+**Feasibility:** **GO as Core plus remote panels; shared-bus principle verified on hardware**
 
 ## Feasibility result
 
@@ -10,8 +10,8 @@ MetaModule SDK 2.2 explicitly does not support Rack expander communication.
 The current firmware loader nevertheless loads one copy of a plugin and
 initializes its globals once. SpaceTime can potentially use that shared plugin
 memory as a private, lock-free bus between its own module instances. This is an
-implementation property rather than a supported SDK contract, so a hardware
-probe is mandatory before product code depends on it.
+implementation property rather than a supported SDK contract. The MM0 probe
+verified the principle across both processor cores on firmware 2.2.0.
 
 The other relevant SDK capabilities are present:
 
@@ -85,6 +85,8 @@ VCV expander transport merely to reuse `vcv/plugin.cpp`.
 
 ### MM0 - Shared-bus proof
 
+**Status:** principle accepted on hardware, 2026-07-16.
+
 Create a deliberately disposable native plugin containing Core Probe and
 Remote Probe. Each module publishes one input voltage through shared plugin
 memory and exposes the voltage received from the other module. Include owner
@@ -98,6 +100,14 @@ reloads, duplicate Core, stale-owner recovery and two independent bus IDs.
 patch reload and multi-core processing; duplicate and missing endpoints fail
 visibly; no stale owner survives removal. If any item fails, use explicit LINK
 cables or return to a fused Core rather than weakening synchronization.
+
+Observed on firmware 2.2.0: Core and Remote were automatically distributed one
+per processor core; bidirectional values were inspected on a scope with Sweet
+Sixteen driving both inputs; `LINK`, `DUP` and mismatched-ID `WAIT` states worked;
+IDs A and B remained isolated; save/reload recovered correctly. Reported load
+was 25% for the two-core probe/scope test patch (scope: 18vert). Endpoint
+deletion/reinsertion, duplicate-owner removal and repeated plugin unload/reload
+remain robustness checks for the product bus rather than blockers for MM1.
 
 ### MM1 - Core engine
 
@@ -185,7 +195,7 @@ the MetaModule-specific control map. Build a clean `.mmplugin` without modifying
 
 ## Decision gates
 
-1. Accept or reject the private shared bus from MM0 hardware evidence.
+1. **Accepted:** private shared bus, based on MM0 firmware 2.2.0 hardware evidence.
 2. Freeze the Core slug after the Core panel mockup.
 3. Decide which controls, if any, Core needs beyond MIDI and essential setup.
 4. Add each remote type only in response to a demonstrated workflow need.

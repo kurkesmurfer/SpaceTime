@@ -46,4 +46,21 @@ The installable probe is written to
    stale owner or false `LINK` state may survive.
 
 Record firmware version, sample rate, CPU allocation/load and any dropped or
-stale updates. Product work starts only after every item passes on hardware.
+stale updates. The Core engine may start after the cross-core principle passes;
+all lifecycle checks must pass before the private bus is treated as release-ready.
+
+## Hardware result
+
+Principle accepted on 2026-07-16 with firmware 2.2.0:
+
+- Core and Remote were automatically distributed one per processor core.
+- Sweet Sixteen drove both inputs and both received outputs were inspected on an
+  18vert scope.
+- `LINK`, `DUP` and mismatched-ID `WAIT` states behaved correctly.
+- Instrument IDs A and B were verified.
+- Save and reload recovered the link and state.
+- Reported load for the two-core probe/scope test patch was 25%.
+
+Endpoint deletion/reinsertion, duplicate-owner removal and two full plugin
+unload/reload cycles remain product-bus robustness checks. They do not block the
+MM1 Core engine now that cross-core communication itself has passed.
