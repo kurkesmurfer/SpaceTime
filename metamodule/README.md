@@ -59,11 +59,12 @@ Principle accepted on 2026-07-16 with firmware 2.2.0:
 - `LINK`, `DUP` and mismatched-ID `WAIT` states behaved correctly.
 - STATUS output was verified at +5 V for `LINK`, 0 V for `WAIT` and -5 V for
   `DUP`.
-- Instrument IDs A and B were verified.
+- Instrument IDs A, B, C and D were verified, including matching and mismatched
+  pair behavior.
 - Save and reload recovered the link and state.
 - Endpoint deletion, reinsertion and reconnection recovered correctly.
 - Reported load for the two-core probe/scope test patch was 25%.
 
-Instrument IDs C/D, duplicate-owner removal and two full plugin unload/reload
-cycles remain product-bus robustness checks. They do not block the MM1 Core
-engine now that cross-core communication itself has passed.
+Duplicate-owner removal and two full plugin unload/reload cycles remain
+product-bus robustness checks. They do not block the MM1 Core engine now that
+cross-core communication itself has passed.
