@@ -164,14 +164,25 @@ struct SpaceTimeCore : Module {
 		if (lightId != STATUS_DISPLAY || text.empty())
 			return 0;
 		int selected = clamp(engine.program().selectedStage(), 0, spacetime::kMaxStages - 1);
+		char runStates[spacetime::kMaxHeads + 1];
+		for (int h = 0; h < spacetime::kMaxHeads; h++)
+			runStates[h] = engine.headOut(h).runState == spacetime::RUN_RUNNING ? 'R' :
+				(engine.headOut(h).runState == spacetime::RUN_HOLDING ? 'H' : '-');
+		runStates[spacetime::kMaxHeads] = '\0';
+		const char* midiKind = engine.midi().lastStatus < 0 ? "---" :
+			(engine.midi().lastChannel < 0 ? "RT " :
+				(((engine.midi().lastStatus >> 4) & 0xf) == 0xc ? "PC " : "CC "));
 		char buffer[128];
 		int length = std::snprintf(buffer, sizeof(buffer),
-			"STAGE %02d  V %.2f  T %.3f\nP%02d S%02d  KEY %02d SCALE %d\nMIDI %02X %d %d  %s",
+			"STAGE %02d V %.2f T %.3f\nP%02d S%02d KEY %02d SCALE %d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
 			selected + 1, engine.table().voltage[selected], engine.table().time[selected],
 			engine.midi().controlChannel + 1, engine.midi().sliderChannel + 1,
 			engine.program().scaleKey().key, engine.program().scaleKey().scale,
-			engine.midi().lastStatus < 0 ? 0 : engine.midi().lastStatus,
-			engine.midi().lastNumber, engine.midi().lastValue,
+			runStates,
+			engine.midi().lastChannel < 0 ? 0 : engine.midi().lastChannel + 1,
+			midiKind,
+			engine.midi().lastNumber < 0 ? 0 : engine.midi().lastNumber,
+			engine.midi().lastValue < 0 ? 0 : engine.midi().lastValue,
 			spacetime::MidiCore::routeName(engine.midi().lastRoute));
 		if (length < 0)
 			return 0;

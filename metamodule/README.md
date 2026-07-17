@@ -38,7 +38,8 @@ and a disabled-MIDI-output fast path; record its empty-patch CPU before continui
 3. On channel 16 send CC 65 = 127. The display and STAGE control must advance
    together. Verify CC 89, 90 and 91 update key, scale and the RETRIGGER switch.
 4. On channel 1 send CC 9 = 127 to select virtual clock, CC 1 = 127 to start
-   Head 1, then isolated CC 0 = 127 messages. The RUN light must turn on and
+   Head 1, then isolated CC 0 = 127 messages. The RUN light and first character
+   of the `RUN 1-8` display row must turn on, and
    HEAD 1 ALL must produce exactly one pulse per message. Send CC 2 = 127 and
    confirm that RUN turns off.
 5. Send MIDI F8 and verify the CLK light. In the module action menu enable

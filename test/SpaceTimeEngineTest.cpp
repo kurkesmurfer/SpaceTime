@@ -138,6 +138,21 @@ TEST_CASE("SpaceTime engine applies per-head MIDI transport and virtual clock") 
 	CHECK(engine.headOut(0).runState == RUN_STOPPED);
 }
 
+TEST_CASE("SpaceTime engine starts and stops every head on MIDI channels 1 through 8") {
+	SpaceTimeEngine engine;
+	for (int head = 0; head < kMaxHeads; head++)
+		engine.handleMidi((uint8_t)(0xB0 | head), 1, 127);
+	engine.processHeads(1.f / 48000.f);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK(engine.headOut(head).runState == RUN_RUNNING);
+
+	for (int head = 0; head < kMaxHeads; head++)
+		engine.handleMidi((uint8_t)(0xB0 | head), 2, 127);
+	engine.processHeads(1.f / 48000.f);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK(engine.headOut(head).runState == RUN_STOPPED);
+}
+
 TEST_CASE("SpaceTime engine follows global MIDI transport only when enabled") {
 	SpaceTimeEngine engine;
 	engine.handleMidi(0xFA);
