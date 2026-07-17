@@ -27,7 +27,13 @@ This test is now required before further remote-panel work.
 Initial Core build `40813fd` loaded successfully on firmware 2.2.0 but reported
 59% CPU at startup in an otherwise empty patch. That is the performance baseline,
 not an accepted result. The following build adds stopped-head control-rate refresh
-and a disabled-MIDI-output fast path; record its empty-patch CPU before continuing.
+and a disabled-MIDI-output fast path.
+
+Optimized Core build `b74f879` measured 24-25% stopped and approximately 53%
+with all eight heads running. The active-head increment is about 3.5 percentage
+points per head, leaving roughly 47% headroom in the eight-head test patch.
+Independent MIDI start/stop on channels 1-8 was verified after correcting the
+DROID remote patch.
 
 1. Remove the old `SpaceTimeProbe.mmplugin`, install `SpaceTime.mmplugin`, then
    add **SpaceTime Core**. Its defaults are Program channel 16 and stage-slider
