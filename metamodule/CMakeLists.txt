@@ -15,13 +15,15 @@ endif()
 include(${METAMODULE_SDK_DIR}/plugin.cmake)
 
 project(SpaceTimeMetaModule
-        VERSION 0.2
+        VERSION 0.3
         DESCRIPTION "SpaceTime Core and shared-memory bus probes"
         LANGUAGES C CXX ASM)
 
 add_library(SpaceTime STATIC)
 target_sources(SpaceTime PRIVATE
         src/Core.cpp
+        src/TimingBus.cpp
+        src/TimingMonitor.cpp
         src/Probe.cpp
         src/plugin.cpp)
 target_include_directories(SpaceTime PRIVATE

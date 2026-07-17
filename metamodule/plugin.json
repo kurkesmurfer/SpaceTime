@@ -1,7 +1,7 @@
 {
   "slug": "SpaceTime",
   "name": "SpaceTime",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "GPL-3.0-or-later",
   "brand": "Kurkesmurfer",
   "author": "Peet Siemensz",
@@ -11,6 +11,11 @@
       "slug": "Core",
       "name": "SpaceTime Core",
       "description": "64-stage, eight-head SpaceTime engine with integrated MIDI"
+    },
+    {
+      "slug": "TimingMonitor",
+      "name": "SpaceTime Timing Monitor",
+      "description": "Diagnostic clock-to-stage timing monitor for eight SpaceTime heads"
     },
     {
       "slug": "BusProbeCore",

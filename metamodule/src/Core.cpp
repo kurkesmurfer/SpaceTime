@@ -1,6 +1,7 @@
 #include <rack.hpp>
 #include <metamodule/VCVTextDisplay.hpp>
 #include "SpaceTimeEngine.hpp"
+#include "TimingBus.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -53,6 +54,9 @@ struct SpaceTimeCore : Module {
 	float midiLight = 0.f;
 	float clockLight = 0.f;
 	float outLight = 0.f;
+	uint32_t busToken = timingBusRegistry.makeToken();
+	int instrumentId = 0;
+	bool ownsTimingBus = false;
 
 	struct RackMidiSink : spacetime::MidiOutputSink {
 		SpaceTimeCore* owner;
@@ -92,6 +96,11 @@ struct SpaceTimeCore : Module {
 		midiInput.channel = -1;
 		midiOutput.channel = -1;
 		controlDivider.setDivision(16);
+		ownsTimingBus = timingBusRegistry.registerCore(instrumentId, busToken);
+	}
+
+	~SpaceTimeCore() override {
+		timingBusRegistry.unregisterCore(instrumentId, busToken);
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -113,7 +122,8 @@ struct SpaceTimeCore : Module {
 				params[PULSE_RETRIG_PARAM].setValue(engine.globals().pulseRetrig ? 1.f : 0.f);
 		}
 
-		if (controlDivider.process()) {
+		bool controlTick = controlDivider.process();
+		if (controlTick) {
 			int controlChannel = clamp((int)std::round(params[CONTROL_CHANNEL_PARAM].getValue()), 0, 15);
 			int sliderChannel = clamp((int)std::round(params[SLIDER_CHANNEL_PARAM].getValue()), 0, 15);
 			if (sliderChannel == controlChannel) {
@@ -142,6 +152,8 @@ struct SpaceTimeCore : Module {
 		}
 
 		engine.processHeads(args.sampleTime);
+		if (controlTick)
+			publishTiming();
 		RackMidiSink sink(this);
 		engine.processMidiOutput(args.sampleTime, sink);
 
@@ -174,8 +186,9 @@ struct SpaceTimeCore : Module {
 				(((engine.midi().lastStatus >> 4) & 0xf) == 0xc ? "PC " : "CC "));
 		char buffer[128];
 		int length = std::snprintf(buffer, sizeof(buffer),
-			"STAGE %02d V %.2f T %.3f\nP%02d S%02d KEY %02d SCALE %d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
+			"STAGE %02d V %.2f T %.3f\nID %c P%02d S%02d K%02d SC%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
 			selected + 1, engine.table().voltage[selected], engine.table().time[selected],
+			(char)('A' + instrumentId),
 			engine.midi().controlChannel + 1, engine.midi().sliderChannel + 1,
 			engine.program().scaleKey().key, engine.program().scaleKey().scale,
 			runStates,
@@ -199,6 +212,7 @@ struct SpaceTimeCore : Module {
 		json_object_set_new(root, "slewFrac2", json_real(engine.globals().slewFrac2));
 		json_object_set_new(root, "slopeLaw", json_integer(engine.globals().slopeLaw));
 		json_object_set_new(root, "addressScale", json_integer(engine.globals().addressScale));
+		json_object_set_new(root, "instrumentId", json_integer(instrumentId));
 		json_object_set_new(root, "moveStageSliders", json_boolean(engine.midi().moveStageSliders));
 		json_object_set_new(root, "midiInput", midiInput.toJson());
 		json_object_set_new(root, "midiOutput", midiOutput.toJson());
@@ -280,6 +294,7 @@ struct SpaceTimeCore : Module {
 		if ((value = json_object_get(root, "slewFrac2"))) engine.globals().slewFrac2 = (float)json_number_value(value);
 		if ((value = json_object_get(root, "slopeLaw"))) engine.globals().slopeLaw = (uint8_t)json_integer_value(value);
 		if ((value = json_object_get(root, "addressScale"))) engine.globals().addressScale = (uint8_t)json_integer_value(value);
+		if ((value = json_object_get(root, "instrumentId"))) setInstrumentId((int)json_integer_value(value));
 		if ((value = json_object_get(root, "moveStageSliders"))) engine.midi().moveStageSliders = json_boolean_value(value);
 		if ((value = json_object_get(root, "midiInput"))) midiInput.fromJson(value);
 		if ((value = json_object_get(root, "midiOutput"))) midiOutput.fromJson(value);
@@ -354,6 +369,33 @@ struct SpaceTimeCore : Module {
 			}
 		}
 	}
+
+	void setInstrumentId(int next) {
+		next = clamp(next, 0, 3);
+		if (next == instrumentId)
+			return;
+		timingBusRegistry.unregisterCore(instrumentId, busToken);
+		instrumentId = next;
+		ownsTimingBus = timingBusRegistry.registerCore(instrumentId, busToken);
+	}
+
+	void publishTiming() {
+		spacetime::MetaModuleTimingBus& bus = timingBusRegistry.bus(instrumentId);
+		if (!ownsTimingBus)
+			ownsTimingBus = timingBusRegistry.tryClaimCore(instrumentId, busToken);
+		if (!ownsTimingBus || bus.coreCount.load(std::memory_order_acquire) != 1)
+			return;
+		spacetime::TimingSnapshot snapshot;
+		for (int h = 0; h < spacetime::kMaxHeads; h++) {
+			snapshot.sourceEvents[h] = engine.sourceClockEvents(h);
+			snapshot.stageEntries[h] = engine.stageEntries(h);
+			snapshot.runState[h] = engine.headOut(h).runState;
+			snapshot.stage[h] = engine.headOut(h).currentStage;
+			snapshot.clockSource[h] = (uint8_t)engine.headClockSource(h);
+			snapshot.clockDivision[h] = engine.headConfig(h).clkDivIndex;
+		}
+		bus.telemetry.publish(snapshot);
+	}
 };
 
 struct SpaceTimeCoreWidget : ModuleWidget {
@@ -393,6 +435,15 @@ struct SpaceTimeCoreWidget : ModuleWidget {
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
+		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
+		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
+			return instrumentLabels[module->instrumentId];
+		}, [=](Menu* ids) {
+			for (int id = 0; id < 4; id++)
+				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
+					[=]() { return module->instrumentId == id; },
+					[=]() { module->setInstrumentId(id); }));
+		}));
 		menu->addChild(createBoolPtrMenuItem("Move stage controls with CC", "", &module->engine.midi().moveStageSliders));
 		menu->addChild(createMenuLabel("MIDI output per head"));
 		static const char* modes[] = {"Off", "Notes", "CC 7-bit"};

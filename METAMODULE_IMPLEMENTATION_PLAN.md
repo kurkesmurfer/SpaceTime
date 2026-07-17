@@ -186,6 +186,10 @@ are not a substitute for this measurement.
 
 ### MM7 - Optional remote panels
 
+**Status:** Timing Monitor implemented as the first read-only product-bus
+consumer. It publishes no commands and validates per-head source-event versus
+stage-entry timing before editable remotes are attempted.
+
 Implement STAGE4, HEAD and PROGRAM remotes only after Core is accepted. Reuse
 the proven bus primitives and give every remote explicit assignment and link
 status. Verify that adding, removing or duplicating a remote cannot change DSP

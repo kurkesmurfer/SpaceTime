@@ -64,6 +64,38 @@ DROID remote patch.
 The Core screen and action menu are the MM2 layout review. Note anything clipped,
 ambiguous or too small at the normal 240 px and reduced 180 px display scales.
 
+## Timing Monitor hardware test
+
+The optional 12 HP Timing Monitor compares clock-source events delivered to all
+eight heads with actual stage entries. It judges timing only while a head is
+active, uses MIDI or Virtual clock, and has its divider at `x1`. Other modes show
+`READY` rather than reporting a false failure. Green means at least one tested
+event and matching totals; red is a latched mismatch until RESET.
+
+1. Add Core and Timing Monitor. Both default to Instrument ID A. The monitor
+   must show `A LINK`; STATUS must be +5 V. A mismatched ID shows `WAIT`/0 V and
+   duplicate Cores on one ID show `DUP`/-5 V.
+2. For Head 1, send channel 1 CC 9 = 127 (Virtual), CC 10 = 64 (`x1`) and
+   CC 1 = 127 (Start). Select Head 1 on the monitor and press RESET.
+3. Send separated CC 0 = 127 virtual ticks. Each tick must increase both `CLK`
+   and `STP` by one, DIFF must remain zero and Head 1 must turn green. CLOCK and
+   STEP outputs provide a conventional two-channel scope pair if desired.
+4. As a monitor sanity check, send two virtual ticks within one millisecond or
+   in one USB packet. The source count must increase by two while only one edge
+   is consumed; DIFF becomes -1 and Head 1 latches red. Press RESET afterward.
+5. Send channel 1 CC 9 = 64 (MIDI Clock), confirm `MIDI x1`, press RESET and
+   send manual F8 messages. Repeat with a continuous DROID MIDI clock.
+6. Configure channels 1-8 for MIDI Clock at `x1`, start all heads, press RESET
+   and run the clock. All eight indicators must remain green. Select each head
+   to inspect counts; record any red indicator, non-zero DIFF or unexpected
+   HOLD/STOP state.
+7. Repeat representative save/load, ID change and Core/Monitor deletion and
+   reinsertion checks. Record combined CPU load and processor-core allocation.
+
+Manual Advance, mode changes, stop/sustain stages and dividers other than `x1`
+change the expected event relationship. Press RESET after configuring a clean
+test state; use Clear Program if necessary.
+
 ## Bus-probe hardware test
 
 1. Install `SpaceTime.mmplugin` and add one BUS PROBE CORE and one BUS

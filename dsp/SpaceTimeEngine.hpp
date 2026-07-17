@@ -29,6 +29,8 @@ public:
 		appliedMidiEvents_ = 0;
 		idleHeadTime_ = 0.f;
 		for (int h = 0; h < kMaxHeads; h++) {
+			sourceClockEvents_[h] = 0;
+			stageEntries_[h] = 0;
 			headDsp_[h].reset((uint32_t)(h + 1));
 			headConfig_[h] = HeadConfig();
 			headSignals_[h] = HeadSignals();
@@ -51,6 +53,8 @@ public:
 	HeadSignals& headSignals(int head) { return headSignals_[clampHead(head)]; }
 	const HeadSignals& headSignals(int head) const { return headSignals_[clampHead(head)]; }
 	const HeadOut& headOut(int head) const { return headOut_[clampHead(head)]; }
+	uint32_t sourceClockEvents(int head) const { return sourceClockEvents_[clampHead(head)]; }
+	uint32_t stageEntries(int head) const { return stageEntries_[clampHead(head)]; }
 	int headClockSource(int head) const { return headRuntime_[clampHead(head)].clockSource; }
 	void setHeadClockSource(int head, int source) {
 		headRuntime_[clampHead(head)].clockSource = clampInt(source, 0, 3);
@@ -94,6 +98,7 @@ public:
 				headDsp_[h].hasTransientOutput() || runtime.forceTick;
 			if (!audioRate && !refreshIdleHeads)
 				continue;
+			uint8_t previousStage = headOut_[h].currentStage;
 			HeadSignals signals = headSignals_[h];
 			signals.start = maxFloat(signals.start, pulseGate(runtime.startTimer, dt));
 			signals.stop = maxFloat(signals.stop, pulseGate(runtime.stopTimer, dt));
@@ -111,6 +116,8 @@ public:
 			headConfig_[h].clkExt = runtime.clockSource != 0;
 			headDsp_[h].tick(table_, ext_, globals_, program_.scaleKey(),
 				headConfig_[h], signals, audioRate ? dt : idleHeadTime_, headOut_[h]);
+			if (headOut_[h].currentStage != previousStage)
+				stageEntries_[h]++;
 		}
 		if (refreshIdleHeads)
 			idleHeadTime_ = 0.f;
@@ -204,6 +211,8 @@ private:
 	uint8_t lastAppliedMidiType_ = MIDI_PROG_NONE;
 	uint8_t lastAppliedMidiIndex_ = 0;
 	uint8_t lastAppliedMidiValue_ = 0;
+	uint32_t sourceClockEvents_[kMaxHeads] = {};
+	uint32_t stageEntries_[kMaxHeads] = {};
 	float idleHeadTime_ = 0.f;
 
 	static int clampHead(int head) {
@@ -252,8 +261,11 @@ private:
 			HeadRuntime& runtime = headRuntime_[h];
 			bool clockChanged = midi_.midiClockSeq != runtime.lastClockSeq;
 			if (clockChanged) {
+				uint32_t clockDelta = midi_.midiClockSeq - runtime.lastClockSeq;
 				runtime.lastClockSeq = midi_.midiClockSeq;
 				runtime.midiClockTimer = 1e-3f;
+				if (runtime.clockSource == 2)
+					sourceClockEvents_[h] += clockDelta;
 			}
 			bool startChanged = midi_.midiStartSeq != runtime.lastStartSeq;
 			bool stopChanged = midi_.midiStopSeq != runtime.lastStopSeq;
@@ -275,7 +287,10 @@ private:
 				uint32_t sequence = midi_.headCcSeq[h][control];
 				if (sequence == runtime.lastCcSeq[control])
 					continue;
+				uint32_t eventDelta = sequence - runtime.lastCcSeq[control];
 				runtime.lastCcSeq[control] = sequence;
+				if (control == 0 && runtime.clockSource == 3)
+					sourceClockEvents_[h] += eventDelta;
 				applyHeadCc(h, control, midi_.headCcValue[h][control]);
 				runtime.forceTick = true;
 			}
@@ -286,7 +301,9 @@ private:
 		HeadConfig& config = headConfig_[head];
 		HeadRuntime& runtime = headRuntime_[head];
 		switch (cc) {
-			case 0: runtime.virtualClockTimer = 1e-3f; break;
+			case 0:
+				runtime.virtualClockTimer = 1e-3f;
+				break;
 			case 1: runtime.startTimer = 1e-3f; break;
 			case 2: runtime.stopTimer = 1e-3f; break;
 			case 3: runtime.advanceTimer = 1e-3f; break;

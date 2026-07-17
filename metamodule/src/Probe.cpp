@@ -207,7 +207,7 @@ void registerProbe(const char* slug, const char* description, const char* panel)
 	JackInput input;
 	input.x_mm = 20.32f;
 	input.y_mm = 54.f;
-	input.image = "SpaceTimeProbe/components/jack.png";
+	input.image = "SpaceTime/components/jack.png";
 	input.short_name = "Send";
 	elements[2] = input;
 	indices[2] = {.input_idx = SendInput};
@@ -215,7 +215,7 @@ void registerProbe(const char* slug, const char* description, const char* panel)
 	JackOutput seen;
 	seen.x_mm = 20.32f;
 	seen.y_mm = 82.f;
-	seen.image = "SpaceTimeProbe/components/jack.png";
+	seen.image = "SpaceTime/components/jack.png";
 	seen.short_name = "Seen";
 	elements[3] = seen;
 	indices[3] = {.output_idx = SeenOutput};
@@ -223,7 +223,7 @@ void registerProbe(const char* slug, const char* description, const char* panel)
 	JackOutput status;
 	status.x_mm = 20.32f;
 	status.y_mm = 110.f;
-	status.image = "SpaceTimeProbe/components/jack.png";
+	status.image = "SpaceTime/components/jack.png";
 	status.short_name = "Status";
 	elements[4] = status;
 	indices[4] = {.output_idx = StatusOutput};

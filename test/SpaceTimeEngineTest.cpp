@@ -138,6 +138,44 @@ TEST_CASE("SpaceTime engine applies per-head MIDI transport and virtual clock") 
 	CHECK(engine.headOut(0).runState == RUN_STOPPED);
 }
 
+TEST_CASE("SpaceTime engine counts virtual and MIDI source events against stage entries") {
+	SpaceTimeEngine engine;
+	engine.handleMidi(0xB0, 9, 127);
+	engine.handleMidi(0xB0, 1, 127);
+	engine.handleMidi(0xB1, 9, 64);
+	engine.handleMidi(0xB1, 1, 127);
+	engine.processHeads(1.f / 48000.f);
+
+	CHECK(engine.headClockSource(0) == 3);
+	CHECK(engine.headClockSource(1) == 2);
+	CHECK(engine.sourceClockEvents(0) == 0);
+	CHECK(engine.stageEntries(0) == 0);
+
+	for (int tick = 1; tick <= 4; tick++) {
+		engine.handleMidi(0xB0, 0, 127);
+		engine.handleMidi(0xF8);
+		engine.processHeads(1.f / 48000.f);
+		CHECK(engine.sourceClockEvents(0) == (uint32_t)tick);
+		CHECK(engine.stageEntries(0) == (uint32_t)tick);
+		CHECK(engine.sourceClockEvents(1) == (uint32_t)tick);
+		CHECK(engine.stageEntries(1) == (uint32_t)tick);
+		for (int sample = 0; sample < 50; sample++)
+			engine.processHeads(1.f / 48000.f);
+	}
+}
+
+TEST_CASE("SpaceTime timing counters expose clock events collapsed into one audio edge") {
+	SpaceTimeEngine engine;
+	engine.handleMidi(0xB0, 9, 127);
+	engine.handleMidi(0xB0, 1, 127);
+	engine.processHeads(1.f / 48000.f);
+	engine.handleMidi(0xB0, 0, 127);
+	engine.handleMidi(0xB0, 0, 127);
+	engine.processHeads(1.f / 48000.f);
+	CHECK(engine.sourceClockEvents(0) == 2);
+	CHECK(engine.stageEntries(0) == 1);
+}
+
 TEST_CASE("SpaceTime engine starts and stops every head on MIDI channels 1 through 8") {
 	SpaceTimeEngine engine;
 	for (int head = 0; head < kMaxHeads; head++)

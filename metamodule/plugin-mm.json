@@ -5,6 +5,7 @@
   "MetaModuleDescription": "SpaceTime Core development plugin with shared-bus probes",
   "MetaModuleIncludedModules": [
     { "slug": "Core", "name": "SpaceTime Core" },
+    { "slug": "TimingMonitor", "name": "SpaceTime Timing Monitor" },
     { "slug": "BusProbeCore", "name": "BUS PROBE CORE" },
     { "slug": "BusProbeRemote", "name": "BUS PROBE REMOTE" }
   ]
