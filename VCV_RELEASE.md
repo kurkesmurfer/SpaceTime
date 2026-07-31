@@ -38,3 +38,13 @@ The four packages are written to
 check that the version in `vcv/plugin.json` is correct and test the x64 macOS
 package in Rack on an Intel Mac. Windows and Linux should receive equivalent
 Rack load and basic audio/MIDI smoke tests.
+
+## Publish a release candidate
+
+Release-candidate packages belong on a GitHub prerelease until every platform
+has passed the smoke tests above. Upload all four `.vcvplugin` files plus a
+SHA-256 checksum file. Release notes must identify which packages have been
+tested natively and warn users to back up important patches.
+
+Do not mark a GitHub release as final or submit it to the VCV Library while any
+platform package remains unverified.

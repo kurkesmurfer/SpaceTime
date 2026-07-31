@@ -16,6 +16,44 @@ not affiliated with or endorsed by Buchla USA or Tiptop Audio. Several
 behaviours that the hardware manual leaves undocumented were verified on an
 actual 248t (with thanks to the demonstrations of Stazma the Junglechrist).
 
+## Preview status and safety
+
+SpaceTime 2.0.0 is currently a release candidate and is not yet distributed
+through the VCV Library. The Apple Silicon build and principal workflows have
+received extensive hands-on testing. The Intel macOS, Windows, and Linux
+packages are cross-compiled with the official VCV Plugin Toolchain and still
+require platform-specific acceptance testing.
+
+Preview builds may contain defects, including incorrect control or MIDI
+behaviour, crashes, or loss of unsaved patch state. Keep backups of important
+patches and do not rely on a preview build as the sole copy of musical work.
+The software is provided without warranty under the GPL-3.0-or-later licence.
+Please report reproducible problems through
+[GitHub Issues](https://github.com/kurkesmurfer/SpaceTime/issues).
+
+## Install a preview build
+
+Download the package for your platform from
+[GitHub Releases](https://github.com/kurkesmurfer/SpaceTime/releases):
+
+| Package suffix | Platform |
+|---|---|
+| `mac-arm64` | Apple Silicon macOS |
+| `mac-x64` | Intel macOS |
+| `win-x64` | 64-bit Windows |
+| `lin-x64` | 64-bit Linux |
+
+1. In Rack, choose **Help > Open user folder**, then quit Rack.
+2. Copy the downloaded `.vcvplugin` file into the matching
+   `plugins-<OS>-<CPU>` directory inside that user folder. Do not unpack it.
+3. Restart Rack. Rack extracts the package and adds the Kurkesmurfer modules
+   to the Module Browser.
+
+This is the standard manual installation method documented by the
+[VCV Rack manual](https://vcvrack.com/manual/Installing#Installing-plugins-not-available-on-the-VCV-Library).
+Remove the extracted `SpaceTime` plugin directory before installing a different
+preview package with the same version number.
+
 ## The family
 
 | Module | HP | Role |
@@ -197,6 +235,8 @@ Code and artwork GPL-3.0-or-later, © Peet Siemensz / Kurkesmurfer.
 Bundled fonts Fraunces and Barlow Condensed under the SIL Open Font License
 (see `vcv/res/fonts/`). Inspired by Don Buchla's Model 248 and the Tiptop
 Audio/Buchla 248t; no original assets or firmware were used.
+The current 248t manual is available from
+[Tiptop Audio's official Buchla 200t page](https://tiptopaudio.com/buchla/).
 
 ## Branding
 
