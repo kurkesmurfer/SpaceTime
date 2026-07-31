@@ -74,6 +74,27 @@ TEST_CASE("MIDI gateway directly left of PROGRAM is transparent") {
 	CHECK_FALSE(lay.brokenLeft);
 }
 
+TEST_CASE("HEAD ALL is accepted once at the far-left end") {
+	TestView valid;
+	valid.left = {ModuleType::Midi, ModuleType::Head, ModuleType::Head,
+	              ModuleType::HeadAll};
+	ChainLayout lay = enumerateChain(valid);
+	CHECK(lay.headCount == 2);
+	CHECK_FALSE(lay.brokenLeft);
+
+	TestView misplaced;
+	misplaced.left = {ModuleType::Midi, ModuleType::HeadAll, ModuleType::Head};
+	lay = enumerateChain(misplaced);
+	CHECK(lay.headCount == 0);
+	CHECK(lay.brokenLeft);
+
+	TestView duplicate;
+	duplicate.left = {ModuleType::Head, ModuleType::HeadAll, ModuleType::HeadAll};
+	lay = enumerateChain(duplicate);
+	CHECK(lay.headCount == 1);
+	CHECK(lay.brokenLeft);
+}
+
 TEST_CASE("gap (empty space) terminates the chain; stranded blocks warn") {
 	TestView v;
 	v.right = {ModuleType::Stage4, ModuleType::None, ModuleType::Stage4};
@@ -186,6 +207,32 @@ TEST_CASE("headRelayRight merges up to 8 statuses, appending own") {
 		CHECK(msg.status[i].headId == 7 - i);
 		CHECK(msg.status[i].currentStage == (7 - i) * 2);
 	}
+}
+
+TEST_CASE("headRelayRight preserves HEAD ALL common controls") {
+	HeadsToAnchorMsg fromLeft;
+	fromLeft.valid = true;
+	fromLeft.headAll.valid = true;
+	fromLeft.headAll.controlSeq[4] = 7;
+	fromLeft.headAll.controlValue[4] = 1.f;
+	fromLeft.headAll.externalClockSeq = 19;
+	fromLeft.headAll.addressConnected = true;
+	fromLeft.headAll.addressCv = 6.25f;
+
+	HeadStatus own;
+	own.headId = 3;
+	HeadsToAnchorMsg out;
+	headRelayRight(own, &fromLeft, out);
+	CHECK(out.headAll.valid);
+	CHECK(out.headAll.controlSeq[4] == 7);
+	CHECK(out.headAll.controlValue[4] == doctest::Approx(1.f));
+	CHECK(out.headAll.externalClockSeq == 19);
+	CHECK(out.headAll.addressConnected);
+	CHECK(out.headAll.addressCv == doctest::Approx(6.25f));
+
+	HeadsToAnchorMsg noSource;
+	headRelayRight(own, NULL, noSource);
+	CHECK_FALSE(noSource.headAll.valid);
 }
 
 TEST_CASE("headRelayRight: a 9th head cannot overflow the merge") {

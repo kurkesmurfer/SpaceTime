@@ -30,6 +30,7 @@ enum MidiRoute {
 	MIDI_ROUTE_PROGRAM,
 	MIDI_ROUTE_STAGE,
 	MIDI_ROUTE_HEAD,
+	MIDI_ROUTE_HEAD_ALL,
 	MIDI_ROUTE_PROGRAM_HEAD,
 	MIDI_ROUTE_STAGE_HEAD
 };
@@ -110,6 +111,7 @@ public:
 			case MIDI_ROUTE_PROGRAM: return "program";
 			case MIDI_ROUTE_STAGE: return "stage";
 			case MIDI_ROUTE_HEAD: return "head";
+			case MIDI_ROUTE_HEAD_ALL: return "head all";
 			case MIDI_ROUTE_PROGRAM_HEAD: return "program+head";
 			case MIDI_ROUTE_STAGE_HEAD: return "stage+head";
 			default: return "none";
@@ -155,16 +157,22 @@ public:
 			bool toProgram = channel == controlChannel;
 			bool toStage = channel == sliderChannel;
 			bool toHead = channel < kMaxHeads;
+			bool toAllHeads = channel == kMaxHeads;
 			if (toProgram)
 				handleProgramCc(data1, data2);
 			if (toStage)
 				handleSliderCc(data1, data2);
 			if (toHead)
 				handleHeadCc(channel, data1, data2);
-			lastRoute = toProgram && toHead ? MIDI_ROUTE_PROGRAM_HEAD :
-				(toStage && toHead ? MIDI_ROUTE_STAGE_HEAD :
+			if (toAllHeads)
+				handleAllHeadsCc(data1, data2);
+			bool toAnyHead = toHead || toAllHeads;
+			lastRoute = toProgram && toAnyHead ? MIDI_ROUTE_PROGRAM_HEAD :
+				(toStage && toAnyHead ? MIDI_ROUTE_STAGE_HEAD :
 				 (toProgram ? MIDI_ROUTE_PROGRAM :
-				  (toStage ? MIDI_ROUTE_STAGE : (toHead ? MIDI_ROUTE_HEAD : MIDI_ROUTE_IGNORED))));
+				  (toStage ? MIDI_ROUTE_STAGE :
+				   (toHead ? MIDI_ROUTE_HEAD :
+				    (toAllHeads ? MIDI_ROUTE_HEAD_ALL : MIDI_ROUTE_IGNORED)))));
 		}
 		else if (status == 0xC && channel == controlChannel) {
 			lastNumber = data1;
@@ -351,6 +359,14 @@ private:
 		headCcValue[channel][cc] = scaled;
 		headCcSeq[channel][cc]++;
 		headEventSeq[channel]++;
+	}
+
+	void handleAllHeadsCc(uint8_t cc, uint8_t value) {
+		// Display remains exclusive and has no meaningful all-head operation.
+		if (cc >= kHeadAllControls)
+			return;
+		for (int head = 0; head < kMaxHeads; head++)
+			handleHeadCc((uint8_t)head, cc, value);
 	}
 
 	static uint8_t cvToNote(float cv) {

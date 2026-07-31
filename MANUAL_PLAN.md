@@ -39,16 +39,18 @@ called out as a deliberate compatibility choice or extension.
 4. STAGE4 reference: voltage/time sliders, external-source interpolation,
    stage LEDs, chaining, and live reordering.
 5. HEAD reference: transport, addressing, regions, direction, loop modes,
-   internal/external/MIDI/virtual clocks, div/mult, and every output.
-6. MIDI reference: device/channel setup, complete incoming CC chart, global
+   internal/external/MIDI/virtual clocks, div/mult, RESET input, and every output.
+6. HEAD ALL reference: terminal placement, common commands, mode-copy behavior,
+   normalled common CV inputs, local overrides, and MIDI channel 9.
+7. MIDI reference: device/channel setup, complete incoming CC chart, global
    realtime messages, per-head virtual clock and transport, visual takeover,
    and outgoing note/CV instrument MIDI.
-7. GLUE LEFT/RIGHT reference, valid layouts, link states, and limitations.
-8. Patch recipes for single-head, multi-head, externally addressed, hybrid
+8. GLUE LEFT/RIGHT reference, valid layouts, link states, and limitations.
+9. Patch recipes for single-head, multi-head, externally addressed, hybrid
    CV/MIDI, and separated-rack workflows.
-9. Compatibility notes explaining pulse retrigger, regions, timing behavior,
+10. Compatibility notes explaining pulse retrigger, regions, timing behavior,
    and all deliberate departures from the hardware.
-10. Troubleshooting, CPU guidance, platform support, and test procedures.
+11. Troubleshooting, CPU guidance, platform support, and test procedures.
 
 ## SpaceTime-Specific Coverage
 
@@ -57,6 +59,7 @@ first-class explanations based on this implementation:
 
 - Up to 64 stages, eight independent heads, and dynamic expander discovery.
 - Direction, loop, per-head clock source, div/mult, and TIME CV extensions.
+- Per-HEAD RESET inputs and the VCV HEAD ALL common-control terminal.
 - MIDI channels, CC mapping, realtime clock/transport, virtual clock messages,
   stateful controls, visual feedback, and outgoing MIDI behavior.
 - Key/scale quantization, presets with slider takeover, and Poly Out.

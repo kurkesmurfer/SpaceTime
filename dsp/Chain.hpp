@@ -25,8 +25,9 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 3;
+static const uint32_t kChainProtocolVersion = 4;
 static const int kMidiHeadControls = 14;
+static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
 
 // ---- Globals travelling with the anchor broadcast ---------------------------
@@ -100,6 +101,31 @@ struct MidiProgramEvent {
 		: seq(0), type(MIDI_PROG_NONE), index(0), value(0), fvalue(0.f), flags(0) {}
 };
 
+// Common HEAD control source, injected at the far-left end and relayed
+// rightward with head statuses. Sequence counters make momentary controls
+// edge-safe across the control-rate expander path. Local ADDRESS/CLK/TIME
+// jacks on an individual HEAD override the corresponding common CV normal.
+struct HeadAllState {
+	uint32_t controlSeq[kHeadAllControls];
+	float controlValue[kHeadAllControls];
+	uint32_t externalClockSeq;
+	float startGate;
+	float addressCv;
+	float timeCv;
+	bool addressConnected;
+	bool timeConnected;
+	bool valid;
+
+	HeadAllState()
+		: externalClockSeq(0), startGate(0.f), addressCv(0.f), timeCv(0.f),
+		  addressConnected(false), timeConnected(false), valid(false) {
+		for (int c = 0; c < kHeadAllControls; c++) {
+			controlSeq[c] = 0;
+			controlValue[c] = 0.f;
+		}
+	}
+};
+
 // ---- Messages ----------------------------------------------------------------
 // Leftward, block -> left neighbour (block or anchor): table of the sub-chain
 // starting at the sender.
@@ -153,6 +179,7 @@ struct AnchorToHeadsMsg {
 struct HeadsToAnchorMsg {
 	HeadStatus status[kMaxHeads];
 	uint8_t headCount;
+	HeadAllState headAll;
 	MidiProgramEvent midiEvents[kMaxMidiProgramEvents];
 	uint8_t midiEventCount;
 	uint32_t midiEventSeq;
@@ -221,6 +248,7 @@ inline void headRelayRight(const HeadStatus& own, const HeadsToAnchorMsg* fromLe
 		out.status[i] = fromLeft->status[i];
 	out.status[n] = own;
 	out.headCount = (uint8_t)(n + 1);
+	out.headAll = (fromLeft && fromLeft->valid) ? fromLeft->headAll : HeadAllState();
 	out.midiEventCount = fromLeft ? fromLeft->midiEventCount : 0;
 	out.midiEventSeq = fromLeft ? fromLeft->midiEventSeq : 0;
 	for (int i = 0; i < out.midiEventCount && i < kMaxMidiProgramEvents; i++)
@@ -288,7 +316,7 @@ inline int applyOpsToSegment(BlockSegment& seg, const AnchorToBlocksMsg& msg, in
 // ---- Chain enumeration (pure, over an abstract neighbour view) ------------------
 // The anchor uses this for the stage-count display, broken-chain warning and
 // validation; module indices themselves come from the hop counters above.
-enum class ModuleType : uint8_t { None = 0, Program, Stage4, Head, Midi, Foreign };
+enum class ModuleType : uint8_t { None = 0, Program, Stage4, Head, HeadAll, Midi, Foreign };
 
 struct NeighborView {
 	virtual ~NeighborView() {}
@@ -346,12 +374,16 @@ inline ChainLayout enumerateChain(const NeighborView& v) {
 		n++;
 	}
 	t = v.leftAt(n);
-	if (t == ModuleType::Head)
+	if (t == ModuleType::HeadAll) {
+		n++;
+		t = v.leftAt(n);
+	}
+	if (t == ModuleType::Head || t == ModuleType::HeadAll || t == ModuleType::Midi)
 		lay.brokenLeft = true;
 	else if (t == ModuleType::Foreign || t == ModuleType::None) {
 		for (int k = n + 1; k <= n + kMaxHeads; k++) {
 			ModuleType kt = v.leftAt(k);
-			if (kt == ModuleType::Head || kt == ModuleType::Midi) {
+			if (kt == ModuleType::Head || kt == ModuleType::HeadAll || kt == ModuleType::Midi) {
 				lay.brokenLeft = true;
 				break;
 			}

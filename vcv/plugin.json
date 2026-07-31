@@ -32,6 +32,12 @@
       "tags": ["Function generator", "Sequencer", "Expander"]
     },
     {
+      "slug": "HeadAll",
+      "name": "HEAD ALL",
+      "description": "Common transport, playback and CV control for every connected HEAD",
+      "tags": ["Controller", "Sequencer", "Expander"]
+    },
+    {
       "slug": "Midi",
       "name": "MIDI",
       "description": "MIDI gateway for clock, transport, preset, CC control and outgoing instrument messages",

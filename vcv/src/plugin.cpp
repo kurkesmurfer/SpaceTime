@@ -8,6 +8,7 @@ void init(Plugin* p) {
 	p->addModel(modelProgram);
 	p->addModel(modelStage4);
 	p->addModel(modelHead);
+	p->addModel(modelHeadAll);
 	p->addModel(modelMidi);
 	p->addModel(modelGlueLeft);
 	p->addModel(modelGlueRight);

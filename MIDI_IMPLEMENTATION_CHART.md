@@ -1,6 +1,6 @@
 # SpaceTime MIDI implementation chart
 
-**Implementation snapshot:** 2026-07-15
+**Implementation snapshot:** 2026-07-31
 **Purpose:** authoritative DROID remote mapping and manual MIDI test reference.  
 **Numbering:** MIDI channels are shown as users see them (1-16). CC and Program
 Change data bytes are shown as raw MIDI values (0-127).
@@ -9,19 +9,20 @@ Change data bytes are shown as raw MIDI values (0-127).
 
 | Item | Current implementation |
 |---|---|
-| Chain layout | `HEAD ... HEAD - MIDI - PROGRAM - STAGE4 ... STAGE4` |
+| Chain layout | `HEAD ALL - HEAD ... HEAD - MIDI - PROGRAM - STAGE4 ... STAGE4` |
 | MIDI module | Singleton, transparent to head numbering |
 | Input device | Selected in MIDI module context menu; input channel is forced to All |
 | Output device | Selected independently in MIDI module context menu |
 | PROGRAM controls channel | Configurable 1-16; default channel 16 |
 | Stage sliders channel | Configurable 1-16; default channel 15 |
 | HEAD input channels | Fixed: HEAD 1-8 use channels 1-8 |
+| HEAD ALL input channel | Fixed: channel 9; CC 0-12 broadcast to all HEADs |
 | Head numbering | HEAD 1 is immediately left of MIDI; numbers increase leftward |
 | Input map | Fixed CC map; no base-CC offset and no MIDI learn |
 | Persistence | Input/output devices, both input channels, and all output-lane settings are saved in the Rack patch |
 
 The PROGRAM-controls and stage-slider channels must differ; the context menu
-rejects an attempt to select the other channel. Keep both outside channels 1-8
+rejects an attempt to select the other channel. Keep both outside channels 1-9
 unless combined routing to a HEAD is intentional. The defaults, channels 16
 and 15 respectively, avoid both forms of overlap. The panel readout shows
 `P16` and `S15` for these defaults.
@@ -146,9 +147,10 @@ the same 3-state bins documented for HEAD selectors: `0-42`, `43-84`, and
 | Preset Save mode | Panel only |
 | Context-menu globals | No incoming MIDI assignments |
 
-## 4. Incoming per-HEAD CC map
+## 4. Incoming HEAD CC map
 
 The same CC 0-13 map is reused on channels 1-8. The channel selects the HEAD.
+Channel 9 broadcasts the same map through CC 12; Display CC 13 is ignored.
 
 | MIDI channel | Target |
 |---:|---|
@@ -160,6 +162,7 @@ The same CC 0-13 map is reused on channels 1-8. The channel selects the HEAD.
 | 6 | HEAD 6 |
 | 7 | HEAD 7 |
 | 8 | HEAD 8, furthest left |
+| 9 | HEAD ALL: broadcast CC 0-12 to every HEAD; CC 13 ignored |
 
 ### 4.1 HEAD controls
 
@@ -204,6 +207,10 @@ CC 10 state order is `/16, /8, /4, /2, x1, x2, x4, x8, x16`.
 - The four continuous/discrete controls reported as flipping between 0 and 127
   on the partial DROID patch are CC 8, 9, 10, and 12; configure them with the
   discrete value sets above.
+- Channel 9 reuses the same CC values and does not require a HEAD ALL panel
+  module. CC 13 is deliberately ignored because only one HEAD may own Display.
+- The mapping therefore consumes one additional MIDI channel, not another set
+  of CC numbers. Channels 10-14 remain unassigned by the fixed HEAD map.
 
 ## 5. Incoming MIDI System Realtime
 
@@ -334,6 +341,7 @@ when that work starts.
 | Route `program` | Message matched PROGRAM-controls channel |
 | Route `stage` | Message matched stage-slider channel |
 | Route `head` | CC matched HEAD channel 1-8 |
+| Route `head all` | CC matched fixed HEAD ALL channel 9 |
 | Route `program+head` | PROGRAM channel overlaps a HEAD channel |
 | Route `stage+head` | Stage-slider channel overlaps a HEAD channel |
 | HEAD context diagnostic | Last applied HEAD CC, scaled value, and sequence |
@@ -350,6 +358,7 @@ transport or CC interleaving.
 - [ ] Use PROGRAM-controls channel 16 and stage-slider channel 15 unless
       deliberately testing HEAD overlap.
 - [ ] Use channels 1-8 for HEAD 1-8.
+- [ ] Use channel 9 for HEAD ALL CC 0-12; confirm CC 13 has no effect.
 - [ ] Configure PROGRAM gesture controls as two-direction actions, not ordinary
       press/release buttons.
 - [ ] Configure CC 8, 9, 10, and 12 as discrete E4 encoder ranges.
@@ -388,6 +397,7 @@ transport or CC interleaving.
 |---|---|
 | PROGRAM/stage CC input | Implemented through CC 91; slider/modifier tests and CC 89/90/91 VCV visual feedback passed; DROID integration pending |
 | Per-head CC input | Implemented; Start/Stop and basic routing passed |
+| HEAD ALL CC input | Implemented on fixed channel 9 for CC 0-12; Display excluded |
 | MIDI Clock input | Implemented; DROID USB clock reaches CLK indicator |
 | MIDI realtime transport | Implemented; Start/Stop working, stale-event synchronization fixed; comprehensive retest pending |
 | Virtual clock input | Implemented; tick-for-tick secondary verification pending |

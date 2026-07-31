@@ -247,7 +247,8 @@ struct Program : Module {
 			table = StageTable();
 
 		// ---- Chain layout for the display
-		RackNeighborView view(this, modelProgram, modelStage4, modelHead, modelMidi);
+		RackNeighborView view(this, modelProgram, modelStage4, modelHead, modelHeadAll,
+			modelMidi);
 		ChainLayout lay = enumerateChain(view);
 		displayCount = table.count;
 		displayBroken = lay.brokenRight || lay.brokenLeft ||

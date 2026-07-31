@@ -96,13 +96,14 @@ struct RackNeighborView : NeighborView {
 	rack::plugin::Model* programModel;
 	rack::plugin::Model* stage4Model;
 	rack::plugin::Model* headModel;
+	rack::plugin::Model* headAllModel;
 	rack::plugin::Model* midiModel;
 
 	RackNeighborView(rack::engine::Module* anchor, rack::plugin::Model* program,
 	                 rack::plugin::Model* stage4, rack::plugin::Model* head,
-	                 rack::plugin::Model* midi)
+	                 rack::plugin::Model* headAll, rack::plugin::Model* midi)
 		: anchor(anchor), programModel(program), stage4Model(stage4),
-		  headModel(head), midiModel(midi) {}
+		  headModel(head), headAllModel(headAll), midiModel(midi) {}
 
 	ModuleType classify(rack::engine::Module* m) const {
 		if (!m)
@@ -111,6 +112,8 @@ struct RackNeighborView : NeighborView {
 			return ModuleType::Stage4;
 		if (m->model == headModel)
 			return ModuleType::Head;
+		if (m->model == headAllModel)
+			return ModuleType::HeadAll;
 		if (m->model == midiModel)
 			return ModuleType::Midi;
 		if (m->model == programModel)

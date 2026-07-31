@@ -162,7 +162,7 @@ struct GlueRight : GlueEndpoint {
 
 	spacetime::GlueMode detectMode() const override {
 		engine::Module* neighbor = leftExpander.module;
-		if (spacetime::modelIs(neighbor, modelHead, modelMidi))
+		if (spacetime::modelIs(neighbor, modelHead, modelMidi, modelHeadAll))
 			return spacetime::GLUE_MODE_HEAD;
 		if (spacetime::modelIs(neighbor, modelProgram, modelStage4))
 			return spacetime::GLUE_MODE_STAGE;

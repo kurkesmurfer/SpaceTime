@@ -202,6 +202,35 @@ VCV Rack.
    reverse an endpoint, or remove a partner. Affected LEDs turn red and the
    chain becomes invalid rather than connecting to the wrong fragment.
 
+## Patch 10 — HEAD RESET and HEAD ALL
+
+Layout: `HEAD ALL HEAD HEAD HEAD HEAD MIDI PROGRAM STAGE4 x4` (16 stages).
+
+1. Patch a manual trigger into each individual HEAD RESET input. Move that HEAD
+   away from stage 1, trigger RESET, and verify only that HEAD returns to the
+   First stage in its current region.
+2. Move all four HEADs to different stages. Press HEAD ALL RST; every HEAD must
+   return to its regional First stage. Repeat with the common RESET input.
+3. Verify HEAD ALL START, STOP and ADV buttons and inputs affect all four HEADs
+   once per edge. A local HEAD transport control must still affect only that
+   HEAD.
+4. Change Direction, clock source, DIV/MULT and Loop on HEAD ALL. All four
+   visible HEAD controls must assume the new value. Change one local HEAD
+   afterward and verify it may diverge until HEAD ALL changes again.
+5. Select External clock on HEAD ALL and feed the common CLK input. Unpatched
+   local HEAD CLK jacks follow it. Patch a different clock into one HEAD and
+   verify that local jack overrides the common normal for only that HEAD.
+6. Repeat the normalled override check for common ADDRESS and TIME CV. Verify
+   the common START input also behaves as the Sustain/Enable gate.
+7. Send channel 9 CC 1/2/3/4 to Start/Stop/Advance/Reset all HEADs, then test
+   selector CC 8/9/10/12. Send channel 9 CC 13 and verify no Display changes.
+8. Insert a correctly paired HEAD-side GLUE between HEAD ALL and the furthest
+   HEAD. Common controls must still arrive and neither PROGRAM nor GLUE may
+   report a broken chain. Misplacing or duplicating HEAD ALL must report a
+   broken chain.
+9. Save/reload the patch. HEAD ALL parameters and the appended HEAD RESET jack
+   connections must restore without changing existing HEAD port mappings.
+
 ## Known WP7 interpretation notes
 
 - Strobe via the panel: flipping the CONT/SEQ/STRB switch DOWN fires one

@@ -23,10 +23,11 @@ actual 248t (with thanks to the demonstrations of Stazma the Junglechrist).
 | **PROGRAM** | 18 | The programming section: stage select, voltage/time/mode modifiers, pulses, Clear, presets + key/scale, external inputs A–D, poly output |
 | **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 16 blocks (4–64 stages) |
 | **HEAD** | 10 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
+| **HEAD ALL** | 10 | Common transport, playback modes and normalled CV inputs for every connected HEAD |
 | **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM |
 | **GLUE RIGHT / LEFT** | 2 each | Paired SpaceTime-only virtual expander bridge for separating chain fragments |
 
-Placement: `[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, all touching — a gap or
+Placement: `[HEAD ALL][HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, all touching — a gap or
 foreign module ends the chain on that side. Stage numbering runs
 left-to-right across the blocks; head 1 sits next to PROGRAM, counting
 upward leftward. Blocks own their stage data: reordering STAGE4 modules
@@ -122,7 +123,7 @@ and reordered live.
 ## HEAD
 
 **Transport:** START, STOP, ADV (force next stage), RST (return to the
-region's First stage). The START jack doubles as the Sustain gate and the
+region's First stage). Each action has a matching input jack. The START jack doubles as the Sustain gate and the
 Enable >5 V threshold, as on the hardware.
 
 **Status LEDs:** green = running; yellow = holding (Sustain/Enable waiting —
@@ -157,9 +158,29 @@ stages 1 and 9 and Last on 8 and 16, a head started low loops 1–8 while a
 head strobed to 9 loops 9–16 — independent sequencers on one surface
 (hardware-verified). RST stays within the head's region.
 
+## HEAD ALL
+
+Place one HEAD ALL immediately left of the furthest HEAD. It is a common
+control source, not a ninth playhead, and therefore has no CV/gate outputs or
+Display ownership. START, STOP, ADV and RST buttons and inputs address every
+connected HEAD. ADDRESS, address source/mode, Direction, clock source,
+DIV/MULT, TIME CV amount and Loop are copied to every HEAD when the common
+control changes; individual HEAD controls may diverge again afterward.
+
+The common START input is also the shared Sustain/Enable gate. Common ADDRESS,
+CLK and TIME inputs are normalled to each HEAD: an individually patched HEAD
+jack overrides the common signal for that HEAD. The common STROBE input and
+momentary address lever strobe every HEAD. HEAD ALL may sit across a correctly
+paired HEAD-side GLUE link and must remain the far-left terminal.
+
+MIDI channel 9 addresses all HEADs directly through the MIDI module, whether
+or not HEAD ALL is installed. It reuses HEAD CC 0-12. CC 13 Display is excluded
+because SpaceTime Display ownership is intentionally exclusive.
+
 ## Deviations from the hardware
 
 VCV extensions: up to 64 stages (16 blocks) and 8 heads instead of 16/2;
+per-HEAD Reset inputs; optional HEAD ALL common control;
 direction modes; external clock with div/mult; per-head TIME CV; loop mode
 selection; EOC output; POLY OUT; presets stored per patch; DISP is latching
 instead of momentary; bulk edit via context menu. Dropped: ART outputs and
@@ -200,6 +221,6 @@ unit-tested, golden traces in `test/golden/`); the manual integration patch
 suite is documented in `test/patches/README.md`.
 
 Library submission checklist: slugs frozen (`SpaceTime`/`Program`/`Stage4`/
-`Head`/`Midi`/`GlueLeft`/`GlueRight`); version major 2; WidgetTest hidden;
+`Head`/`HeadAll`/`Midi`/`GlueLeft`/`GlueRight`); version major 2; WidgetTest hidden;
 licence and font notices included; panel screenshots at 100% zoom; release
 metadata points to the Kurkesmurfer site and planned public repository.

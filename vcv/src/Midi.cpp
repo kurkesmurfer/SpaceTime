@@ -290,6 +290,7 @@ struct MidiWidget : ModuleWidget {
 			&module->core.moveStageSliders));
 
 		menu->addChild(createMenuLabel("HEAD channels fixed: 1-8"));
+		menu->addChild(createMenuLabel("HEAD ALL channel fixed: 9 (CC 0-12)"));
 		menu->addChild(createMenuLabel("PROGRAM and stage channels must differ"));
 		menu->addChild(createMenuLabel("CC maps fixed; no base offset"));
 		if (module->core.lastStatus >= 0) {

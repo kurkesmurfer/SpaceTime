@@ -52,6 +52,7 @@ struct Head : Module {
 		ADDRESS_INPUT,
 		CLK_INPUT,
 		TIMECV_INPUT,
+		RESET_INPUT,  // appended (patch compatibility)
 		INPUTS_LEN
 	};
 	enum OutputId {
@@ -88,15 +89,20 @@ struct Head : Module {
 	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;  // broadcast in
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;   // statuses in
 
-	rack::dsp::BooleanTrigger resetTrigger, strobeDownTrigger, displayTrigger;
+	rack::dsp::BooleanTrigger resetTrigger, resetInputTrigger, strobeDownTrigger, displayTrigger;
 	bool resetPending = false, strobePending = false;
 	bool displayLatch = false;
 	bool displayClaimPending = false;
 	uint32_t lastCancelSeq = 0;
 	uint32_t lastMidiClockSeq = 0, lastMidiStartSeq = 0, lastMidiStopSeq = 0, lastMidiContinueSeq = 0;
 	uint32_t lastHeadCcSeq[spacetime::kMidiHeadControls] = {};
-	float midiClockTimer = 0.f, virtualClockTimer = 0.f;
+	uint32_t lastHeadAllCcSeq[spacetime::kHeadAllControls] = {};
+	uint32_t lastHeadAllClockSeq = 0;
+	float midiClockTimer = 0.f, virtualClockTimer = 0.f, headAllClockTimer = 0.f;
 	float midiStartTimer = 0.f, midiStopTimer = 0.f, midiAdvanceTimer = 0.f;
+	float headAllStartGate = 0.f, headAllAddressCv = 0.f, headAllTimeCv = 0.f;
+	bool headAllAddressConnected = false, headAllTimeConnected = false;
+	bool lastHeadAllValid = false;
 	bool followMidiTransport = false;
 	int lastMidiCc = -1;
 	float lastMidiCcValue = 0.f;
@@ -136,6 +142,7 @@ struct Head : Module {
 		configInput(ADDRESS_INPUT, "Address CV");
 		configInput(CLK_INPUT, "External clock");
 		configInput(TIMECV_INPUT, "Time CV");
+		configInput(RESET_INPUT, "Reset to First stage (gate/trigger)");
 
 		configOutput(CV_OUTPUT, "Stage CV (1 V/oct when quantized)");
 		configOutput(TIME_OUTPUT, "Time (current stage's time slider)");
@@ -201,6 +208,9 @@ struct Head : Module {
 		if (ctrl) {
 			float dt = args.sampleTime * divider.getDivision();
 			bool midiDisplayToggle = false;
+			bool leftIsStatusSource = modelIs(leftExpander.module, modelHead, modelHeadAll,
+				modelGlueLeft);
+			const HeadsToAnchorMsg* lm = leftPort.consume(leftExpander);
 
 			// ---- Broadcast in (anchor side)
 			bool rightIsChain = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
@@ -263,6 +273,34 @@ struct Head : Module {
 				table.count = 0;
 				displayLatch = false;
 				displayClaimPending = false;
+			}
+
+			// ---- Common controls from HEAD ALL (far-left source)
+			bool headAllValid = leftIsStatusSource && lm->valid && lm->headAll.valid;
+			if (headAllValid) {
+				for (int c = 0; c < kHeadAllControls; c++) {
+					uint32_t seq = lm->headAll.controlSeq[c];
+					if (!lastHeadAllValid || seq != lastHeadAllCcSeq[c]) {
+						lastHeadAllCcSeq[c] = seq;
+						applyHeadCc(c, lm->headAll.controlValue[c]);
+					}
+				}
+				if (lm->headAll.externalClockSeq != lastHeadAllClockSeq) {
+					lastHeadAllClockSeq = lm->headAll.externalClockSeq;
+					headAllClockTimer = 1e-3f;
+				}
+				headAllStartGate = lm->headAll.startGate;
+				headAllAddressCv = lm->headAll.addressCv;
+				headAllTimeCv = lm->headAll.timeCv;
+				headAllAddressConnected = lm->headAll.addressConnected;
+				headAllTimeConnected = lm->headAll.timeConnected;
+				lastHeadAllValid = true;
+			}
+			else {
+				headAllStartGate = 0.f;
+				headAllAddressConnected = false;
+				headAllTimeConnected = false;
+				lastHeadAllValid = false;
 			}
 			// Apply MIDI Display after arbitration, matching the panel button.
 			// Otherwise the previous owner's broadcast clears a new MIDI claim
@@ -327,9 +365,7 @@ struct Head : Module {
 						table.program[out.currentStage].quantize()) ? 1 : 0;
 					own.phase = out.phase;
 					own.cv = out.cv;
-					bool leftIsHead = modelIs(leftExpander.module, modelHead, modelGlueLeft);
-					const HeadsToAnchorMsg* lm = leftPort.consume(leftExpander);
-					headRelayRight(own, (leftIsHead && lm->valid) ? lm : NULL, *ro);
+					headRelayRight(own, (leftIsStatusSource && lm->valid) ? lm : NULL, *ro);
 					flipRightNeighbor(this);
 				}
 			}
@@ -344,9 +380,11 @@ struct Head : Module {
 
 		// ---- DSP at audio rate (sample-accurate slew/ramp/pulses)
 		HeadSignals sig;
+		float commonClockPulse = pulseGate(headAllClockTimer, args.sampleTime);
 		sig.start = std::fmax(inputs[START_INPUT].getVoltage(),
 			params[START_PARAM].getValue() > 0.5f ? 10.f : 0.f);
 		sig.start = std::fmax(sig.start, pulseGate(midiStartTimer, args.sampleTime));
+		sig.start = std::fmax(sig.start, headAllStartGate);
 		sig.stop = std::fmax(inputs[STOP_INPUT].getVoltage(),
 			params[STOP_PARAM].getValue() > 0.5f ? 10.f : 0.f);
 		sig.stop = std::fmax(sig.stop, pulseGate(midiStopTimer, args.sampleTime));
@@ -355,16 +393,24 @@ struct Head : Module {
 		sig.advance = std::fmax(sig.advance, pulseGate(midiAdvanceTimer, args.sampleTime));
 		sig.strobe = std::fmax(inputs[STROBE_INPUT].getVoltage(),
 			strobePending ? 10.f : 0.f);
-		sig.addressCv = inputs[ADDRESS_INPUT].getVoltage();
+		sig.addressCv = inputs[ADDRESS_INPUT].isConnected() ?
+			inputs[ADDRESS_INPUT].getVoltage() :
+			(headAllAddressConnected ? headAllAddressCv : 0.f);
 		int clockSource = clamp((int)std::round(params[CLK_SOURCE_PARAM].getValue()), 0, 3);
 		if (clockSource == 2)
 			sig.extClock = pulseGate(midiClockTimer, args.sampleTime);
 		else if (clockSource == 3)
 			sig.extClock = pulseGate(virtualClockTimer, args.sampleTime);
+		else if (clockSource == 1)
+			sig.extClock = inputs[CLK_INPUT].isConnected() ?
+				inputs[CLK_INPUT].getVoltage() : commonClockPulse;
 		else
 			sig.extClock = inputs[CLK_INPUT].getVoltage();
-		sig.timeCv = inputs[TIMECV_INPUT].getVoltage();
-		sig.reset = resetPending;
+		sig.timeCv = inputs[TIMECV_INPUT].isConnected() ?
+			inputs[TIMECV_INPUT].getVoltage() :
+			(headAllTimeConnected ? headAllTimeCv : 0.f);
+		sig.reset = resetPending ||
+			resetInputTrigger.process(inputs[RESET_INPUT].getVoltage() >= 1.f);
 		resetPending = false;
 		strobePending = false;
 
@@ -446,12 +492,12 @@ struct HeadWidget : ModuleWidget {
 
 		{
 			static const char* in1[4] = {"START", "STOP", "ADV", "STRB"};
-			static const char* in2[3] = {"ADDR", "CLK", "TIME"};
+			static const char* in2[4] = {"ADDR", "CLK", "TIME", "RST"};
 			static const char* out1[4] = {"CV", "TIME", "REF", "ALL"};
 			static const char* out2[3] = {"P1", "P2", "EOC"};
 			for (int i = 0; i < 4; i++)
 				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 4.6f, in1[i]);
-			for (int i = 0; i < 3; i++)
+			for (int i = 0; i < 4; i++)
 				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.6f, in2[i]);
 			for (int i = 0; i < 4; i++)
 				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, OUT1_Y + 4.6f, out1[i]);
@@ -488,6 +534,7 @@ struct HeadWidget : ModuleWidget {
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, IN2_Y)), module, Head::ADDRESS_INPUT));
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, IN2_Y)), module, Head::CLK_INPUT));
 		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 2 * JACK_PITCH, IN2_Y)), module, Head::TIMECV_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 3 * JACK_PITCH, IN2_Y)), module, Head::RESET_INPUT));
 
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, OUT1_Y)), module, Head::CV_OUTPUT));
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, OUT1_Y)), module, Head::TIME_OUTPUT));

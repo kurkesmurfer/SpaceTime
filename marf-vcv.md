@@ -1,8 +1,8 @@
 # SpaceTime — Multi-Playhead Arbitrary Function Generator for VCV Rack
 
-**Plugin name:** SpaceTime (Kurkesmurfer) — modules PROGRAM / STAGE4 / HEAD / MIDI / GLUE; slugs `SpaceTime` / `Program` / `Stage4` / `Head` / `Midi` / `GlueLeft` / `GlueRight`
+**Plugin name:** SpaceTime (Kurkesmurfer) — modules PROGRAM / STAGE4 / HEAD / HEAD ALL / MIDI / GLUE; slugs `SpaceTime` / `Program` / `Stage4` / `Head` / `HeadAll` / `Midi` / `GlueLeft` / `GlueRight`
 **Created:** 2026-07-06
-**Updated:** 2026-07-11 (rev 6 — MIDI addendum added for WP8b, draft at design gate; rev 5 renamed to SpaceTime; rev 4 aligned with 248t manual)
+**Updated:** 2026-07-31 (rev 7 — HEAD Reset input and HEAD ALL common-control extension; rev 6 MIDI addendum)
 **Status:** Concept / Specification
 **Inspired by:** Buchla Model 248 / Tiptop Audio & Buchla 248t MARF (Multiple Arbitrary Function Generator)
 **Brand:** Kurkesmurfer
@@ -26,8 +26,9 @@ Per-stage programming state lives in the STAGE4 blocks (clean persistence; seque
 | PROGRAM | 14–18 | Programming section: stage-select scroll, voltage/time/mode modifier switches with LEDs, pulses, Clear, presets + scale/key, EXT A–D input column, globals, POLY OUT |
 | STAGE4 | 10–12 | 4 stages: voltage slider, time slider, stage LED (selection + playhead positions). Chainable ×16 right of PROGRAM |
 | HEAD | 8–10 | One Function Generator: transport, addressing, direction, clock, outputs. Chainable ×8 left of PROGRAM |
+| HEAD ALL | 10 | Optional common transport, playback-mode and normalled-CV controller at the far-left end |
 
-Rack placement: `[HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, contiguous; a gap or foreign module terminates the chain. Stage index runs left-to-right across blocks; head index 1 adjacent to PROGRAM, increasing leftward. Reordering STAGE4 blocks reorders the sequence (blocks own their stage data).
+Rack placement: `[HEAD ALL][HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, contiguous; a gap or foreign module terminates the chain. HEAD ALL is optional and does not count as a playhead. Stage index runs left-to-right across blocks; head index 1 adjacent to PROGRAM, increasing leftward. Reordering STAGE4 blocks reorders the sequence (blocks own their stage data).
 
 VCV layout extension: a numbered GLUE RIGHT / GLUE LEFT pair may replace one
 physical adjacency. The pair transports SpaceTime's bidirectional typed
@@ -103,7 +104,7 @@ Row of 12 buttons + Load/Save (hardware: non-volatile; VCV: 12 internal slots on
 |---------|----------|
 | Start / Stop | Manual buttons + pulse inputs; controls the internal clock |
 | Advance | Manual button + pulse input; force next stage |
-| Reset | Return to First-programmed stage (or stage 1 if none) |
+| Reset | Button and pulse/gate input; return to First-programmed stage (or stage 1 if none) |
 | Address knob | Stage position in continuous/strobe addressing |
 | Int / Ext | Latching: address from knob or external ADDRESS CV |
 | Cont / Strobe | 3-pos: latching up = Continuous (address sweeps stages directly, internal clock stopped), latching center = sequential, momentary down = Strobe (load stage at current address value) |
@@ -118,7 +119,7 @@ Row of 12 buttons + Load/Save (hardware: non-volatile; VCV: 12 internal slots on
 | Loop | Obey First/Last flags / full chain / one-shot |
 
 ### Inputs
-START (pulse/gate — also serves Sustain gate and Enable >5 V threshold, per hardware), STOP, ADVANCE, STROBE, ADDRESS, CLK, TIME CV.
+START (pulse/gate — also serves Sustain gate and Enable >5 V threshold, per hardware), STOP, ADVANCE, STROBE, ADDRESS, CLK, TIME CV, RESET.
 
 ### Outputs
 | Jack | Function |
@@ -135,6 +136,30 @@ Default: 0–10 V spans the full current chain (self-normalizing). Menu alternat
 
 ---
 
+## HEAD ALL (common-control terminal, optional x1)
+
+HEAD ALL uses the HEAD panel geometry and is placed immediately left of the
+furthest HEAD. It is a source-only terminal: it adds no head index, has no
+Display control and produces no playhead outputs.
+
+- START, STOP, ADVANCE and RESET buttons/inputs emit the corresponding command
+  to every connected HEAD.
+- ADDRESS, address source/mode, Direction, clock source, DIV/MULT, TIME CV
+  amount and Loop are copied to every HEAD when a HEAD ALL control changes.
+  These are commands rather than permanent parameter locks, so a per-HEAD
+  control can diverge afterward.
+- The START input is also a common Sustain/Enable gate. Common ADDRESS, CLK and
+  TIME CV are normals: a patched local HEAD input overrides the common signal
+  for that HEAD. STROBE is a common edge command.
+- The rightward common-control payload is append-only in chain protocol rev 4
+  and survives a HEAD-side GLUE bridge. More than one HEAD ALL, or placement
+  between PROGRAM/MIDI and a HEAD, is a broken chain.
+- MIDI channel 9 independently provides HEAD ALL control by broadcasting the
+  existing CC 0-12 map to all eight HEAD slots. CC 13 Display is excluded.
+  No additional CC numbers are consumed; channels 10-14 remain available.
+
+---
+
 ## Expander Protocol (VCV Rack)
 
 - Standard `Module::leftExpander`/`rightExpander` producer/consumer with `requestMessageFlip()`; fixed-size structs, **no dynamic allocation**.
@@ -142,6 +167,8 @@ Default: 0–10 V spans the full current chain (self-normalizing). Menu alternat
 - **Anchor → blocks (rightward):** edit-ops `{ stageIndex, field, value }` from the programming section + selected-stage index for LED display; blocks apply ops to their own state.
 - **Anchor → heads (leftward):** stage table + `{ float ext[4]; globals; scaleKey }` relayed head-to-head.
 - **Heads → anchor → blocks (rightward):** status `{ headId, currentStage, phase, runState }` merged/relayed for position LEDs.
+- **HEAD ALL → heads (rightward):** sequenced common controls and normalled
+  START/ADDRESS/CLK/TIME signals, carried alongside the status merge.
 - Latency: one sample per hop, control-rate data only — irrelevant. Slew, ramps and pulses generated **locally in each head**, sample-accurate.
 - `onExpanderChange`: anchor renumbers both chains; modules display index/colour.
 
@@ -197,6 +224,8 @@ Channel model for Part I:
   fit for head-specific MIDI. For Part I, each HEAD gets a target channel
   equal to its 0-based head id (head 0..7 -> MIDI channel 0..7, displayed as
   channels 1..8) and reuses the same HEAD CC map on that channel.
+  MIDI channel 9 is the fixed HEAD ALL target and broadcasts CC 0..12 to all
+  eight head slots; Display CC 13 remains exclusive and is ignored there.
   PROGRAM and stage-slider edits remain on their respective module channels.
 - MIDI Start/Stop/Continue are System Real-Time messages and carry **no MIDI
   channel**. Heads therefore respond by per-head opt-in, not by channel.
@@ -211,6 +240,7 @@ Channel model for Part I:
 | I-4 | **CC → stage sliders** | **Accepted.** Fixed map on the stage-slider channel: CC 0..63 = voltage sliders 1..64, CC 64..127 = time sliders 1..64 (7-bit, scaled onto 0-10 V / 0-1). Slider takeover applies, same as preset recall. DROID is programmable, so a clean fixed map beats MIDI-learn. |
 | I-5 | **CC → selected-stage modifiers** | **Implemented.** PROGRAM-section controls target the currently selected stage and honour the bulk window. |
 | I-6 | **CC → HEAD controls** | **Implemented.** Each HEAD receives the fixed 14-CC map, including virtual clock, on its own head channel. This is distinct from channel-less MIDI realtime transport. |
+| I-6a | **CC → HEAD ALL controls** | **Implemented.** Fixed MIDI channel 9 broadcasts CC 0–12 through the existing per-head arrays. Display CC 13 is excluded. |
 | I-7 | **Notes → strobe/transpose** | **Postponed/rejected for Part I.** Controller MIDI starts with PC/CC/clock/transport. Note input can be reconsidered later only if a concrete controller workflow needs it; generated notes belong to outgoing MIDI Part II. |
 | I-8 | MIDI-learn, arbitrary mapping UI | **Rejected/later** — scope; the fixed map + DROID programmability covers it. |
 | I-9 | NRPN input | **Rejected/later** — 7-bit CC resolution on 0–10 V is 78 mV; fine for sliders. Revisit with Part II experience. |
@@ -273,6 +303,9 @@ plus virtual clock:
 Across eight heads that is 112 logical controls, but the MIDI map does not
 spend 112 unique CC numbers on one channel. Head 0..7 use MIDI channels 0..7
 and all heads reuse this 14-CC map:
+
+Channel 9 reuses CC 0..12 as HEAD ALL. This consumes no new CC numbers and
+leaves MIDI channels 10..14 free under the default channel plan.
 
 - CC 0: virtual clock edge.
 - CC 1: Start.
@@ -362,7 +395,7 @@ work packages and the panel/slug review gates.
 5. **Pendulum endpoints (VCV extension):** repeat end stages or reverse without repeat; menu option?
 6. **Master transport on PROGRAM:** global START/STOP for all heads — useful or clutter?
 7. **Per-stage program visibility:** hardware shows one stage's programming at a time via the shared LEDs. Optional VCV extra: compact per-stage program glyph row on STAGE4 blocks (always-on at-a-glance) — worth the panel space?
-8. ~~Module names~~ **Resolved:** plugin **SpaceTime**, modules PROGRAM / STAGE4 / HEAD — no MARF in names or slugs; 248t inspiration credited in the manual only.
+8. ~~Module names~~ **Resolved:** plugin **SpaceTime**, modules PROGRAM / STAGE4 / HEAD / HEAD ALL / MIDI / GLUE — no MARF in names or slugs; 248t inspiration credited in the manual only.
 
 ---
 

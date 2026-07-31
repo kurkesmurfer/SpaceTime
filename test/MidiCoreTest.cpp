@@ -2,6 +2,7 @@
 #include "MidiCore.hpp"
 
 #include <vector>
+#include <string>
 
 using namespace spacetime;
 
@@ -104,6 +105,29 @@ TEST_CASE("MIDI core routes per-head controls and realtime counters") {
 	CHECK(message.midiContinueSeq == 1);
 	CHECK(message.midiStopSeq == 1);
 	CHECK(core.lastRoute == MIDI_ROUTE_STOP);
+}
+
+TEST_CASE("MIDI channel 9 applies CC 0-12 to every head but excludes Display") {
+	MidiCore core;
+	core.handleMessage(0xB8, 9, 127);
+	for (int head = 0; head < kMaxHeads; head++) {
+		CHECK(core.headCcSeq[head][9] == 1);
+		CHECK(core.headCcValue[head][9] == doctest::Approx(3.f));
+	}
+	CHECK(core.lastRoute == MIDI_ROUTE_HEAD_ALL);
+	CHECK(std::string(MidiCore::routeName(core.lastRoute)) == "head all");
+
+	core.handleMessage(0xB8, 13, 127);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK(core.headCcSeq[head][13] == 0);
+	CHECK(core.lastRoute == MIDI_ROUTE_HEAD_ALL);
+
+	core.handleMessage(0xB8, 1, 0);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK(core.headCcSeq[head][1] == 0);
+	core.handleMessage(0xB8, 1, 127);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK(core.headCcSeq[head][1] == 1);
 }
 
 TEST_CASE("MIDI core preserves command release and Program Change behavior") {

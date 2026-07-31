@@ -34,6 +34,7 @@ extern Plugin* pluginInstance;
 extern Model* modelProgram;
 extern Model* modelStage4;
 extern Model* modelHead;
+extern Model* modelHeadAll;
 extern Model* modelMidi;
 extern Model* modelGlueLeft;
 extern Model* modelGlueRight;
