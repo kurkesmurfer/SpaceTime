@@ -1,7 +1,7 @@
 # SpaceTime MIDI implementation chart
 
 **Implementation snapshot:** 2026-07-31
-**Purpose:** authoritative DROID remote mapping and manual MIDI test reference.  
+**Purpose:** authoritative controller mapping, feedback protocol, and manual MIDI test reference.
 **Numbering:** MIDI channels are shown as users see them (1-16). CC and Program
 Change data bytes are shown as raw MIDI values (0-127).
 
@@ -330,7 +330,179 @@ Do not reserve DROID controls or fixed CC pairs for 14-bit output yet. The
 MSB/LSB numbering, lane mode, update ordering, and throttle should be specified
 when that work starts.
 
-## 8. Activity and diagnostics
+## 8. Controller feedback protocol v1 (frozen)
+
+Protocol v1 gives stateful controllers an authoritative view of SpaceTime after
+panel edits, MIDI edits, patch reloads, and controller page changes. It is a
+controller-independent CC protocol: Midilize, DROID, or another adapter maps
+these semantic messages onto the controls and LEDs of a particular surface.
+
+This section freezes the wire format before implementation. Messages described
+here are **specified, not yet implemented**, unless a later status table says
+otherwise.
+
+### 8.1 Transport and device rules
+
+| Rule | Protocol v1 decision |
+|---|---|
+| Feedback device | A separate MIDI output selected in the MIDI module context menu; Off by default |
+| Input device | Snapshot requests arrive through the existing SpaceTime MIDI input |
+| Feedback channels | Fixed and independent of the configurable PROGRAM-controls and stage-slider input channels |
+| Message type | Ordinary MIDI CC only; no SysEx, NRPN, notes, or Program Change |
+| Live updates | Sparse state deltas, emitted only when a semantic value changes |
+| Resynchronization | Controller sends an explicit, stateless snapshot request for the area/page it is showing |
+| Multiple controllers | Supported: every listener sees deltas and snapshot replies; SpaceTime stores no controller identity or page |
+| Clock traffic | MIDI Clock, virtual-clock ticks, and phase are not echoed |
+| Momentary acknowledgement | Advance and Reset emit a short `127` then `0` acknowledgement; these are not persistent state |
+| Value convention | Enumerations use their exact zero-based index; binary state uses `0`/`127`; continuous values use `0-127` |
+
+Selecting a feedback output is the explicit declaration that a stateful
+controller is attached. Performance output lanes continue to use the existing
+MIDI output. Keeping feedback on its own device prevents LED/status traffic
+from entering a synthesizer or colliding with per-head note and CV lanes.
+
+### 8.2 Fixed channel allocation
+
+| MIDI channel | Feedback role |
+|---:|---|
+| 1-8 | HEAD 1-8 state; channel number equals visible HEAD number |
+| 9 | Reserved for a future aggregate HEAD ALL status; no v1 state is emitted here |
+| 10 | Protocol requests, version response, and snapshot framing |
+| 11-14 | Reserved for future SpaceTime feedback areas |
+| 15 | Stage voltage/time values |
+| 16 | PROGRAM and selected-stage programming state |
+
+HEAD ALL is a command target, not a ninth head with one authoritative state.
+After a broadcast, heads may diverge through local panel, CV, or MIDI control.
+Its snapshot request therefore returns individual HEAD messages on channels
+1-8. Controller adapters may show an ALL layer while deriving its LEDs from
+those eight truthful states.
+
+### 8.3 Snapshot requests and framing (channel 10)
+
+Requests use the existing MIDI input. Values below 64 are ignored for the
+PROGRAM request; HEAD and Stage page values are exact indices and must not be
+followed by an automatic release message.
+
+| CC | Direction | Value | Meaning |
+|---:|---|---:|---|
+| 0 | Controller -> SpaceTime | `0-7` | Request one HEAD snapshot; value 0 means HEAD 1 |
+| 0 | Controller -> SpaceTime | `8` | Request all present HEAD snapshots (HEAD ALL view) |
+| 1 | Controller -> SpaceTime | `64-127` | Request PROGRAM snapshot |
+| 2 | Controller -> SpaceTime | `0-7` | Request one eight-stage page; page 0 is stages 1-8 |
+| 3 | Controller -> SpaceTime | `64-127` | Protocol probe/version request |
+| 3 | SpaceTime -> Controller | `1` | Protocol major version 1 |
+| 118 | SpaceTime -> Controller | area code | Snapshot begins |
+| 119 | SpaceTime -> Controller | same area code | Snapshot ends |
+
+Snapshot area codes are `0-7` for HEAD 1-8, `8` for all HEADs, `16` for
+PROGRAM, and `32-39` for stage pages 1-8. Framing is emitted only for explicit
+snapshots, never around sparse deltas. A controller must treat a repeated value
+as valid inside a snapshot even if it equals its cached state.
+
+The request is stateless: the desired head or stage page is carried in every
+message. SpaceTime does not remember which page any controller is displaying.
+
+### 8.4 HEAD state and acknowledgements (channels 1-8)
+
+Where practical, feedback reuses the incoming HEAD CC number. Start and Stop
+are represented as mutually exclusive status LEDs rather than command echoes.
+
+| CC | Feedback value |
+|---:|---|
+| 1 | Running: `127` only in RUNNING, otherwise `0` |
+| 2 | Stopped: `127` only in STOPPED, otherwise `0` |
+| 3 | Advance acknowledgement pulse: `127`, then `0` |
+| 4 | Reset acknowledgement pulse: `127`, then `0` |
+| 5 | Address, absolute `0-127` |
+| 6 | Address source: `0` Internal, `127` External |
+| 7 | Address mode: `0` Strobe, `1` Sequential, `2` Continuous |
+| 8 | Direction: `0` Forward, `1` Reverse, `2` Pendulum, `3` Random, `4` Brownian |
+| 9 | Clock source: `0` Internal, `1` External CV, `2` MIDI, `3` Virtual |
+| 10 | Clock div/mult: `0-8` for `/16, /8, /4, /2, x1, x2, x4, x8, x16` |
+| 11 | Time CV amount, absolute `0-127` using the incoming CC 11 scale |
+| 12 | Loop mode: `0` One-shot, `1` First/Last, `2` Full chain |
+| 13 | Display ownership: `0` Off, `127` On |
+| 14 | Holding: `127` only in HOLDING, otherwise `0` |
+| 15 | Current stage: exact zero-based index `0-63` |
+| 16 | HEAD present: `127`; an absent requested head reports `0` |
+| 17 | Follow MIDI transport: `0` Off, `127` On |
+
+CC 0 is deliberately unused: echoing clock ticks would turn feedback into a
+high-rate clock stream. Snapshot order is ascending CC number. A change of run
+state emits CC 1, 2, and 14 together so a controller cannot retain a stale
+RUN/STOP/HOLD LED combination.
+
+### 8.5 PROGRAM state (channel 16)
+
+| CC | Feedback value |
+|---:|---|
+| 0 | Selected stage: exact zero-based index `0-63` |
+| 1 | Key: exact index `0-11` for C-B |
+| 2 | Scale: `0` Major, `1` Minor, `2` Chromatic |
+| 3 | Pulse Retrig: `0` Off, `127` On |
+| 4 | Bulk arm active: `0` Off, `127` On |
+| 16 | Selected-stage Quantize: `0` Continuous, `127` Quantized |
+| 17 | Selected-stage slope: `0` Stepped, `1` Slew 1, `2` Slew 2 |
+| 18 | Selected-stage voltage range: `0` Full, `1` Half, `2` Limited |
+| 19 | Selected-stage Limited octave: exact index `0-4` for -2 through +2 |
+| 20 | Selected-stage voltage source: `0` Internal, `127` External |
+| 21 | Selected-stage Stop flag: `0` Off, `127` On |
+| 22 | Selected-stage Sustain flag: `0` Off, `127` On |
+| 23 | Selected-stage Enable flag: `0` Off, `127` On |
+| 24 | Selected-stage First flag: `0` Off, `127` On |
+| 25 | Selected-stage Last flag: `0` Off, `127` On |
+| 26 | Selected-stage time range: exact index `0-3` |
+| 27 | Selected-stage time source: `0` Internal, `127` External |
+| 28 | Selected-stage Pulse 1 flag: `0` Off, `127` On |
+| 29 | Selected-stage Pulse 2 flag: `0` Off, `127` On |
+
+Changing selected stage emits CC 0 followed by CC 16-29 for the newly selected
+stage. This is one bounded semantic refresh, not a full 64-stage dump. PROGRAM
+snapshot order is CC 0-4 followed by CC 16-29.
+
+### 8.6 Stage values (channel 15)
+
+Stage feedback mirrors the slider map exactly:
+
+| CC | Feedback value |
+|---:|---|
+| 0-63 | Stage voltage 1-64, scaled from 0-10 V to `0-127` |
+| 64-127 | Stage time 1-64, scaled from 0-1 to `0-127` |
+
+An eight-stage page snapshot emits sixteen values: voltage CC `8p` through
+`8p+7`, then time CC `64+8p` through `71+8p`, where `p` is page `0-7`.
+Requests for stages beyond the connected chain return `0` so controllers can
+clear stale rings or faders after modules are removed.
+
+Live stage deltas are opt-in through a MIDI-module context setting, disabled by
+default. When enabled, they are coalesced and rate-limited before transmission;
+only the latest 7-bit value for a changed stage is required. Explicit page
+snapshots work whenever a feedback output is selected, regardless of the live
+stage-delta setting.
+
+### 8.7 Ordering and restart behavior
+
+- SpaceTime state is authoritative; controllers must overwrite cached LEDs and
+  rings with each snapshot reply.
+- On controller, Midilize document, Rack patch, or MIDI-device reconnect, the
+  adapter requests the visible HEAD/HEAD ALL area, PROGRAM, and visible stage
+  page. No assumed controller state survives a reconnect.
+- Persistent deltas carry final state, not gestures. Panel and incoming-MIDI
+  changes therefore produce the same feedback.
+- Snapshot replies and deltas may interleave with performance MIDI only at the
+  operating-system level because they use separate output devices.
+- Feedback loops are the controller adapter's responsibility: messages sent to
+  controller LEDs must not be routed back into SpaceTime's input as commands.
+
+### 8.8 Reserved and deferred feedback
+
+Protocol v1 does not report audio-rate phase/CV, raw clock ticks, per-stage
+program bitfields, preset contents, note-lane state, or 14-bit values. Channels
+9 and 11-14, protocol CC 4-117, and unused area codes remain reserved; future
+versions must not reinterpret any v1 assignment.
+
+## 9. Activity and diagnostics
 
 | Indicator/diagnostic | Meaning |
 |---|---|
@@ -351,7 +523,7 @@ Continuous MIDI Clock quickly becomes the MIDI module's last diagnostic
 message, so use Stoermelder MIDI-MON for ordered raw traffic when debugging
 transport or CC interleaving.
 
-## 9. DROID implementation checklist
+## 10. DROID implementation checklist
 
 ### Input/controller side
 
@@ -391,7 +563,7 @@ transport or CC interleaving.
 - [ ] Stress-test MIDI Clock plus multiple CC lanes and eight HEADs.
 - [ ] Add 14-bit CV emission tests when that mode is designed and implemented.
 
-## 10. Current implementation status
+## 11. Current implementation status
 
 | Area | Status |
 |---|---|
@@ -406,8 +578,9 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
+| Controller feedback protocol v1 | Wire format frozen in section 8; implementation pending |
 
-## 11. Shared implementation ownership
+## 12. Shared implementation ownership
 
 All platform-neutral MIDI behavior lives in `dsp/MidiCore.hpp`: raw message
 decoding, PROGRAM/HEAD routing, realtime counters, output-lane state, pitch/CC
@@ -419,3 +592,7 @@ The MetaModule implementation should provide its own similarly thin adapter
 around the same `MidiCore`, including a `MidiOutputSink` for hardware output.
 Future 14-bit CV emission belongs in `MidiCore` so both platforms receive the
 same mapping, ordering, and throttling behavior.
+
+Controller feedback likewise belongs in a platform-neutral shared core. VCV
+and MetaModule adapters own only feedback MIDI device I/O, menus, persistence,
+and host-specific reconnect detection.
