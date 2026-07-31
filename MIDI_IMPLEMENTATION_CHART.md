@@ -387,7 +387,7 @@ followed by an automatic release message.
 | CC | Direction | Value | Meaning |
 |---:|---|---:|---|
 | 0 | Controller -> SpaceTime | `0-7` | Request one HEAD snapshot; value 0 means HEAD 1 |
-| 0 | Controller -> SpaceTime | `8` | Request all present HEAD snapshots (HEAD ALL view) |
+| 0 | Controller -> SpaceTime | `8` | Request all eight HEAD snapshots (HEAD ALL view) |
 | 1 | Controller -> SpaceTime | `64-127` | Request PROGRAM snapshot |
 | 2 | Controller -> SpaceTime | `0-7` | Request one eight-stage page; page 0 is stages 1-8 |
 | 3 | Controller -> SpaceTime | `64-127` | Protocol probe/version request |
@@ -578,7 +578,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | Wire format frozen in section 8; implementation pending |
+| Controller feedback protocol v1 | Wire format frozen; shared request/snapshot/delta engine implemented and host-tested; adapter wiring pending |
 
 ## 12. Shared implementation ownership
 
@@ -596,3 +596,8 @@ same mapping, ordering, and throttling behavior.
 Controller feedback likewise belongs in a platform-neutral shared core. VCV
 and MetaModule adapters own only feedback MIDI device I/O, menus, persistence,
 and host-specific reconnect detection.
+
+`dsp/MidiFeedback.hpp` implements protocol-v1 request decoding, snapshot
+framing, semantic Head/PROGRAM deltas, acknowledgement pulses, and coalesced
+stage-value deltas. It consumes a fixed-size `MidiFeedbackState`; adapters are
+responsible for populating that state from their local module topology.
