@@ -342,6 +342,17 @@ struct Program : Module {
 		}
 
 		// ---- MIDI module -> PROGRAM events
+		auto midiSelectRelative = [&](int delta) {
+			if (displayOwner >= 0) {
+				int displayedStage = overrideStage;
+				displayCancelSeq++;
+				displayOwner = -1;
+				logic.setSelectOverride(-1);
+				if (displayedStage >= 0)
+					logic.setSelected(displayedStage);
+			}
+			logic.selectRelative(delta, table.count);
+		};
 		if (statusValid) {
 			for (int e = 0; e < sm->midiEventCount && e < kMaxMidiProgramEvents; e++) {
 				const MidiProgramEvent& ev = sm->midiEvents[e];
@@ -353,10 +364,10 @@ struct Program : Module {
 				lastMidiValue = ev.value;
 				lastMidiFValue = ev.fvalue;
 				if (ev.type == MIDI_PROG_SELECT_PREV) {
-					logic.selectRelative(-1, table.count);
+					midiSelectRelative(-1);
 				}
 				else if (ev.type == MIDI_PROG_SELECT_NEXT) {
-					logic.selectRelative(+1, table.count);
+					midiSelectRelative(+1);
 				}
 				else if (ev.type == MIDI_PROG_BULK_ARM) {
 					logic.armBulkOnce();

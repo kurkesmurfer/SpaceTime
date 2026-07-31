@@ -91,6 +91,7 @@ struct Head : Module {
 	rack::dsp::BooleanTrigger resetTrigger, strobeDownTrigger, displayTrigger;
 	bool resetPending = false, strobePending = false;
 	bool displayLatch = false;
+	bool displayClaimPending = false;
 	uint32_t lastCancelSeq = 0;
 	uint32_t lastMidiClockSeq = 0, lastMidiStartSeq = 0, lastMidiStopSeq = 0, lastMidiContinueSeq = 0;
 	uint32_t lastHeadCcSeq[spacetime::kMidiHeadControls] = {};
@@ -199,6 +200,7 @@ struct Head : Module {
 		bool ctrl = divider.process();
 		if (ctrl) {
 			float dt = args.sampleTime * divider.getDivision();
+			bool midiDisplayToggle = false;
 
 			// ---- Broadcast in (anchor side)
 			bool rightIsChain = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
@@ -239,7 +241,10 @@ struct Head : Module {
 						if (seq != lastHeadCcSeq[c]) {
 							lastHeadCcSeq[c] = seq;
 							lastAppliedHeadCcSeq = seq;
-							applyHeadCc(c, bm->headCcValue[headId][c]);
+							if (c == 13)
+								midiDisplayToggle = true;
+							else
+								applyHeadCc(c, bm->headCcValue[headId][c]);
 						}
 					}
 				}
@@ -247,16 +252,29 @@ struct Head : Module {
 				if (bm->displayCancelSeq != lastCancelSeq) {
 					lastCancelSeq = bm->displayCancelSeq;
 					displayLatch = false;
+					displayClaimPending = false;
 				}
-				if (bm->displayOwner != 0xFF && bm->displayOwner != (uint8_t)headId)
+				if (bm->displayOwner == (uint8_t)headId)
+					displayClaimPending = false;
+				else if (bm->displayOwner != 0xFF && !displayClaimPending)
 					displayLatch = false;
 			}
 			else {
 				table.count = 0;
 				displayLatch = false;
+				displayClaimPending = false;
 			}
-			if (displayTrigger.process(params[DISPLAY_PARAM].getValue() > 0.5f))
+			// Apply MIDI Display after arbitration, matching the panel button.
+			// Otherwise the previous owner's broadcast clears a new MIDI claim
+			// before this head can report it back to PROGRAM.
+			if (midiDisplayToggle) {
 				displayLatch = !displayLatch;
+				displayClaimPending = displayLatch;
+			}
+			if (displayTrigger.process(params[DISPLAY_PARAM].getValue() > 0.5f)) {
+				displayLatch = !displayLatch;
+				displayClaimPending = displayLatch;
+			}
 
 			// ---- Config from panel
 			cfg.continuous = params[ADDR_MODE_PARAM].getValue() > 1.5f;
