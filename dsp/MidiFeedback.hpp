@@ -124,6 +124,8 @@ public:
 		for (int h = 0; h < kMaxHeads; h++) {
 			lastAdvanceSeq_[h] = 0;
 			lastResetSeq_[h] = 0;
+			advanceOffPending_[h] = false;
+			resetOffPending_[h] = false;
 			for (int cc = 0; cc < kHeadValueCount; cc++)
 				headCache_[h][cc] = 0;
 		}
@@ -249,6 +251,8 @@ private:
 	uint8_t headCache_[kMaxHeads][kHeadValueCount];
 	uint32_t lastAdvanceSeq_[kMaxHeads];
 	uint32_t lastResetSeq_[kMaxHeads];
+	bool advanceOffPending_[kMaxHeads];
+	bool resetOffPending_[kMaxHeads];
 	uint8_t programCache_[kProgramValueCount];
 	uint8_t stageCache_[kStageValueCount];
 	bool stagePending_[kStageValueCount];
@@ -436,8 +440,21 @@ private:
 			return;
 		}
 		if (!head.present) {
+			advanceOffPending_[index] = false;
+			resetOffPending_[index] = false;
 			cacheHead(head, index);
 			return;
+		}
+		// Momentary acknowledgements need distinct MIDI timestamps. Some hardware
+		// output layers coalesce a 127/0 pair emitted in one process call and leave
+		// the LED latched on. Release the previous pulse one feedback tick later.
+		if (advanceOffPending_[index]) {
+			sendCc(sink, (uint8_t)index, 3, 0);
+			advanceOffPending_[index] = false;
+		}
+		if (resetOffPending_[index]) {
+			sendCc(sink, (uint8_t)index, 4, 0);
+			resetOffPending_[index] = false;
 		}
 
 		bool runChanged = values[1] != headCache_[index][1] ||
@@ -460,12 +477,12 @@ private:
 		}
 		if (head.advanceSeq != lastAdvanceSeq_[index]) {
 			sendCc(sink, (uint8_t)index, 3, 127);
-			sendCc(sink, (uint8_t)index, 3, 0);
+			advanceOffPending_[index] = true;
 			lastAdvanceSeq_[index] = head.advanceSeq;
 		}
 		if (head.resetSeq != lastResetSeq_[index]) {
 			sendCc(sink, (uint8_t)index, 4, 127);
-			sendCc(sink, (uint8_t)index, 4, 0);
+			resetOffPending_[index] = true;
 			lastResetSeq_[index] = head.resetSeq;
 		}
 	}
