@@ -90,6 +90,7 @@ struct Head : Module {
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;   // statuses in
 
 	rack::dsp::BooleanTrigger resetTrigger, resetInputTrigger, strobeDownTrigger, displayTrigger;
+	rack::dsp::BooleanTrigger feedbackAdvanceTrigger;
 	bool resetPending = false, strobePending = false;
 	bool displayLatch = false;
 	bool displayClaimPending = false;
@@ -107,6 +108,7 @@ struct Head : Module {
 	int lastMidiCc = -1;
 	float lastMidiCcValue = 0.f;
 	uint32_t lastAppliedHeadCcSeq = 0;
+	uint32_t feedbackAdvanceSeq = 0, feedbackResetSeq = 0;
 	rack::dsp::ClockDivider divider;
 
 	Head() {
@@ -358,13 +360,25 @@ struct Head : Module {
 					own.currentStage = out.currentStage;
 					own.runState = out.runState;
 					own.display = displayLatch ? 1 : 0;
+					own.addressExternal = cfg.addrExt ? 1 : 0;
+					own.addressMode = (uint8_t)clamp(
+						(int)std::round(params[ADDR_MODE_PARAM].getValue()), 0, 2);
+					own.direction = cfg.direction;
+					own.clockSource = (uint8_t)clockSource;
+					own.clockDivIndex = cfg.clkDivIndex;
+					own.loopMode = cfg.loopMode;
+					own.followMidiTransport = followMidiTransport ? 1 : 0;
 					own.pulse1 = out.pulse1 ? 1 : 0;
 					own.pulse2 = out.pulse2 ? 1 : 0;
 					own.allPulse = out.allPulse ? 1 : 0;
 					own.quantized = (out.currentStage < table.count &&
 						table.program[out.currentStage].quantize()) ? 1 : 0;
+					own.address = cfg.addressKnob;
+					own.timeCvAmount = cfg.timeCvAmount;
 					own.phase = out.phase;
 					own.cv = out.cv;
+					own.advanceSeq = feedbackAdvanceSeq;
+					own.resetSeq = feedbackResetSeq;
 					headRelayRight(own, (leftIsStatusSource && lm->valid) ? lm : NULL, *ro);
 					flipRightNeighbor(this);
 				}
@@ -411,6 +425,10 @@ struct Head : Module {
 			(headAllTimeConnected ? headAllTimeCv : 0.f);
 		sig.reset = resetPending ||
 			resetInputTrigger.process(inputs[RESET_INPUT].getVoltage() >= 1.f);
+		if (feedbackAdvanceTrigger.process(sig.advance >= 1.f))
+			feedbackAdvanceSeq++;
+		if (sig.reset)
+			feedbackResetSeq++;
 		resetPending = false;
 		strobePending = false;
 

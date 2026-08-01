@@ -2,6 +2,7 @@
 #include "paneltheme.hpp"
 #include "ChainAdapter.hpp"
 #include "MidiCore.hpp"
+#include "MidiFeedback.hpp"
 #include <app/MidiDisplay.hpp>
 
 // ============================================================================
@@ -37,6 +38,7 @@ struct Midi : Module {
 	midi::InputQueue midiInput;
 	midi::Output midiOutput;
 	spacetime::MidiCore core;
+	spacetime::MidiFeedbackState feedbackState;
 
 	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;
@@ -119,6 +121,8 @@ struct Midi : Module {
 			if (toProgram) {
 				const spacetime::HeadsToAnchorMsg* fromHead = leftPort.consume(leftExpander);
 				bool statusValid = leftIsHead && fromHead->valid;
+				spacetime::collectHeadFeedbackState(statusValid ? fromHead : NULL,
+					feedbackState);
 				if (statusValid) {
 					RackMidiSink sink(this);
 					core.processOutput(*fromHead, args.sampleTime, sink);

@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 4;
+static const uint32_t kChainProtocolVersion = 5;
 static const int kMidiHeadControls = 14;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
@@ -60,17 +60,31 @@ struct HeadStatus {
 	uint8_t currentStage;  // global stage index 0..63
 	uint8_t runState;      // RunState
 	uint8_t display;       // 1 = this head requests Display (manual: FG "display" switch)
+	uint8_t addressExternal; // 1 = ADDRESS CV, 0 = panel Address
+	uint8_t addressMode;   // 0 Strobe, 1 Sequential, 2 Continuous
+	uint8_t direction;     // Direction enum, 0..4
+	uint8_t clockSource;   // 0 Internal, 1 External CV, 2 MIDI, 3 Virtual
+	uint8_t clockDivIndex; // 0..8 = /16 through x16
+	uint8_t loopMode;      // LoopMode, 0..2
+	uint8_t followMidiTransport;
 	uint8_t pulse1;        // current Pulse 1 gate level, for MIDI out
 	uint8_t pulse2;        // current Pulse 2 gate level, for MIDI out
 	uint8_t allPulse;      // current ALL trigger level, for MIDI out
 	uint8_t quantized;     // current stage is quantized; note output uses this
+	float address;         // panel Address, 0..10 V
+	float timeCvAmount;    // TIME CV attenuverter, -1..1
 	float phase;           // 0..1 position within the stage interval
 	float cv;              // head CV output (WP7: POLY OUT channel payload)
+	uint32_t advanceSeq;   // increments for every accepted Advance edge
+	uint32_t resetSeq;     // increments for every accepted Reset event
 
 	HeadStatus()
 		: headId(0), currentStage(0), runState(RUN_STOPPED), display(0),
+		  addressExternal(0), addressMode(1), direction(0), clockSource(0),
+		  clockDivIndex(4), loopMode(1), followMidiTransport(0),
 		  pulse1(0), pulse2(0), allPulse(0), quantized(0),
-		  phase(0.f), cv(0.f) {}
+		  address(0.f), timeCvAmount(0.f), phase(0.f), cv(0.f),
+		  advanceSeq(0), resetSeq(0) {}
 };
 
 enum MidiProgramEventType {

@@ -578,7 +578,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | Wire format frozen; shared request/snapshot/delta engine implemented and host-tested; adapter wiring pending |
+| Controller feedback protocol v1 | Wire format and shared engine implemented; VCV HEAD state is collected at MIDI; feedback output device/menu wiring pending |
 
 ## 12. Shared implementation ownership
 
@@ -601,3 +601,8 @@ and host-specific reconnect detection.
 framing, semantic Head/PROGRAM deltas, acknowledgement pulses, and coalesced
 stage-value deltas. It consumes a fixed-size `MidiFeedbackState`; adapters are
 responsible for populating that state from their local module topology.
+
+The VCV HEAD vertical slice publishes its complete semantic control state and
+Advance/Reset event counters through `HeadStatus`. The MIDI anchor collects
+that merged status by stable head id into `MidiFeedbackState`; selecting and
+driving the separate feedback output remains the next adapter step.

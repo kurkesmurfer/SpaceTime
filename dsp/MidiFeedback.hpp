@@ -69,6 +69,38 @@ struct MidiFeedbackState {
 	StageTable table;
 };
 
+// Convert the merged expander status into the feedback engine's canonical
+// Head bank. Statuses are keyed by headId rather than relay order, and missing
+// heads are explicitly cleared so a later snapshot cannot retain stale state.
+inline void collectHeadFeedbackState(const HeadsToAnchorMsg* status,
+                                     MidiFeedbackState& state) {
+	for (int h = 0; h < kMaxHeads; h++)
+		state.head[h] = HeadFeedbackState();
+	if (!status || !status->valid)
+		return;
+	for (int i = 0; i < status->headCount && i < kMaxHeads; i++) {
+		const HeadStatus& source = status->status[i];
+		if (source.headId >= kMaxHeads)
+			continue;
+		HeadFeedbackState& target = state.head[source.headId];
+		target.present = true;
+		target.runState = source.runState;
+		target.currentStage = source.currentStage;
+		target.display = source.display != 0;
+		target.address = source.address;
+		target.addressExternal = source.addressExternal != 0;
+		target.addressMode = source.addressMode;
+		target.direction = source.direction;
+		target.clockSource = source.clockSource;
+		target.clockDivIndex = source.clockDivIndex;
+		target.timeCvAmount = source.timeCvAmount;
+		target.loopMode = source.loopMode;
+		target.followMidiTransport = source.followMidiTransport != 0;
+		target.advanceSeq = source.advanceSeq;
+		target.resetSeq = source.resetSeq;
+	}
+}
+
 class MidiFeedbackCore {
 public:
 	MidiFeedbackCore() { reset(); }

@@ -62,6 +62,74 @@ static MidiFeedbackState populatedFeedbackState() {
 	return state;
 }
 
+TEST_CASE("merged HEAD status populates feedback state by stable head id") {
+	HeadsToAnchorMsg status;
+	status.valid = true;
+	status.headCount = 2;
+	status.status[0].headId = 5;
+	status.status[0].runState = RUN_HOLDING;
+	status.status[0].currentStage = 42;
+	status.status[0].display = 1;
+	status.status[0].address = 6.5f;
+	status.status[0].addressExternal = 1;
+	status.status[0].addressMode = 2;
+	status.status[0].direction = 4;
+	status.status[0].clockSource = 3;
+	status.status[0].clockDivIndex = 8;
+	status.status[0].timeCvAmount = -0.5f;
+	status.status[0].loopMode = 0;
+	status.status[0].followMidiTransport = 1;
+	status.status[0].advanceSeq = 17;
+	status.status[0].resetSeq = 23;
+	status.status[1].headId = 1;
+	status.status[1].runState = RUN_RUNNING;
+
+	MidiFeedbackState state;
+	state.head[0].present = true;
+	collectHeadFeedbackState(&status, state);
+
+	CHECK_FALSE(state.head[0].present);
+	CHECK(state.head[1].present);
+	CHECK(state.head[1].runState == RUN_RUNNING);
+	CHECK(state.head[5].present);
+	CHECK(state.head[5].runState == RUN_HOLDING);
+	CHECK(state.head[5].currentStage == 42);
+	CHECK(state.head[5].display);
+	CHECK(state.head[5].address == doctest::Approx(6.5f));
+	CHECK(state.head[5].addressExternal);
+	CHECK(state.head[5].addressMode == 2);
+	CHECK(state.head[5].direction == 4);
+	CHECK(state.head[5].clockSource == 3);
+	CHECK(state.head[5].clockDivIndex == 8);
+	CHECK(state.head[5].timeCvAmount == doctest::Approx(-0.5f));
+	CHECK(state.head[5].loopMode == 0);
+	CHECK(state.head[5].followMidiTransport);
+	CHECK(state.head[5].advanceSeq == 17);
+	CHECK(state.head[5].resetSeq == 23);
+
+	MidiFeedbackCore core;
+	TestFeedbackSink sink;
+	CHECK(core.handleMessage(0xB9, 0, 5));
+	core.process(state, 0.f, false, sink);
+	CHECK(sink.sent.front().channel == kFeedbackProtocolChannel);
+	CHECK(sink.sent.front().cc == 118);
+	CHECK(sink.sent.front().value == 5);
+	CHECK(hasFeedback(sink, 5, 9, 3));
+	CHECK(hasFeedback(sink, 5, 15, 42));
+	CHECK(hasFeedback(sink, 5, 16, 127));
+	CHECK(sink.sent.back().cc == 119);
+	CHECK(sink.sent.back().value == 5);
+}
+
+TEST_CASE("invalid HEAD status clears stale feedback presence") {
+	MidiFeedbackState state;
+	state.head[3].present = true;
+	state.head[3].currentStage = 31;
+	collectHeadFeedbackState(NULL, state);
+	for (int head = 0; head < kMaxHeads; head++)
+		CHECK_FALSE(state.head[head].present);
+}
+
 TEST_CASE("feedback protocol decodes fixed-channel snapshot requests") {
 	MidiFeedbackCore core;
 	CHECK_FALSE(core.handleMessage(0xB8, 0, 0));

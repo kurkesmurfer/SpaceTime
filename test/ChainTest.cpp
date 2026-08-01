@@ -196,6 +196,11 @@ TEST_CASE("headRelayRight merges up to 8 statuses, appending own") {
 		own.headId = (uint8_t)id;
 		own.currentStage = (uint8_t)(id * 2);
 		own.runState = RUN_RUNNING;
+		own.address = (float)id + 0.25f;
+		own.clockSource = (uint8_t)(id % 4);
+		own.followMidiTransport = id & 1;
+		own.advanceSeq = (uint32_t)(100 + id);
+		own.resetSeq = (uint32_t)(200 + id);
 		HeadsToAnchorMsg out;
 		headRelayRight(own, (id == 7) ? NULL : &msg, out);
 		msg = out;
@@ -206,6 +211,11 @@ TEST_CASE("headRelayRight merges up to 8 statuses, appending own") {
 	for (int i = 0; i < 8; i++) {
 		CHECK(msg.status[i].headId == 7 - i);
 		CHECK(msg.status[i].currentStage == (7 - i) * 2);
+		CHECK(msg.status[i].address == doctest::Approx((float)(7 - i) + 0.25f));
+		CHECK(msg.status[i].clockSource == (7 - i) % 4);
+		CHECK(msg.status[i].followMidiTransport == ((7 - i) & 1));
+		CHECK(msg.status[i].advanceSeq == (uint32_t)(107 - i));
+		CHECK(msg.status[i].resetSeq == (uint32_t)(207 - i));
 	}
 }
 
