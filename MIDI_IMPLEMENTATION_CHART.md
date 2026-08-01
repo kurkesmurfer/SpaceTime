@@ -19,13 +19,13 @@ Change data bytes are shown as raw MIDI values (0-127).
 | HEAD ALL input channel | Fixed: channel 9; CC 0-12 broadcast to all HEADs |
 | Head numbering | HEAD 1 is immediately left of MIDI; numbers increase leftward |
 | Input map | Fixed CC map; no base-CC offset and no MIDI learn |
-| Persistence | Input/output devices, both input channels, and all output-lane settings are saved in the Rack patch |
+| Persistence | Input, performance-output, and feedback-output devices, both input channels, the live-stage option, and all output-lane settings are saved in the Rack patch |
 
-The PROGRAM-controls and stage-slider channels must differ; the context menu
-rejects an attempt to select the other channel. Keep both outside channels 1-9
-unless combined routing to a HEAD is intentional. The defaults, channels 16
-and 15 respectively, avoid both forms of overlap. The panel readout shows
-`P16` and `S15` for these defaults.
+The PROGRAM-controls and stage-slider channels must differ, and channel 10 is
+reserved for feedback-protocol requests. The context menu rejects either
+conflict. Keep both outside channels 1-10 unless combined routing to a HEAD is
+intentional. The defaults, channels 16 and 15 respectively, avoid all fixed
+routes. The panel readout shows `P16` and `S15` for these defaults.
 
 ## 2. Message value conventions
 
@@ -337,9 +337,10 @@ panel edits, MIDI edits, patch reloads, and controller page changes. It is a
 controller-independent CC protocol: Midilize, DROID, or another adapter maps
 these semantic messages onto the controls and LEDs of a particular surface.
 
-This section freezes the wire format before implementation. Messages described
-here are **specified, not yet implemented**, unless a later status table says
-otherwise.
+This section freezes the wire format. HEAD/HEAD ALL feedback, protocol probing,
+the separate VCV output, and sparse HEAD deltas are implemented. PROGRAM and
+Stage feedback remain capability-gated until their authoritative state adapters
+are completed.
 
 ### 8.1 Transport and device rules
 
@@ -377,6 +378,9 @@ After a broadcast, heads may diverge through local panel, CV, or MIDI control.
 Its snapshot request therefore returns individual HEAD messages on channels
 1-8. Controller adapters may show an ALL layer while deriving its LEDs from
 those eight truthful states.
+
+Channel 10 is reserved at the VCV input adapter. It cannot simultaneously be
+selected as the configurable PROGRAM-controls or stage-slider channel.
 
 ### 8.3 Snapshot requests and framing (channel 10)
 
@@ -508,7 +512,7 @@ versions must not reinterpret any v1 assignment.
 |---|---|
 | MIDI IN LED | Any received MIDI message, including ignored messages |
 | CLK LED | Received `F8` MIDI Clock |
-| MIDI OUT LED | A Note On, Note Off, or CC message was emitted |
+| MIDI OUT LED | A performance or controller-feedback MIDI message was emitted |
 | MIDI context `Last` | Last decoded status/channel/number/value and route |
 | Route `program` | Message matched PROGRAM-controls channel |
 | Route `stage` | Message matched stage-slider channel |
@@ -578,7 +582,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | Wire format and shared engine implemented; VCV HEAD state is collected at MIDI; feedback output device/menu wiring pending |
+| Controller feedback protocol v1 | VCV HEAD/HEAD ALL snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented; PROGRAM/Stage responses capability-gated |
 
 ## 12. Shared implementation ownership
 
@@ -604,5 +608,7 @@ responsible for populating that state from their local module topology.
 
 The VCV HEAD vertical slice publishes its complete semantic control state and
 Advance/Reset event counters through `HeadStatus`. The MIDI anchor collects
-that merged status by stable head id into `MidiFeedbackState`; selecting and
-driving the separate feedback output remains the next adapter step.
+that merged status by stable head id into `MidiFeedbackState` and drives a
+separate, persistent Rack MIDI output selected under `Controller feedback
+output`. The output defaults Off. PROGRAM and Stage requests are consumed but
+deliberately unanswered until those state adapters are implemented.

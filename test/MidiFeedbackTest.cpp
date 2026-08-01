@@ -146,6 +146,24 @@ TEST_CASE("feedback protocol decodes fixed-channel snapshot requests") {
 	CHECK(sink.sent[0].value == kFeedbackProtocolVersion);
 }
 
+TEST_CASE("feedback capabilities consume but defer unavailable area requests") {
+	MidiFeedbackCore core;
+	MidiFeedbackState state = populatedFeedbackState();
+	TestFeedbackSink sink;
+
+	CHECK(core.handleMessage(0xB9, 1, 127, FEEDBACK_CAP_HEADS));
+	CHECK(core.handleMessage(0xB9, 2, 0, FEEDBACK_CAP_HEADS));
+	CHECK(core.handleMessage(0xB9, 90, 127, FEEDBACK_CAP_HEADS));
+	core.process(state, 0.f, false, sink);
+	CHECK(sink.sent.empty());
+
+	CHECK(core.handleMessage(0xB9, 3, 127, FEEDBACK_CAP_HEADS));
+	core.process(state, 0.f, false, sink);
+	REQUIRE(sink.sent.size() == 1);
+	CHECK(sink.sent[0].cc == 3);
+	CHECK(sink.sent[0].value == kFeedbackProtocolVersion);
+}
+
 TEST_CASE("HEAD snapshot is framed and uses exact semantic values") {
 	MidiFeedbackCore core;
 	MidiFeedbackState state = populatedFeedbackState();

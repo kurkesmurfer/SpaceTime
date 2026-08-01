@@ -37,11 +37,17 @@ struct Midi : Module {
 
 	midi::InputQueue midiInput;
 	midi::Output midiOutput;
+	midi::Output feedbackOutput;
 	spacetime::MidiCore core;
+	spacetime::MidiFeedbackCore feedbackCore;
 	spacetime::MidiFeedbackState feedbackState;
+	bool liveStageFeedback = false;
+	int lastFeedbackDriver = -2, lastFeedbackDevice = -2;
+	uint32_t feedbackMessageCount = 0;
 
 	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;
+	rack::dsp::ClockDivider feedbackDivider;
 
 	float inLight = 0.f, clkLight = 0.f, outLight = 0.f;
 
@@ -49,11 +55,13 @@ struct Midi : Module {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configLight(IN_LIGHT, "MIDI input activity");
 		configLight(CLK_LIGHT, "MIDI clock activity");
-		configLight(OUT_LIGHT, "MIDI output activity");
+		configLight(OUT_LIGHT, "MIDI output or controller feedback activity");
 		midiInput.channel = -1;  // channel routing is SpaceTime-specific
 		midiOutput.channel = -1; // SpaceTime routes per-head output channels
+		feedbackOutput.channel = -1; // feedback protocol uses fixed channels
 		rightPort.attach(rightExpander);
 		leftPort.attach(leftExpander);
+		feedbackDivider.setDivision(16);
 	}
 
 	void handleMessage(const midi::Message& msg) {
@@ -65,7 +73,10 @@ struct Midi : Module {
 		inLight = 1.f;
 		if (status == 0xF8)
 			clkLight = 1.f;
-		core.handleMessage(status, data1, data2);
+		bool feedbackProtocol = feedbackCore.handleMessage(status, data1, data2,
+			spacetime::FEEDBACK_CAP_HEADS);
+		if (!feedbackProtocol)
+			core.handleMessage(status, data1, data2);
 	}
 
 	void sendMidi(uint8_t status, uint8_t channel, uint8_t a, uint8_t b) {
@@ -78,6 +89,17 @@ struct Midi : Module {
 		outLight = 1.f;
 	}
 
+	void sendFeedbackMidi(uint8_t status, uint8_t channel, uint8_t a, uint8_t b) {
+		midi::Message msg;
+		msg.setStatus(status);
+		msg.setChannel(channel & 0xf);
+		msg.setNote(a);
+		msg.setValue(b);
+		feedbackOutput.sendMessage(msg);
+		feedbackMessageCount++;
+		outLight = 1.f;
+	}
+
 	struct RackMidiSink : spacetime::MidiOutputSink {
 		Midi* module;
 		explicit RackMidiSink(Midi* module) : module(module) {}
@@ -86,9 +108,33 @@ struct Midi : Module {
 		}
 	};
 
+	struct RackFeedbackSink : spacetime::MidiFeedbackSink {
+		Midi* module;
+		explicit RackFeedbackSink(Midi* module) : module(module) {}
+		void send(uint8_t status, uint8_t channel, uint8_t data1, uint8_t data2) override {
+			module->sendFeedbackMidi(status, channel, data1, data2);
+		}
+	};
+
+	bool feedbackEnabled() {
+		return feedbackOutput.getDriverId() >= 0 && feedbackOutput.getDeviceId() >= 0;
+	}
+
+	void updateFeedbackDevice() {
+		int driver = feedbackOutput.getDriverId();
+		int device = feedbackOutput.getDeviceId();
+		if (driver == lastFeedbackDriver && device == lastFeedbackDevice)
+			return;
+		lastFeedbackDriver = driver;
+		lastFeedbackDevice = device;
+		feedbackCore.reset();
+	}
+
 	void process(const ProcessArgs& args) override {
 		midiInput.channel = -1;  // SpaceTime routes channels internally
 		midiOutput.channel = -1;
+		feedbackOutput.channel = -1;
+		updateFeedbackDevice();
 		midi::Message msg;
 		while (midiInput.tryPop(&msg, args.frame))
 			handleMessage(msg);
@@ -98,6 +144,7 @@ struct Midi : Module {
 
 		const spacetime::AnchorToHeadsMsg* fromProgram = rightPort.consume(rightExpander);
 		bool broadcastValid = rightIsProgram && fromProgram->valid;
+		bool feedbackStateUpdated = false;
 		if (leftIsHead) {
 			spacetime::AnchorToHeadsMsg* toHead =
 				spacetime::leftNeighborProducer<spacetime::AnchorToHeadsMsg>(
@@ -123,6 +170,7 @@ struct Midi : Module {
 				bool statusValid = leftIsHead && fromHead->valid;
 				spacetime::collectHeadFeedbackState(statusValid ? fromHead : NULL,
 					feedbackState);
+				feedbackStateUpdated = true;
 				if (statusValid) {
 					RackMidiSink sink(this);
 					core.processOutput(*fromHead, args.sampleTime, sink);
@@ -137,6 +185,15 @@ struct Midi : Module {
 				core.appendProgramEvents(*toProgram);
 				spacetime::flipRightNeighbor(this);
 			}
+		}
+		if (!feedbackStateUpdated) {
+			spacetime::collectHeadFeedbackState(NULL, feedbackState);
+		}
+
+		if (feedbackEnabled() && feedbackDivider.process()) {
+			RackFeedbackSink sink(this);
+			feedbackCore.process(feedbackState, args.sampleTime * 16.f,
+				liveStageFeedback, sink);
 		}
 
 		inLight = std::fmax(0.f, inLight - args.sampleTime * 8.f);
@@ -154,6 +211,8 @@ struct Midi : Module {
 		json_object_set_new(root, "moveStageSliders", json_boolean(core.moveStageSliders));
 		json_object_set_new(root, "midiInput", midiInput.toJson());
 		json_object_set_new(root, "midiOutput", midiOutput.toJson());
+		json_object_set_new(root, "feedbackOutput", feedbackOutput.toJson());
+		json_object_set_new(root, "liveStageFeedback", json_boolean(liveStageFeedback));
 		json_t* lanes = json_array();
 		for (int h = 0; h < spacetime::kMaxHeads; h++) {
 			json_t* lane = json_object();
@@ -173,6 +232,10 @@ struct Midi : Module {
 			core.controlChannel = clamp((int)json_integer_value(j), 0, 15);
 		if ((j = json_object_get(root, "sliderChannel")))
 			core.sliderChannel = clamp((int)json_integer_value(j), 0, 15);
+		if (core.controlChannel == spacetime::kFeedbackProtocolChannel)
+			core.controlChannel = 15;
+		if (core.sliderChannel == spacetime::kFeedbackProtocolChannel)
+			core.sliderChannel = 14;
 		if (core.sliderChannel == core.controlChannel)
 			core.sliderChannel = core.controlChannel == 15 ? 14 : 15;
 		if ((j = json_object_get(root, "moveStageSliders")))
@@ -181,6 +244,10 @@ struct Midi : Module {
 			midiInput.fromJson(j);
 		if ((j = json_object_get(root, "midiOutput")))
 			midiOutput.fromJson(j);
+		if ((j = json_object_get(root, "feedbackOutput")))
+			feedbackOutput.fromJson(j);
+		if ((j = json_object_get(root, "liveStageFeedback")))
+			liveStageFeedback = json_boolean_value(j);
 		if ((j = json_object_get(root, "outLanes"))) {
 			for (int h = 0; h < spacetime::kMaxHeads; h++) {
 				json_t* lane = json_array_get(j, h);
@@ -199,6 +266,7 @@ struct Midi : Module {
 		}
 		midiInput.channel = -1;
 		midiOutput.channel = -1;
+		feedbackOutput.channel = -1;
 	}
 };
 
@@ -280,14 +348,16 @@ struct MidiWidget : ModuleWidget {
 			chLabels,
 			[=]() { return module->core.controlChannel; },
 			[=](int i) {
-				if (i != module->core.sliderChannel)
+				if (i != module->core.sliderChannel &&
+					i != spacetime::kFeedbackProtocolChannel)
 					module->core.controlChannel = i;
 			}));
 		menu->addChild(createIndexSubmenuItem("Stage sliders channel",
 			chLabels,
 			[=]() { return module->core.sliderChannel; },
 			[=](int i) {
-				if (i != module->core.controlChannel)
+				if (i != module->core.controlChannel &&
+					i != spacetime::kFeedbackProtocolChannel)
 					module->core.sliderChannel = i;
 			}));
 		menu->addChild(createBoolPtrMenuItem("Move stage sliders with CC", "",
@@ -295,6 +365,7 @@ struct MidiWidget : ModuleWidget {
 
 		menu->addChild(createMenuLabel("HEAD channels fixed: 1-8"));
 		menu->addChild(createMenuLabel("HEAD ALL channel fixed: 9 (CC 0-12)"));
+		menu->addChild(createMenuLabel("Feedback requests fixed: channel 10"));
 		menu->addChild(createMenuLabel("PROGRAM and stage channels must differ"));
 		menu->addChild(createMenuLabel("CC maps fixed; no base offset"));
 		if (module->core.lastStatus >= 0) {
@@ -350,6 +421,16 @@ struct MidiWidget : ModuleWidget {
 		menu->addChild(createMenuLabel(string::f("Output notes/CCs: %u/%u",
 			module->core.outNoteCount,
 			module->core.outCcCount)));
+
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createMenuLabel("Controller feedback output"));
+		app::appendMidiMenu(menu, &module->feedbackOutput);
+		menu->addChild(createBoolPtrMenuItem("Live stage feedback (reserved)", "",
+			&module->liveStageFeedback));
+		menu->addChild(createMenuLabel("Fixed feedback channels; output defaults Off"));
+		menu->addChild(createMenuLabel("HEAD feedback active; PROGRAM/stages reserved"));
+		menu->addChild(createMenuLabel(string::f("Feedback messages: %u",
+			module->feedbackMessageCount)));
 	}
 };
 

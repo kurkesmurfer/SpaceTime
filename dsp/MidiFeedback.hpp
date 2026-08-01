@@ -24,6 +24,13 @@ enum FeedbackArea {
 	FEEDBACK_AREA_STAGE_PAGE_1 = 32
 };
 
+enum FeedbackCapability {
+	FEEDBACK_CAP_HEADS = 1 << 0,
+	FEEDBACK_CAP_PROGRAM = 1 << 1,
+	FEEDBACK_CAP_STAGES = 1 << 2,
+	FEEDBACK_CAP_ALL = FEEDBACK_CAP_HEADS | FEEDBACK_CAP_PROGRAM | FEEDBACK_CAP_STAGES
+};
+
 struct MidiFeedbackSink {
 	virtual ~MidiFeedbackSink() {}
 	virtual void send(uint8_t status, uint8_t channel, uint8_t data1, uint8_t data2) = 0;
@@ -131,24 +138,27 @@ public:
 
 	// Returns true for protocol-channel messages, including harmless release
 	// values. The caller may use this to keep requests out of normal CC routing.
-	bool handleMessage(uint8_t statusByte, uint8_t data1, uint8_t data2) {
+	bool handleMessage(uint8_t statusByte, uint8_t data1, uint8_t data2,
+	                   uint8_t capabilities = FEEDBACK_CAP_ALL) {
 		if (((statusByte >> 4) & 0xF) != 0xB || (statusByte & 0xF) != kFeedbackProtocolChannel)
 			return false;
 		data1 &= 0x7F;
 		data2 &= 0x7F;
 		switch (data1) {
 			case 0:
+				if (!(capabilities & FEEDBACK_CAP_HEADS))
+					break;
 				if (data2 < kMaxHeads)
 					pendingHeadMask_ |= (uint8_t)(1u << data2);
 				else if (data2 == kMaxHeads)
 					pendingAllHeads_ = true;
 				break;
 			case 1:
-				if (data2 >= 64)
+				if ((capabilities & FEEDBACK_CAP_PROGRAM) && data2 >= 64)
 					pendingProgram_ = true;
 				break;
 			case 2:
-				if (data2 < 8)
+				if ((capabilities & FEEDBACK_CAP_STAGES) && data2 < 8)
 					pendingStageMask_ |= (uint8_t)(1u << data2);
 				break;
 			case 3:
