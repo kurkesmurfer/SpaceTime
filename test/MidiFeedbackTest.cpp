@@ -228,7 +228,12 @@ TEST_CASE("HEAD deltas group run state and acknowledge advance and reset") {
 	CHECK_FALSE(hasFeedback(sink, 0, 4, 0));
 
 	sink.sent.clear();
-	core.process(state, 0.f, false, sink);
+	core.process(state, 0.02f, false, sink);
+	CHECK_FALSE(hasFeedback(sink, 0, 3, 0));
+	CHECK_FALSE(hasFeedback(sink, 0, 4, 0));
+
+	sink.sent.clear();
+	core.process(state, 0.04f, false, sink);
 	CHECK(hasFeedback(sink, 0, 3, 0));
 	CHECK(hasFeedback(sink, 0, 4, 0));
 	CHECK_FALSE(hasFeedback(sink, 0, 3, 127));

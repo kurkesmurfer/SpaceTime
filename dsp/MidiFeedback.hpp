@@ -126,6 +126,8 @@ public:
 			lastResetSeq_[h] = 0;
 			advanceOffPending_[h] = false;
 			resetOffPending_[h] = false;
+			advanceOffTimer_[h] = 0.f;
+			resetOffTimer_[h] = 0.f;
 			for (int cc = 0; cc < kHeadValueCount; cc++)
 				headCache_[h][cc] = 0;
 		}
@@ -230,7 +232,7 @@ public:
 
 		for (int h = 0; h < kMaxHeads; h++) {
 			if (!(snappedHeads & (1u << h)))
-				emitHeadDeltas(state.head[h], h, sink);
+			emitHeadDeltas(state.head[h], h, dt, sink);
 		}
 		if (!snappedProgram)
 			emitProgramDeltas(state, sink);
@@ -253,6 +255,8 @@ private:
 	uint32_t lastResetSeq_[kMaxHeads];
 	bool advanceOffPending_[kMaxHeads];
 	bool resetOffPending_[kMaxHeads];
+	float advanceOffTimer_[kMaxHeads];
+	float resetOffTimer_[kMaxHeads];
 	uint8_t programCache_[kProgramValueCount];
 	uint8_t stageCache_[kStageValueCount];
 	bool stagePending_[kStageValueCount];
@@ -424,7 +428,8 @@ private:
 		}
 	}
 
-	void emitHeadDeltas(const HeadFeedbackState& head, int index, MidiFeedbackSink& sink) {
+	void emitHeadDeltas(const HeadFeedbackState& head, int index, float dt,
+	                    MidiFeedbackSink& sink) {
 		uint8_t values[kHeadValueCount];
 		bool valid[kHeadValueCount];
 		encodeHead(head, values, valid);
@@ -442,19 +447,26 @@ private:
 		if (!head.present) {
 			advanceOffPending_[index] = false;
 			resetOffPending_[index] = false;
+			advanceOffTimer_[index] = 0.f;
+			resetOffTimer_[index] = 0.f;
 			cacheHead(head, index);
 			return;
 		}
-		// Momentary acknowledgements need distinct MIDI timestamps. Some hardware
-		// output layers coalesce a 127/0 pair emitted in one process call and leave
-		// the LED latched on. Release the previous pulse one feedback tick later.
+		// Keep acknowledgements high long enough to cross host MIDI batching. A
+		// one-tick pulse can still have one timestamp at the controller output.
 		if (advanceOffPending_[index]) {
-			sendCc(sink, (uint8_t)index, 3, 0);
-			advanceOffPending_[index] = false;
+			advanceOffTimer_[index] -= dt;
+			if (advanceOffTimer_[index] <= 0.f) {
+				sendCc(sink, (uint8_t)index, 3, 0);
+				advanceOffPending_[index] = false;
+			}
 		}
 		if (resetOffPending_[index]) {
-			sendCc(sink, (uint8_t)index, 4, 0);
-			resetOffPending_[index] = false;
+			resetOffTimer_[index] -= dt;
+			if (resetOffTimer_[index] <= 0.f) {
+				sendCc(sink, (uint8_t)index, 4, 0);
+				resetOffPending_[index] = false;
+			}
 		}
 
 		bool runChanged = values[1] != headCache_[index][1] ||
@@ -478,11 +490,13 @@ private:
 		if (head.advanceSeq != lastAdvanceSeq_[index]) {
 			sendCc(sink, (uint8_t)index, 3, 127);
 			advanceOffPending_[index] = true;
+			advanceOffTimer_[index] = 0.05f;
 			lastAdvanceSeq_[index] = head.advanceSeq;
 		}
 		if (head.resetSeq != lastResetSeq_[index]) {
 			sendCc(sink, (uint8_t)index, 4, 127);
 			resetOffPending_[index] = true;
+			resetOffTimer_[index] = 0.05f;
 			lastResetSeq_[index] = head.resetSeq;
 		}
 	}
