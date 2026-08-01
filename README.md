@@ -182,6 +182,8 @@ stage once).
 (forward/reverse/pendulum/random/brownian), clock source INT/EXT/MIDI/VIRTUAL with
 /16…×16 DIV/MULT, TIME CV attenuverter scaling all stage times, and a loop
 lever: ALL (full chain) / F-L (obey First/Last) / 1-SHOT.
+After a 1-SHOT run completes and parks on its final stage, the next START
+returns to the region's First stage and begins a fresh pass.
 
 **Outputs:** CV (1 V/oct when quantized), TIME (the stage's time slider as a
 CV — a free second row when time source is External), REF (downward ramp
@@ -212,8 +214,10 @@ momentary address lever strobe every HEAD. HEAD ALL may sit across a correctly
 paired HEAD-side GLUE link and must remain the far-left terminal.
 
 MIDI channel 9 addresses all HEADs directly through the MIDI module, whether
-or not HEAD ALL is installed. It reuses HEAD CC 0-12. CC 13 Display is excluded
-because SpaceTime Display ownership is intentionally exclusive.
+or not HEAD ALL is installed. When HEAD ALL is present, persistent channel-9
+controls also move its panel controls so the common state remains visible. It
+reuses HEAD CC 0-12. CC 13 Display is excluded because SpaceTime Display
+ownership is intentionally exclusive.
 
 ## Deviations from the hardware
 

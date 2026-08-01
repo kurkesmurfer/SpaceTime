@@ -169,6 +169,9 @@ struct AnchorToHeadsMsg {
 	uint32_t midiContinueSeq;   // global MIDI Continue counter
 	uint32_t headCcSeq[kMaxHeads][kMidiHeadControls];
 	float headCcValue[kMaxHeads][kMidiHeadControls];
+	// Dedicated channel-9 events let HEAD ALL mirror common persistent state.
+	uint32_t headAllCcSeq[kHeadAllControls];
+	float headAllCcValue[kHeadAllControls];
 	bool valid;
 
 	AnchorToHeadsMsg()
@@ -184,6 +187,10 @@ struct AnchorToHeadsMsg {
 				headCcSeq[h][c] = 0;
 				headCcValue[h][c] = 0.f;
 			}
+		}
+		for (int c = 0; c < kHeadAllControls; c++) {
+			headAllCcSeq[c] = 0;
+			headAllCcValue[c] = 0.f;
 		}
 	}
 };

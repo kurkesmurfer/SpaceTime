@@ -114,20 +114,29 @@ TEST_CASE("MIDI channel 9 applies CC 0-12 to every head but excludes Display") {
 		CHECK(core.headCcSeq[head][9] == 1);
 		CHECK(core.headCcValue[head][9] == doctest::Approx(3.f));
 	}
+	CHECK(core.headAllCcSeq[9] == 1);
+	CHECK(core.headAllCcValue[9] == doctest::Approx(3.f));
+	AnchorToHeadsMsg allMessage;
+	core.injectMidi(allMessage);
+	CHECK(allMessage.headAllCcSeq[9] == 1);
+	CHECK(allMessage.headAllCcValue[9] == doctest::Approx(3.f));
 	CHECK(core.lastRoute == MIDI_ROUTE_HEAD_ALL);
 	CHECK(std::string(MidiCore::routeName(core.lastRoute)) == "head all");
 
 	core.handleMessage(0xB8, 13, 127);
 	for (int head = 0; head < kMaxHeads; head++)
 		CHECK(core.headCcSeq[head][13] == 0);
+	CHECK(core.headAllCcSeq[12] == 0);
 	CHECK(core.lastRoute == MIDI_ROUTE_HEAD_ALL);
 
 	core.handleMessage(0xB8, 1, 0);
 	for (int head = 0; head < kMaxHeads; head++)
 		CHECK(core.headCcSeq[head][1] == 0);
+	CHECK(core.headAllCcSeq[1] == 0);
 	core.handleMessage(0xB8, 1, 127);
 	for (int head = 0; head < kMaxHeads; head++)
 		CHECK(core.headCcSeq[head][1] == 1);
+	CHECK(core.headAllCcSeq[1] == 1);
 }
 
 TEST_CASE("MIDI core preserves command release and Program Change behavior") {

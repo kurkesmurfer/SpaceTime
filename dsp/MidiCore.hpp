@@ -60,6 +60,8 @@ public:
 	uint32_t headEventSeq[kMaxHeads];
 	uint32_t headCcSeq[kMaxHeads][kMidiHeadControls];
 	float headCcValue[kMaxHeads][kMidiHeadControls];
+	uint32_t headAllCcSeq[kHeadAllControls];
+	float headAllCcValue[kHeadAllControls];
 
 	MidiProgramEvent programEvents[kMaxMidiProgramEvents];
 	uint8_t programEventCount;
@@ -91,6 +93,10 @@ public:
 				headCcSeq[h][c] = 0;
 				headCcValue[h][c] = 0.f;
 			}
+		}
+		for (int c = 0; c < kHeadAllControls; c++) {
+			headAllCcSeq[c] = 0;
+			headAllCcValue[c] = 0.f;
 		}
 	}
 
@@ -198,6 +204,10 @@ public:
 				msg.headCcSeq[h][c] = headCcSeq[h][c];
 				msg.headCcValue[h][c] = headCcValue[h][c];
 			}
+		}
+		for (int c = 0; c < kHeadAllControls; c++) {
+			msg.headAllCcSeq[c] = headAllCcSeq[c];
+			msg.headAllCcValue[c] = headAllCcValue[c];
 		}
 	}
 
@@ -365,8 +375,13 @@ private:
 		// Display remains exclusive and has no meaningful all-head operation.
 		if (cc >= kHeadAllControls)
 			return;
+		uint32_t previous = headCcSeq[0][cc];
 		for (int head = 0; head < kMaxHeads; head++)
 			handleHeadCc((uint8_t)head, cc, value);
+		if (headCcSeq[0][cc] != previous) {
+			headAllCcValue[cc] = headCcValue[0][cc];
+			headAllCcSeq[cc]++;
+		}
 	}
 
 	static uint8_t cvToNote(float cv) {

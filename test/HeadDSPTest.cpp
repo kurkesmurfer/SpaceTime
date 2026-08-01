@@ -620,11 +620,12 @@ TEST_CASE("one-shot: runs once, EOC at completion, start re-arms") {
 		sawEoc = sawEoc || s.out.eoc;
 	}
 	CHECK(s.out.runState == RUN_STOPPED);
-	CHECK(s.out.currentStage == 3);  // parked on the final stage
+	CHECK(s.out.currentStage == 3);  // parked on the final stage until restarted
 	CHECK(sawEoc);
 
 	s.pulseStart();
 	CHECK(s.out.runState == RUN_RUNNING);
+	CHECK(s.out.currentStage == 0);
 }
 
 TEST_CASE("stage pulses gate for exactly their stage's interval") {

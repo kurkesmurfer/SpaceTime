@@ -173,6 +173,7 @@ public:
 		holding_ = false;
 		enableWait_ = false;
 		stoppedOnStop_ = false;
+		oneShotComplete_ = false;
 		pendulumFwd_ = true;
 		cvNow_ = 0.f;
 		prevStart_ = prevStop_ = prevAdvance_ = prevStrobe_ = prevClock_ = false;
@@ -239,10 +240,16 @@ public:
 		prevContStage_ = -1;
 
 		// ---- Events
-		if (in.reset)
+		if (cfg.loopMode != LOOP_ONESHOT)
+			oneShotComplete_ = false;
+		if (in.reset) {
 			enterStage(table, resetStage(table, cfg.loopMode, stage_));
-		if (strobeEdge)
+			oneShotComplete_ = false;
+		}
+		if (strobeEdge) {
 			enterStage(table, addressToStage(addr, table.count, g));
+			oneShotComplete_ = false;
+		}
 		if (stopEdge) {
 			running_ = false;
 			holding_ = false;
@@ -251,7 +258,11 @@ public:
 		}
 		// Stop is authoritative if Start and Stop arrive in the same DSP tick.
 		if (startEdge && !stopEdge) {
-			if (stoppedOnStop_) {
+			if (oneShotComplete_ && cfg.loopMode == LOOP_ONESHOT) {
+				enterStage(table, resetStage(table, cfg.loopMode, stage_));
+				oneShotComplete_ = false;
+			}
+			else if (stoppedOnStop_) {
 				advance(table, cfg.loopMode, cfg.direction);  // release the stop stage
 				stoppedOnStop_ = false;
 			}
@@ -264,6 +275,7 @@ public:
 		if (advEdge) {
 			advance(table, cfg.loopMode, cfg.direction);
 			stoppedOnStop_ = false;
+			oneShotComplete_ = false;
 			if (running_)
 				checkEnable(table, in);
 		}
@@ -336,7 +348,7 @@ private:
 	uint32_t rng_;
 	int stage_;
 	float phase_;
-	bool running_, holding_, enableWait_, stoppedOnStop_, pendulumFwd_;
+	bool running_, holding_, enableWait_, stoppedOnStop_, oneShotComplete_, pendulumFwd_;
 	float cvNow_;
 	bool prevStart_, prevStop_, prevAdvance_, prevStrobe_, prevClock_;
 	float clockPeriod_, clockTimer_, subTimer_;
@@ -517,6 +529,7 @@ private:
 		bool atEnd = (dir == DIR_REVERSE) ? (stage_ == lo) : (stage_ == hi);
 		if (loopMode == LOOP_ONESHOT && atEnd) {
 			running_ = false;
+			oneShotComplete_ = true;
 			phase_ = 1.f;
 			fireEoc();
 			return;

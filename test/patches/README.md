@@ -223,13 +223,16 @@ Layout: `HEAD ALL HEAD HEAD HEAD HEAD MIDI PROGRAM STAGE4 x4` (16 stages).
 6. Repeat the normalled override check for common ADDRESS and TIME CV. Verify
    the common START input also behaves as the Sustain/Enable gate.
 7. Send channel 9 CC 1/2/3/4 to Start/Stop/Advance/Reset all HEADs, then test
-   selector CC 8/9/10/12. Send channel 9 CC 13 and verify no Display changes.
+   selector CC 8/9/10/12. Persistent selectors must also move on the HEAD ALL
+   panel. Send channel 9 CC 13 and verify no Display changes.
 8. Insert a correctly paired HEAD-side GLUE between HEAD ALL and the furthest
    HEAD. Common controls must still arrive and neither PROGRAM nor GLUE may
    report a broken chain. Misplacing or duplicating HEAD ALL must report a
    broken chain.
 9. Save/reload the patch. HEAD ALL parameters and the appended HEAD RESET jack
    connections must restore without changing existing HEAD port mappings.
+10. Complete a One-shot run, then press START again. The HEAD must return to its
+    regional First stage and begin a complete new pass.
 
 ## Known WP7 interpretation notes
 

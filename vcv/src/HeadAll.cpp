@@ -55,10 +55,13 @@ struct HeadAll : Module {
 	enum LightId { LINK_LIGHT, LIGHTS_LEN };
 
 	spacetime::HeadAllState state;
+	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;
 	rack::dsp::BooleanTrigger startTrigger, stopTrigger, advanceTrigger;
 	rack::dsp::BooleanTrigger resetTrigger, strobeTrigger, clockTrigger;
 	rack::dsp::ClockDivider divider;
 	float lastPersistent[8];
+	uint32_t lastMidiAllCcSeq[spacetime::kHeadAllControls];
+	bool lastMidiAllValid = false;
 	bool chainOk = false;
 
 	HeadAll() {
@@ -95,7 +98,45 @@ struct HeadAll : Module {
 
 		for (int i = 0; i < 8; i++)
 			lastPersistent[i] = NAN;
+		for (int i = 0; i < spacetime::kHeadAllControls; i++)
+			lastMidiAllCcSeq[i] = 0;
+		rightPort.attach(rightExpander);
 		divider.setDivision(16);
+	}
+
+	void applyMidiPersistent(int cc, float value) {
+		switch (cc) {
+			case 5: params[ADDRESS_PARAM].setValue(clamp(value, 0.f, 10.f)); break;
+			case 6: params[ADDR_SOURCE_PARAM].setValue(value >= 0.5f ? 1.f : 0.f); break;
+			case 7:
+				if (value >= 0.5f)
+					params[ADDR_MODE_PARAM].setValue((float)clamp((int)std::round(value), 1, 2));
+				break;
+			case 8: params[DIRECTION_PARAM].setValue((float)clamp((int)std::round(value), 0, 4)); break;
+			case 9: params[CLK_SOURCE_PARAM].setValue((float)clamp((int)std::round(value), 0, 3)); break;
+			case 10: params[CLK_DIV_PARAM].setValue((float)clamp((int)std::round(value), 0, 8)); break;
+			case 11: params[TIMECV_PARAM].setValue(clamp(value, -1.f, 1.f)); break;
+			case 12: params[LOOP_PARAM].setValue((float)clamp((int)std::round(value), 0, 2)); break;
+			default: break;
+		}
+	}
+
+	void consumeMidiAll() {
+		bool sourceValid = spacetime::modelIs(rightExpander.module, modelHead, modelGlueRight);
+		const spacetime::AnchorToHeadsMsg* in = rightPort.consume(rightExpander);
+		if (!sourceValid || !in->valid) {
+			lastMidiAllValid = false;
+			return;
+		}
+		for (int cc = 0; cc < spacetime::kHeadAllControls; cc++) {
+			uint32_t seq = in->headAllCcSeq[cc];
+			if (!lastMidiAllValid || seq != lastMidiAllCcSeq[cc]) {
+				lastMidiAllCcSeq[cc] = seq;
+				if (seq != 0)
+					applyMidiPersistent(cc, in->headAllCcValue[cc]);
+			}
+		}
+		lastMidiAllValid = true;
 	}
 
 	void emitControl(int cc, float value) {
@@ -124,6 +165,9 @@ struct HeadAll : Module {
 	}
 
 	void process(const ProcessArgs& args) override {
+		bool controlTick = divider.process();
+		if (controlTick)
+			consumeMidiAll();
 		float start = std::fmax(inputs[START_INPUT].getVoltage(),
 			params[START_PARAM].getValue() > 0.5f ? 10.f : 0.f);
 		float stop = std::fmax(inputs[STOP_INPUT].getVoltage(),
@@ -150,7 +194,7 @@ struct HeadAll : Module {
 		if (clockTrigger.process(inputs[CLK_INPUT].getVoltage() >= 1.f))
 			state.externalClockSeq++;
 
-		if (!divider.process())
+		if (!controlTick)
 			return;
 		float dt = args.sampleTime * divider.getDivision();
 		publishPersistentControls();

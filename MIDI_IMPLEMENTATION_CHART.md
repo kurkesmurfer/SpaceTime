@@ -208,7 +208,9 @@ CC 10 state order is `/16, /8, /4, /2, x1, x2, x4, x8, x16`.
   on the partial DROID patch are CC 8, 9, 10, and 12; configure them with the
   discrete value sets above.
 - Channel 9 reuses the same CC values and does not require a HEAD ALL panel
-  module. CC 13 is deliberately ignored because only one HEAD may own Display.
+  module. When installed, HEAD ALL mirrors persistent channel-9 controls on its
+  panel while the direct broadcast still reaches every HEAD. CC 13 is
+  deliberately ignored because only one HEAD may own Display.
 - The mapping therefore consumes one additional MIDI channel, not another set
   of CC numbers. Channels 10-14 remain unassigned by the fixed HEAD map.
 

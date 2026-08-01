@@ -175,6 +175,8 @@ TEST_CASE("headRelayLeft increments hop index and preserves payload") {
 	in.globals.slewFrac2 = 0.5f;
 	in.table.count = 8;
 	in.table.voltage[7] = 3.3f;
+	in.headAllCcSeq[9] = 42;
+	in.headAllCcValue[9] = 3.f;
 
 	AnchorToHeadsMsg out;
 	headRelayLeft(in, out);
@@ -183,9 +185,12 @@ TEST_CASE("headRelayLeft increments hop index and preserves payload") {
 	CHECK(out.ext[2] == -7.5f);
 	CHECK(out.scaleKey.key == 9);
 	CHECK(out.table.voltage[7] == 3.3f);
+	CHECK(out.headAllCcSeq[9] == 42);
+	CHECK(out.headAllCcValue[9] == doctest::Approx(3.f));
 	AnchorToHeadsMsg out2;
 	headRelayLeft(out, out2);
 	CHECK(out2.hopIndex == 2);
+	CHECK(out2.headAllCcSeq[9] == 42);
 }
 
 TEST_CASE("headRelayRight merges up to 8 statuses, appending own") {

@@ -334,9 +334,9 @@ struct Head : Module {
 				strobePending = true;
 
 			// ---- Relay the broadcast to the next head (leftward)
-			if (modelIs(leftExpander.module, modelHead, modelGlueLeft)) {
+			if (modelIs(leftExpander.module, modelHead, modelGlueLeft, modelHeadAll)) {
 				AnchorToHeadsMsg* lo = leftNeighborProducer<AnchorToHeadsMsg>(
-					this, modelHead, modelGlueLeft);
+					this, modelHead, modelGlueLeft, modelHeadAll);
 				if (lo) {
 					if (chainOk)
 						headRelayLeft(*bm, *lo);

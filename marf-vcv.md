@@ -155,8 +155,9 @@ Display control and produces no playhead outputs.
   and survives a HEAD-side GLUE bridge. More than one HEAD ALL, or placement
   between PROGRAM/MIDI and a HEAD, is a broken chain.
 - MIDI channel 9 independently provides HEAD ALL control by broadcasting the
-  existing CC 0-12 map to all eight HEAD slots. CC 13 Display is excluded.
-  No additional CC numbers are consumed; channels 10-14 remain available.
+  existing CC 0-12 map to all eight HEAD slots. An installed HEAD ALL mirrors
+  persistent channel-9 values on its panel. CC 13 Display is excluded. No
+  additional CC numbers are consumed; channels 10-14 remain available.
 
 ---
 
@@ -240,7 +241,7 @@ Channel model for Part I:
 | I-4 | **CC → stage sliders** | **Accepted.** Fixed map on the stage-slider channel: CC 0..63 = voltage sliders 1..64, CC 64..127 = time sliders 1..64 (7-bit, scaled onto 0-10 V / 0-1). Slider takeover applies, same as preset recall. DROID is programmable, so a clean fixed map beats MIDI-learn. |
 | I-5 | **CC → selected-stage modifiers** | **Implemented.** PROGRAM-section controls target the currently selected stage and honour the bulk window. |
 | I-6 | **CC → HEAD controls** | **Implemented.** Each HEAD receives the fixed 14-CC map, including virtual clock, on its own head channel. This is distinct from channel-less MIDI realtime transport. |
-| I-6a | **CC → HEAD ALL controls** | **Implemented.** Fixed MIDI channel 9 broadcasts CC 0–12 through the existing per-head arrays. Display CC 13 is excluded. |
+| I-6a | **CC → HEAD ALL controls** | **Implemented.** Fixed MIDI channel 9 broadcasts CC 0–12 to every HEAD and mirrors persistent values on an installed HEAD ALL panel. Display CC 13 is excluded. |
 | I-7 | **Notes → strobe/transpose** | **Postponed/rejected for Part I.** Controller MIDI starts with PC/CC/clock/transport. Note input can be reconsidered later only if a concrete controller workflow needs it; generated notes belong to outgoing MIDI Part II. |
 | I-8 | MIDI-learn, arbitrary mapping UI | **Rejected/later** — scope; the fixed map + DROID programmability covers it. |
 | I-9 | NRPN input | **Rejected/later** — 7-bit CC resolution on 0–10 V is 78 mV; fine for sliders. Revisit with Part II experience. |
