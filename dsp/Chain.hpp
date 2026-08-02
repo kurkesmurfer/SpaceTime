@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 5;
+static const uint32_t kChainProtocolVersion = 6;
 static const int kMidiHeadControls = 14;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
@@ -157,6 +157,8 @@ struct AnchorToHeadsMsg {
 	bool extConnected[4]; // WP7: HeadDSP's external-time fallback needs this
 	Globals globals;
 	ScaleKey scaleKey;
+	uint8_t selectedStage;  // PROGRAM selection, including active Display override
+	bool bulkArmed;         // one-shot apply-to-all state
 	uint8_t hopIndex;     // head id of the receiver; incremented at each relay
 	// Display arbitration (manual: only one Display LED active at a time):
 	// heads unlatch when the owner is another head or when cancelSeq changes
@@ -175,7 +177,8 @@ struct AnchorToHeadsMsg {
 	bool valid;
 
 	AnchorToHeadsMsg()
-		: hopIndex(0), displayOwner(0xFF), displayCancelSeq(0),
+		: selectedStage(0), bulkArmed(false), hopIndex(0),
+		  displayOwner(0xFF), displayCancelSeq(0),
 		  midiClockSeq(0), midiStartSeq(0), midiStopSeq(0), midiContinueSeq(0),
 		  valid(false) {
 		for (int i = 0; i < 4; i++) {

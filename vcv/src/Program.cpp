@@ -481,6 +481,8 @@ struct Program : Module {
 				}
 				ho->globals = globals;
 				ho->scaleKey = logic.scaleKey();
+				ho->selectedStage = om.selectedStage;
+				ho->bulkArmed = logic.bulkArmed();
 				ho->hopIndex = 0;
 				ho->displayOwner = displayOwner >= 0 ? (uint8_t)displayOwner : 0xFF;
 				ho->displayCancelSeq = displayCancelSeq;

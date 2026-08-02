@@ -339,10 +339,10 @@ panel edits, MIDI edits, patch reloads, and controller page changes. It is a
 controller-independent CC protocol: Midilize, DROID, or another adapter maps
 these semantic messages onto the controls and LEDs of a particular surface.
 
-This section freezes the wire format. HEAD/HEAD ALL feedback, protocol probing,
-the separate VCV output, and sparse HEAD deltas are implemented. PROGRAM and
-Stage feedback remain capability-gated until their authoritative state adapters
-are completed.
+This section freezes the wire format. HEAD/HEAD ALL and PROGRAM feedback,
+protocol probing, the separate VCV output, and sparse semantic deltas are
+implemented. Stage feedback remains capability-gated until its authoritative
+state adapter is completed.
 
 ### 8.1 Transport and device rules
 
@@ -584,7 +584,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | VCV HEAD/HEAD ALL snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented; PROGRAM/Stage responses capability-gated |
+| Controller feedback protocol v1 | VCV HEAD/HEAD ALL and PROGRAM snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented; Stage responses capability-gated |
 
 ## 12. Shared implementation ownership
 
@@ -609,8 +609,10 @@ stage-value deltas. It consumes a fixed-size `MidiFeedbackState`; adapters are
 responsible for populating that state from their local module topology.
 
 The VCV HEAD vertical slice publishes its complete semantic control state and
-Advance/Reset event counters through `HeadStatus`. The MIDI anchor collects
-that merged status by stable head id into `MidiFeedbackState` and drives a
+Advance/Reset event counters through `HeadStatus`. PROGRAM adds its selection,
+bulk-arm state and globals to the existing leftward broadcast; MIDI combines
+that with PROGRAM's returned stage table to resolve every selected-stage flag.
+The MIDI anchor collects both areas into `MidiFeedbackState` and drives a
 separate, persistent Rack MIDI output selected under `Controller feedback
-output`. The output defaults Off. PROGRAM and Stage requests are consumed but
-deliberately unanswered until those state adapters are implemented.
+output`. The output defaults Off. Stage-page requests are consumed but
+deliberately unanswered until that final state adapter is enabled.

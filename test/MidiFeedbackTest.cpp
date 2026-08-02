@@ -130,6 +130,37 @@ TEST_CASE("invalid HEAD status clears stale feedback presence") {
 		CHECK_FALSE(state.head[head].present);
 }
 
+TEST_CASE("PROGRAM broadcast populates authoritative feedback state") {
+	AnchorToHeadsMsg broadcast;
+	broadcast.valid = true;
+	broadcast.table.count = 4;
+	broadcast.table.voltage[2] = 8.f;
+	broadcast.table.program[2].setSlew(2);
+	broadcast.scaleKey.key = 9;
+	broadcast.scaleKey.scale = 0;
+	broadcast.globals.pulseRetrig = false;
+	broadcast.selectedStage = 2;
+	broadcast.bulkArmed = true;
+
+	MidiFeedbackState state;
+	collectProgramFeedbackState(&broadcast, state);
+	CHECK(state.table.count == 4);
+	CHECK(state.table.voltage[2] == doctest::Approx(8.f));
+	CHECK(state.program.selectedStage == 2);
+	CHECK(state.program.scaleKey.key == 9);
+	CHECK(state.program.scaleKey.scale == 0);
+	CHECK_FALSE(state.program.pulseRetrig);
+	CHECK(state.program.bulkArmed);
+
+	collectProgramFeedbackState(NULL, state);
+	CHECK(state.table.count == 0);
+	CHECK(state.program.selectedStage == 0);
+	CHECK(state.program.scaleKey.key == 0);
+	CHECK(state.program.scaleKey.scale == 2);
+	CHECK(state.program.pulseRetrig);
+	CHECK_FALSE(state.program.bulkArmed);
+}
+
 TEST_CASE("feedback protocol decodes fixed-channel snapshot requests") {
 	MidiFeedbackCore core;
 	CHECK_FALSE(core.handleMessage(0xB8, 0, 0));
@@ -162,6 +193,23 @@ TEST_CASE("feedback capabilities consume but defer unavailable area requests") {
 	REQUIRE(sink.sent.size() == 1);
 	CHECK(sink.sent[0].cc == 3);
 	CHECK(sink.sent[0].value == kFeedbackProtocolVersion);
+}
+
+TEST_CASE("PROGRAM capability enables fixed-channel snapshot requests") {
+	MidiFeedbackCore core;
+	MidiFeedbackState state = populatedFeedbackState();
+	TestFeedbackSink sink;
+
+	CHECK(core.handleMessage(0xB9, 1, 127,
+		FEEDBACK_CAP_HEADS | FEEDBACK_CAP_PROGRAM));
+	core.process(state, 0.f, false, sink);
+	REQUIRE(sink.sent.size() == 21);
+	CHECK(sink.sent.front().cc == 118);
+	CHECK(sink.sent.front().value == FEEDBACK_AREA_PROGRAM);
+	CHECK(hasFeedback(sink, kFeedbackProgramChannel, 0, 0));
+	CHECK(hasFeedback(sink, kFeedbackProgramChannel, 1, 7));
+	CHECK(sink.sent.back().cc == 119);
+	CHECK(sink.sent.back().value == FEEDBACK_AREA_PROGRAM);
 }
 
 TEST_CASE("HEAD snapshot is framed and uses exact semantic values") {

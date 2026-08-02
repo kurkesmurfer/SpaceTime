@@ -108,6 +108,23 @@ inline void collectHeadFeedbackState(const HeadsToAnchorMsg* status,
 	}
 }
 
+// PROGRAM is authoritative for its globals and selection, while the returned
+// block table owns the selected stage's modifiers and slider values. MIDI sits
+// transparently in this broadcast path and can therefore collect both without
+// another chain message.
+inline void collectProgramFeedbackState(const AnchorToHeadsMsg* broadcast,
+                                        MidiFeedbackState& state) {
+	state.program = ProgramFeedbackState();
+	state.table = StageTable();
+	if (!broadcast || !broadcast->valid)
+		return;
+	state.table = broadcast->table;
+	state.program.selectedStage = broadcast->selectedStage;
+	state.program.scaleKey = broadcast->scaleKey;
+	state.program.pulseRetrig = broadcast->globals.pulseRetrig;
+	state.program.bulkArmed = broadcast->bulkArmed;
+}
+
 class MidiFeedbackCore {
 public:
 	MidiFeedbackCore() { reset(); }

@@ -234,6 +234,29 @@ Layout: `HEAD ALL HEAD HEAD HEAD HEAD MIDI PROGRAM STAGE4 x4` (16 stages).
 10. Complete a One-shot run, then press START again. The HEAD must return to its
     regional First stage and begin a complete new pass.
 
+## Patch 11 — PROGRAM controller feedback
+
+Layout: `HEAD MIDI PROGRAM STAGE4`, with MIDI input connected to the controller
+command bus and Controller feedback output connected only to the controller
+feedback bus.
+
+1. Send channel-10 CC1 value 127. Expect framing CC118/119 with area 16 and
+   channel-16 CC0-4 plus CC16-29 between them.
+2. Select another stage from PROGRAM. Expect channel-16 CC0 followed by the
+   complete CC16-29 selected-stage bank; no snapshot framing is used for this
+   sparse update.
+3. Change Quantize, Slope, voltage Range/source, Stop, Sustain, Enable,
+   First/Last, time Range/source and Pulse 1/2 from the panel. Each final state
+   must be reported on its documented channel-16 CC.
+4. Change Key, Scale and Pulse Retrig from the panel or MIDI. Expect CC1, CC2
+   and CC3 respectively. Arm the one-shot bulk edit and expect CC4=127; apply a
+   modifier and expect CC4=0 after the arm is consumed.
+5. Enable a HEAD Display and move that Head. PROGRAM feedback CC0 and CC16-29
+   must follow the displayed stage. Cancel Display with PROGRAM navigation and
+   confirm feedback returns to PROGRAM's own selection.
+6. Save/reload the Rack patch and request a new PROGRAM snapshot. The reply
+   must overwrite controller assumptions with the restored Rack state.
+
 ## Known WP7 interpretation notes
 
 - Strobe via the panel: flipping the CONT/SEQ/STRB switch DOWN fires one

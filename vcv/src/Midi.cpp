@@ -74,7 +74,7 @@ struct Midi : Module {
 		if (status == 0xF8)
 			clkLight = 1.f;
 		bool feedbackProtocol = feedbackCore.handleMessage(status, data1, data2,
-			spacetime::FEEDBACK_CAP_HEADS);
+			spacetime::FEEDBACK_CAP_HEADS | spacetime::FEEDBACK_CAP_PROGRAM);
 		if (!feedbackProtocol)
 			core.handleMessage(status, data1, data2);
 	}
@@ -144,6 +144,8 @@ struct Midi : Module {
 
 		const spacetime::AnchorToHeadsMsg* fromProgram = rightPort.consume(rightExpander);
 		bool broadcastValid = rightIsProgram && fromProgram->valid;
+		spacetime::collectProgramFeedbackState(broadcastValid ? fromProgram : NULL,
+			feedbackState);
 		bool feedbackStateUpdated = false;
 		if (leftIsHead) {
 			spacetime::AnchorToHeadsMsg* toHead =
@@ -192,8 +194,11 @@ struct Midi : Module {
 
 		if (feedbackEnabled() && feedbackDivider.process()) {
 			RackFeedbackSink sink(this);
+			// PROGRAM needs the stage table to resolve its selected modifiers,
+			// but stage-value transmission remains capability-gated until the
+			// dedicated Stage feedback slice is accepted.
 			feedbackCore.process(feedbackState, args.sampleTime * 16.f,
-				liveStageFeedback, sink);
+				false, sink);
 		}
 
 		inLight = std::fmax(0.f, inLight - args.sampleTime * 8.f);
@@ -428,7 +433,7 @@ struct MidiWidget : ModuleWidget {
 		menu->addChild(createBoolPtrMenuItem("Live stage feedback (reserved)", "",
 			&module->liveStageFeedback));
 		menu->addChild(createMenuLabel("Fixed feedback channels; output defaults Off"));
-		menu->addChild(createMenuLabel("HEAD feedback active; PROGRAM/stages reserved"));
+		menu->addChild(createMenuLabel("HEAD/PROGRAM feedback active; stages reserved"));
 		menu->addChild(createMenuLabel(string::f("Feedback messages: %u",
 			module->feedbackMessageCount)));
 	}
