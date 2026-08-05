@@ -678,7 +678,9 @@ struct ProgramWidget : ModuleWidget {
 	ProgramWidget(Program* module) {
 		using namespace Layout;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Program.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/Program-light.svg"),
+			asset::plugin(pluginInstance, "res/Program.svg")));
 
 #ifndef METAMODULE
 		spacetime::addTitle(this, 45.72f, 5.6f, "Program");
@@ -807,6 +809,8 @@ struct ProgramWidget : ModuleWidget {
 
 	void appendContextMenu(Menu* menu) override {
 		Program* module = getModule<Program>();
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		// Single-pointer alternative to the hardware's hold-scroll-and-press
 		// bulk gesture (hold+press needs two hands / MIDI / MetaModule).

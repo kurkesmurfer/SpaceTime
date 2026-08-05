@@ -212,6 +212,23 @@ TEST_CASE("PROGRAM capability enables fixed-channel snapshot requests") {
 	CHECK(sink.sent.back().value == FEEDBACK_AREA_PROGRAM);
 }
 
+TEST_CASE("Stage capability enables fixed-channel page requests") {
+	MidiFeedbackCore core;
+	MidiFeedbackState state = populatedFeedbackState();
+	TestFeedbackSink sink;
+
+	CHECK(core.handleMessage(0xB9, 2, 0, FEEDBACK_CAP_ALL));
+	core.process(state, 0.f, false, sink);
+	REQUIRE(sink.sent.size() == 18);
+	CHECK(sink.sent.front().cc == 118);
+	CHECK(sink.sent.front().value == FEEDBACK_AREA_STAGE_PAGE_1);
+	CHECK(sink.sent[1].channel == kFeedbackStageChannel);
+	CHECK(sink.sent[1].cc == 0);
+	CHECK(sink.sent[9].cc == 64);
+	CHECK(sink.sent.back().cc == 119);
+	CHECK(sink.sent.back().value == FEEDBACK_AREA_STAGE_PAGE_1);
+}
+
 TEST_CASE("HEAD snapshot is framed and uses exact semantic values") {
 	MidiFeedbackCore core;
 	MidiFeedbackState state = populatedFeedbackState();

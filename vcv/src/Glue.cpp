@@ -278,20 +278,25 @@ struct GlueReadout : Widget {
 		nvgFontFaceId(args.vg, font->handle);
 		nvgFontSize(args.vg, 9.f);
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgFillColor(args.vg, nvgRGB(0xcf, 0xc2, 0xaf));
+		nvgFillColor(args.vg, spacetime::useDarkPanels() ?
+			spacetime::colorLabelIO() : spacetime::colorLabelIOLight());
 		nvgText(args.vg, 0, 0, value.c_str(), NULL);
 	}
 };
 
 template <typename TModule>
 struct GlueWidget : ModuleWidget {
-	explicit GlueWidget(TModule* module, const char* panel, const char* direction) {
+	explicit GlueWidget(TModule* module, const char* lightPanel,
+	                   const char* darkPanel, const char* direction) {
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, panel)));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, lightPanel),
+			asset::plugin(pluginInstance, darkPanel)));
 #ifndef METAMODULE
 		spacetime::addMicroLabel(this, 5.08f, 6.f, "GLUE");
 		spacetime::addLabel(this, 5.08f, 12.f, direction, spacetime::fontTitle(),
-		                    13.f, spacetime::colorTitle());
+		                    13.f, spacetime::colorTitle(), 0.f,
+		                    spacetime::colorTitleLight());
 		spacetime::addMicroLabel(this, 5.08f, 18.f, "LINK");
 		addChild(new spacetime::CornerMark(10.16f, 128.5f, 0.70f, 1.04f, 4.f));
 #endif
@@ -305,6 +310,8 @@ struct GlueWidget : ModuleWidget {
 
 	void appendContextMenu(Menu* menu) override {
 		TModule* module = getModule<TModule>();
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		if (!module)
 			return;
@@ -323,12 +330,14 @@ struct GlueWidget : ModuleWidget {
 
 struct GlueLeftWidget : GlueWidget<GlueLeft> {
 	explicit GlueLeftWidget(GlueLeft* module)
-		: GlueWidget<GlueLeft>(module, "res/GlueLeft.svg", "<") {}
+		: GlueWidget<GlueLeft>(module, "res/GlueLeft-light.svg",
+			"res/GlueLeft.svg", "<") {}
 };
 
 struct GlueRightWidget : GlueWidget<GlueRight> {
 	explicit GlueRightWidget(GlueRight* module)
-		: GlueWidget<GlueRight>(module, "res/GlueRight.svg", ">") {}
+		: GlueWidget<GlueRight>(module, "res/GlueRight-light.svg",
+			"res/GlueRight.svg", ">") {}
 };
 
 } // namespace

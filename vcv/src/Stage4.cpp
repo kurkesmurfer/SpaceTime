@@ -262,7 +262,9 @@ struct Stage4Widget : ModuleWidget {
 	Stage4Widget(Stage4* module) {
 		using namespace Layout4;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Stage4.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/Stage4-light.svg"),
+			asset::plugin(pluginInstance, "res/Stage4.svg")));
 
 #ifndef METAMODULE
 		spacetime::addTitle(this, 25.4f, 5.6f, "Stage4");
@@ -297,6 +299,8 @@ struct Stage4Widget : ModuleWidget {
 
 	void appendContextMenu(Menu* menu) override {
 		Stage4* module = getModule<Stage4>();
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		if (!module) {
 			menu->addChild(createMenuLabel("STAGE4 diagnostics unavailable"));

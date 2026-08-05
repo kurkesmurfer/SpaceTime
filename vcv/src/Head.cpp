@@ -468,7 +468,9 @@ struct HeadWidget : ModuleWidget {
 	HeadWidget(Head* module) {
 		using namespace LayoutH;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Head.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/Head-light.svg"),
+			asset::plugin(pluginInstance, "res/Head.svg")));
 
 #ifndef METAMODULE
 		spacetime::addTitle(this, CX, 5.6f, "Head");
@@ -565,6 +567,8 @@ struct HeadWidget : ModuleWidget {
 
 	void appendContextMenu(Menu* menu) override {
 		Head* module = getModule<Head>();
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createMenuLabel("MIDI"));
 		if (!module) {

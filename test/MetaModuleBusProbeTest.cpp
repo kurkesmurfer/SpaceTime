@@ -61,3 +61,36 @@ TEST_CASE("MetaModule probe buses isolate independent instruments") {
 	CHECK(valueA == doctest::Approx(1.f));
 	CHECK(valueB == doctest::Approx(9.f));
 }
+
+TEST_CASE("MetaModule probe bus partitions StageRemote and HeadRemote roles") {
+	MetaModuleBusProbeRegistry registry;
+	uint32_t core = registry.makeToken();
+	uint32_t stage = registry.makeToken();
+	uint32_t head = registry.makeToken();
+
+	CHECK(registry.registerRole(BusRole::Core, 0, core));
+	CHECK(registry.registerRole(BusRole::StageRemote, 0, stage));
+	CHECK(registry.registerRole(BusRole::HeadRemote, 0, head));
+
+	// Each role has its own owner/count. Registering one role must not be
+	// visible to, or block, an unrelated role sharing the same Instrument ID.
+	CHECK(registry.roleCount(BusRole::Core, 0) == 1);
+	CHECK(registry.roleCount(BusRole::StageRemote, 0) == 1);
+	CHECK(registry.roleCount(BusRole::HeadRemote, 0) == 1);
+	CHECK(registry.roleCount(BusRole::ProgramRemote, 0) == 0);
+
+	// A second StageRemote on the same slot is a duplicate; it must not
+	// affect HeadRemote's independent count or ownership.
+	uint32_t secondStage = registry.makeToken();
+	CHECK_FALSE(registry.registerRole(BusRole::StageRemote, 0, secondStage));
+	CHECK(registry.roleCount(BusRole::StageRemote, 0) == 2);
+	CHECK(registry.roleCount(BusRole::HeadRemote, 0) == 1);
+
+	registry.unregisterRole(BusRole::Core, 0, core);
+	registry.unregisterRole(BusRole::StageRemote, 0, stage);
+	registry.unregisterRole(BusRole::StageRemote, 0, secondStage);
+	registry.unregisterRole(BusRole::HeadRemote, 0, head);
+	CHECK(registry.roleCount(BusRole::Core, 0) == 0);
+	CHECK(registry.roleCount(BusRole::StageRemote, 0) == 0);
+	CHECK(registry.roleCount(BusRole::HeadRemote, 0) == 0);
+}

@@ -339,10 +339,9 @@ panel edits, MIDI edits, patch reloads, and controller page changes. It is a
 controller-independent CC protocol: Midilize, DROID, or another adapter maps
 these semantic messages onto the controls and LEDs of a particular surface.
 
-This section freezes the wire format. HEAD/HEAD ALL and PROGRAM feedback,
-protocol probing, the separate VCV output, and sparse semantic deltas are
-implemented. Stage feedback remains capability-gated until its authoritative
-state adapter is completed.
+This section freezes the wire format. HEAD/HEAD ALL, PROGRAM, and Stage
+feedback, protocol probing, the separate VCV output, snapshots, and sparse
+semantic deltas are implemented.
 
 ### 8.1 Transport and device rules
 
@@ -405,6 +404,12 @@ Snapshot area codes are `0-7` for HEAD 1-8, `8` for all HEADs, `16` for
 PROGRAM, and `32-39` for stage pages 1-8. Framing is emitted only for explicit
 snapshots, never around sparse deltas. A controller must treat a repeated value
 as valid inside a snapshot even if it equals its cached state.
+
+The VCV adapter spaces controller-feedback messages by 1 ms. This pacing is
+required for hardware receivers with a bounded per-cycle MIDI event window;
+without it, DROID blue-7 accepts the Stage frame-begin marker and values 1-15
+but drops value 16 from the 18-message snapshot burst. Sparse live updates are
+subject to the same queue and therefore preserve message ordering.
 
 The request is stateless: the desired head or stage page is carried in every
 message. SpaceTime does not remember which page any controller is displaying.
@@ -584,7 +589,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | VCV HEAD/HEAD ALL and PROGRAM snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented; Stage responses capability-gated |
+| Controller feedback protocol v1 | VCV HEAD/HEAD ALL, PROGRAM, and Stage snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented |
 
 ## 12. Shared implementation ownership
 
@@ -612,7 +617,7 @@ The VCV HEAD vertical slice publishes its complete semantic control state and
 Advance/Reset event counters through `HeadStatus`. PROGRAM adds its selection,
 bulk-arm state and globals to the existing leftward broadcast; MIDI combines
 that with PROGRAM's returned stage table to resolve every selected-stage flag.
-The MIDI anchor collects both areas into `MidiFeedbackState` and drives a
+The MIDI anchor collects all three areas into `MidiFeedbackState` and drives a
 separate, persistent Rack MIDI output selected under `Controller feedback
-output`. The output defaults Off. Stage-page requests are consumed but
-deliberately unanswered until that final state adapter is enabled.
+output`. The output defaults Off. Stage-page snapshots are always available;
+live Stage deltas remain an explicit opt-in setting.

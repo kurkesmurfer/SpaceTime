@@ -4,6 +4,7 @@
 #include "MidiCore.hpp"
 #include "MidiFeedback.hpp"
 #include <app/MidiDisplay.hpp>
+#include <array>
 
 // ============================================================================
 // MIDI — platform adapter around dsp/MidiCore.hpp.
@@ -45,6 +46,22 @@ struct Midi : Module {
 	int lastFeedbackDriver = -2, lastFeedbackDevice = -2;
 	uint32_t feedbackMessageCount = 0;
 
+	struct PendingFeedbackMessage {
+		uint8_t status;
+		uint8_t channel;
+		uint8_t data1;
+		uint8_t data2;
+	};
+	static const int kFeedbackQueueCapacity = 512;
+	// DROID drops the final Stage value when an 18-message snapshot is emitted
+	// as one burst. A 1 ms interval keeps snapshots responsive and lossless.
+	static constexpr float kFeedbackMessageInterval = 0.001f;
+	std::array<PendingFeedbackMessage, kFeedbackQueueCapacity> feedbackQueue;
+	int feedbackQueueRead = 0;
+	int feedbackQueueWrite = 0;
+	int feedbackQueueSize = 0;
+	float feedbackSendTimer = 0.f;
+
 	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;
 	rack::dsp::ClockDivider feedbackDivider;
@@ -74,7 +91,7 @@ struct Midi : Module {
 		if (status == 0xF8)
 			clkLight = 1.f;
 		bool feedbackProtocol = feedbackCore.handleMessage(status, data1, data2,
-			spacetime::FEEDBACK_CAP_HEADS | spacetime::FEEDBACK_CAP_PROGRAM);
+			spacetime::FEEDBACK_CAP_ALL);
 		if (!feedbackProtocol)
 			core.handleMessage(status, data1, data2);
 	}
@@ -89,13 +106,39 @@ struct Midi : Module {
 		outLight = 1.f;
 	}
 
-	void sendFeedbackMidi(uint8_t status, uint8_t channel, uint8_t a, uint8_t b) {
+	void clearFeedbackQueue() {
+		feedbackQueueRead = 0;
+		feedbackQueueWrite = 0;
+		feedbackQueueSize = 0;
+		feedbackSendTimer = 0.f;
+	}
+
+	void queueFeedbackMidi(uint8_t status, uint8_t channel, uint8_t a, uint8_t b) {
+		if (feedbackQueueSize >= kFeedbackQueueCapacity)
+			return;
+		feedbackQueue[feedbackQueueWrite] = {status, channel, a, b};
+		feedbackQueueWrite = (feedbackQueueWrite + 1) % kFeedbackQueueCapacity;
+		feedbackQueueSize++;
+	}
+
+	void processFeedbackQueue(float dt) {
+		if (!feedbackEnabled()) {
+			clearFeedbackQueue();
+			return;
+		}
+		feedbackSendTimer -= dt;
+		if (feedbackQueueSize == 0 || feedbackSendTimer > 0.f)
+			return;
+		const PendingFeedbackMessage& pending = feedbackQueue[feedbackQueueRead];
 		midi::Message msg;
-		msg.setStatus(status);
-		msg.setChannel(channel & 0xf);
-		msg.setNote(a);
-		msg.setValue(b);
+		msg.setStatus(pending.status);
+		msg.setChannel(pending.channel & 0xf);
+		msg.setNote(pending.data1);
+		msg.setValue(pending.data2);
 		feedbackOutput.sendMessage(msg);
+		feedbackQueueRead = (feedbackQueueRead + 1) % kFeedbackQueueCapacity;
+		feedbackQueueSize--;
+		feedbackSendTimer = kFeedbackMessageInterval;
 		feedbackMessageCount++;
 		outLight = 1.f;
 	}
@@ -112,7 +155,7 @@ struct Midi : Module {
 		Midi* module;
 		explicit RackFeedbackSink(Midi* module) : module(module) {}
 		void send(uint8_t status, uint8_t channel, uint8_t data1, uint8_t data2) override {
-			module->sendFeedbackMidi(status, channel, data1, data2);
+			module->queueFeedbackMidi(status, channel, data1, data2);
 		}
 	};
 
@@ -127,6 +170,7 @@ struct Midi : Module {
 			return;
 		lastFeedbackDriver = driver;
 		lastFeedbackDevice = device;
+		clearFeedbackQueue();
 		feedbackCore.reset();
 	}
 
@@ -194,12 +238,10 @@ struct Midi : Module {
 
 		if (feedbackEnabled() && feedbackDivider.process()) {
 			RackFeedbackSink sink(this);
-			// PROGRAM needs the stage table to resolve its selected modifiers,
-			// but stage-value transmission remains capability-gated until the
-			// dedicated Stage feedback slice is accepted.
 			feedbackCore.process(feedbackState, args.sampleTime * 16.f,
-				false, sink);
+				liveStageFeedback, sink);
 		}
+		processFeedbackQueue(args.sampleTime);
 
 		inLight = std::fmax(0.f, inLight - args.sampleTime * 8.f);
 		clkLight = std::fmax(0.f, clkLight - args.sampleTime * 10.f);
@@ -302,7 +344,9 @@ struct MidiWidget : ModuleWidget {
 	MidiWidget(Midi* module) {
 		using namespace LayoutM;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Midi.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/Midi-light.svg"),
+			asset::plugin(pluginInstance, "res/Midi.svg")));
 
 #ifndef METAMODULE
 		spacetime::addTitle(this, CX, 5.6f, "Midi");
@@ -333,6 +377,8 @@ struct MidiWidget : ModuleWidget {
 
 	void appendContextMenu(Menu* menu) override {
 		Midi* module = getModule<Midi>();
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createMenuLabel("MIDI input"));
 		if (!module) {
@@ -430,10 +476,10 @@ struct MidiWidget : ModuleWidget {
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createMenuLabel("Controller feedback output"));
 		app::appendMidiMenu(menu, &module->feedbackOutput);
-		menu->addChild(createBoolPtrMenuItem("Live stage feedback (reserved)", "",
+		menu->addChild(createBoolPtrMenuItem("Live stage feedback", "",
 			&module->liveStageFeedback));
 		menu->addChild(createMenuLabel("Fixed feedback channels; output defaults Off"));
-		menu->addChild(createMenuLabel("HEAD/PROGRAM feedback active; stages reserved"));
+		menu->addChild(createMenuLabel("HEAD, PROGRAM and Stage feedback active"));
 		menu->addChild(createMenuLabel(string::f("Feedback messages: %u",
 			module->feedbackMessageCount)));
 	}

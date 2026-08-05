@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="20.32mm" height="128.5mm" viewBox="0 0 20.32 128.5">
+  <!-- SpaceTime MIDI - light Bone design system. -->
+  <rect width="20.32" height="128.5" fill="#e7e4de"/>
+
+  <circle cx="1.870" cy="1.870" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
+  <circle cx="18.450" cy="1.870" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
+  <circle cx="1.870" cy="126.630" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
+  <circle cx="18.450" cy="126.630" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
+
+  <rect x="3.1" y="10.05" width="3.6" height="0.27" fill="#a83232" opacity="0.65"/>
+  <rect x="13.6" y="10.05" width="3.6" height="0.27" fill="#a83232" opacity="0.65"/>
+
+  <rect x="3.0" y="18.8" width="14.3" height="31.0" rx="1.2" fill="#d5d1ca" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="2.7" y="59.0" width="14.9" height="12.0" rx="1.2" fill="#171513" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="2.7" y="82.0" width="14.9" height="12.0" rx="1.2" fill="#171513" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="3.0" y="110.0" width="14.3" height="11.8" rx="1.2" fill="#d5d1ca" stroke="#81786e" stroke-width="0.25"/>
+</svg>

@@ -257,6 +257,24 @@ feedback bus.
 6. Save/reload the Rack patch and request a new PROGRAM snapshot. The reply
    must overwrite controller assumptions with the restored Rack state.
 
+## Patch 12 — Stage controller feedback with DROID
+
+Layout: `MIDI PROGRAM STAGE4 x2` or larger, with the DROID
+`SpaceTimeStageFeedbackTest.ini` patch loaded. Connect SpaceTime's controller
+feedback output directly to DROID and keep it separate from controller input.
+
+1. Select DROID page 1. Expect a channel-10 CC2 value 0 request, framing area
+   32, and sixteen channel-15 values: CC0-7 followed by CC64-71.
+2. Compare the eight orange voltage rings and eight cyan time rings with Rack.
+   Include zero, midpoint, and maximum values.
+3. Select page 2. Expect request value 1 and framing area 33; every ring must be
+   replaced by stages 9-16. Press page 2 again to verify explicit refresh.
+4. Request a page beyond the connected Stage chain. Missing stages must return
+   zero and clear stale rings.
+5. Leave `Live stage feedback` disabled, change a Rack slider, and confirm the
+   ring changes only after a page request. Enable it and confirm final slider
+   values arrive as coalesced, rate-limited deltas without framing.
+
 ## Known WP7 interpretation notes
 
 - Strobe via the panel: flipping the CONT/SEQ/STRB switch DOWN fires one

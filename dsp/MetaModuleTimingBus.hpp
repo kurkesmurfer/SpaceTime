@@ -3,11 +3,15 @@
 // Lock-free read-only telemetry bus used by the MetaModule Core and optional
 // diagnostic/control surfaces. The seqlock keeps each eight-head snapshot
 // coherent when Core and a monitor are scheduled on different processors.
+// Storage and seqlock retry logic now live in the shared ExpanderSnapshot
+// primitive (see ExpanderLink.hpp); this header defines the typed snapshot
+// and marshals it to and from the flat field array ExpanderSnapshot stores.
+
+#include "ExpanderLink.hpp"
+#include "StageTable.hpp"
 
 #include <atomic>
 #include <cstdint>
-
-#include "StageTable.hpp"
 
 namespace spacetime {
 
@@ -34,52 +38,50 @@ struct TimingSnapshot {
 class TimingTelemetry {
 public:
 	void publish(const TimingSnapshot& snapshot) {
-		sequence_.fetch_add(1, std::memory_order_acq_rel);
-		for (int h = 0; h < kMaxHeads; h++) {
-			sourceEvents_[h].store(snapshot.sourceEvents[h], std::memory_order_relaxed);
-			stageEntries_[h].store(snapshot.stageEntries[h], std::memory_order_relaxed);
-			runState_[h].store(snapshot.runState[h], std::memory_order_relaxed);
-			stage_[h].store(snapshot.stage[h], std::memory_order_relaxed);
-			clockSource_[h].store(snapshot.clockSource[h], std::memory_order_relaxed);
-			clockDivision_[h].store(snapshot.clockDivision[h], std::memory_order_relaxed);
-		}
-		sequence_.fetch_add(1, std::memory_order_release);
-		heartbeat_.fetch_add(1, std::memory_order_release);
+		uint32_t fields[kFieldCount];
+		pack(snapshot, fields);
+		link_.publish(fields);
 	}
 
 	bool read(TimingSnapshot& snapshot) const {
-		for (int attempt = 0; attempt < 4; attempt++) {
-			uint32_t before = sequence_.load(std::memory_order_acquire);
-			if (before & 1u)
-				continue;
-			for (int h = 0; h < kMaxHeads; h++) {
-				snapshot.sourceEvents[h] = sourceEvents_[h].load(std::memory_order_relaxed);
-				snapshot.stageEntries[h] = stageEntries_[h].load(std::memory_order_relaxed);
-				snapshot.runState[h] = (uint8_t)runState_[h].load(std::memory_order_relaxed);
-				snapshot.stage[h] = (uint8_t)stage_[h].load(std::memory_order_relaxed);
-				snapshot.clockSource[h] = (uint8_t)clockSource_[h].load(std::memory_order_relaxed);
-				snapshot.clockDivision[h] = (uint8_t)clockDivision_[h].load(std::memory_order_relaxed);
-			}
-			uint32_t after = sequence_.load(std::memory_order_acquire);
-			if (before == after && !(after & 1u))
-				return true;
-		}
-		return false;
+		uint32_t fields[kFieldCount];
+		if (!link_.read(fields))
+			return false;
+		unpack(fields, snapshot);
+		return true;
 	}
 
 	uint32_t heartbeat() const {
-		return heartbeat_.load(std::memory_order_acquire);
+		return link_.heartbeat();
 	}
 
 private:
-	std::atomic<uint32_t> sequence_{0};
-	std::atomic<uint32_t> heartbeat_{0};
-	std::atomic<uint32_t> sourceEvents_[kMaxHeads]{};
-	std::atomic<uint32_t> stageEntries_[kMaxHeads]{};
-	std::atomic<uint32_t> runState_[kMaxHeads]{};
-	std::atomic<uint32_t> stage_[kMaxHeads]{};
-	std::atomic<uint32_t> clockSource_[kMaxHeads]{};
-	std::atomic<uint32_t> clockDivision_[kMaxHeads]{};
+	static const unsigned kFieldsPerHead = 6;
+	static const unsigned kFieldCount = kMaxHeads * kFieldsPerHead;
+
+	static void pack(const TimingSnapshot& snapshot, uint32_t (&fields)[kFieldCount]) {
+		for (int h = 0; h < kMaxHeads; h++) {
+			fields[h * kFieldsPerHead + 0] = snapshot.sourceEvents[h];
+			fields[h * kFieldsPerHead + 1] = snapshot.stageEntries[h];
+			fields[h * kFieldsPerHead + 2] = snapshot.runState[h];
+			fields[h * kFieldsPerHead + 3] = snapshot.stage[h];
+			fields[h * kFieldsPerHead + 4] = snapshot.clockSource[h];
+			fields[h * kFieldsPerHead + 5] = snapshot.clockDivision[h];
+		}
+	}
+
+	static void unpack(const uint32_t (&fields)[kFieldCount], TimingSnapshot& snapshot) {
+		for (int h = 0; h < kMaxHeads; h++) {
+			snapshot.sourceEvents[h] = fields[h * kFieldsPerHead + 0];
+			snapshot.stageEntries[h] = fields[h * kFieldsPerHead + 1];
+			snapshot.runState[h] = (uint8_t)fields[h * kFieldsPerHead + 2];
+			snapshot.stage[h] = (uint8_t)fields[h * kFieldsPerHead + 3];
+			snapshot.clockSource[h] = (uint8_t)fields[h * kFieldsPerHead + 4];
+			snapshot.clockDivision[h] = (uint8_t)fields[h * kFieldsPerHead + 5];
+		}
+	}
+
+	ExpanderSnapshot<kFieldCount> link_;
 };
 
 struct MetaModuleTimingBus {
@@ -124,6 +126,34 @@ public:
 
 	void unregisterMonitor(unsigned index) {
 		bus(index).monitorCount.fetch_sub(1, std::memory_order_acq_rel);
+	}
+
+	// EB4 auto-bind: read-only query for a fresh Remote deciding which
+	// Instrument ID to join. Returns true and sets instrumentId only when
+	// exactly one Instrument ID currently has a live (single-owner) Core;
+	// returns false when none or more than one exist, so the caller falls
+	// back to explicit A-D selection rather than guessing among ambiguous
+	// candidates. Claims nothing and changes no ownership -- callers still
+	// register/tryClaim through the normal entry points once they have the
+	// resolved instrumentId (see METAMODULE_EXPANDER_BUS_PLAN.md, EB4).
+	//
+	// This queries the real Core's registry (the one Core.cpp actually
+	// registers into), not MetaModuleBusProbeRegistry -- that one only
+	// tracks the disposable MM0 probe modules and has never been the real
+	// Core's bus.
+	bool findSoleCore(unsigned& instrumentId) {
+		unsigned found = kBusCount;
+		unsigned liveCount = 0;
+		for (unsigned i = 0; i < kBusCount; i++) {
+			if (buses_[i].coreCount.load(std::memory_order_acquire) == 1) {
+				liveCount++;
+				found = i;
+			}
+		}
+		if (liveCount != 1)
+			return false;
+		instrumentId = found;
+		return true;
 	}
 
 private:

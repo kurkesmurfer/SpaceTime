@@ -73,6 +73,14 @@ reorders the sequence, and a block carries its programming with it.
 PROGRAM's display shows the stage count and appends `!` when the chain looks
 broken.
 
+### Panel theme
+
+SpaceTime follows Rack's global light/dark panel preference by default. Every
+SpaceTime module context menu also provides **Panel theme > Follow Rack / Light
+/ Dark**. The override is plugin-wide, so changing it from one module updates
+the complete SpaceTime family and is stored as a Rack plugin preference rather
+than in individual patches.
+
 ### GLUE virtual bridge
 
 GLUE RIGHT sits immediately to the right of the left fragment; its matching

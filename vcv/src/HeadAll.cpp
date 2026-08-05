@@ -219,7 +219,9 @@ struct HeadAllWidget : ModuleWidget {
 	explicit HeadAllWidget(HeadAll* module) {
 		using namespace LayoutHA;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/HeadAll.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/HeadAll-light.svg"),
+			asset::plugin(pluginInstance, "res/HeadAll.svg")));
 
 #ifndef METAMODULE
 		spacetime::addTitle(this, CX, 5.6f, "Head All");
@@ -287,6 +289,8 @@ struct HeadAllWidget : ModuleWidget {
 	}
 
 	void appendContextMenu(Menu* menu) override {
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createMenuLabel("Placement: left of the furthest HEAD"));
 		menu->addChild(createMenuLabel("MIDI: channel 9, CC 0-12"));

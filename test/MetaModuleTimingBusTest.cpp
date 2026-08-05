@@ -69,3 +69,40 @@ TEST_CASE("MetaModule timing buses isolate instruments and count monitors") {
 	registry.unregisterMonitor(0);
 	CHECK(registry.bus(0).monitorCount.load() == 0);
 }
+
+TEST_CASE("findSoleCore resolves only when exactly one Core is live") {
+	MetaModuleTimingBusRegistry registry;
+	unsigned instrumentId = 99;
+
+	// No Core anywhere yet: nothing to auto-bind to.
+	CHECK_FALSE(registry.findSoleCore(instrumentId));
+
+	// A Core on instrument C (index 2), not the default A -- auto-bind must
+	// find it wherever it actually is, not assume index 0.
+	uint32_t core = registry.makeToken();
+	CHECK(registry.registerCore(2, core));
+	CHECK(registry.findSoleCore(instrumentId));
+	CHECK(instrumentId == 2);
+
+	// A second Core on a different instrument makes the answer ambiguous
+	// again -- auto-bind must decline rather than pick one arbitrarily.
+	uint32_t secondCore = registry.makeToken();
+	CHECK(registry.registerCore(1, secondCore));
+	CHECK_FALSE(registry.findSoleCore(instrumentId));
+
+	// Removing the second Core restores a sole, resolvable Core.
+	registry.unregisterCore(1, secondCore);
+	CHECK(registry.findSoleCore(instrumentId));
+	CHECK(instrumentId == 2);
+
+	// A duplicate Core on the same instrument is also ambiguous: coreCount
+	// becomes 2, so that instrument no longer counts as "live" for
+	// auto-bind purposes even though one of the two is the rightful owner.
+	uint32_t duplicateCore = registry.makeToken();
+	CHECK_FALSE(registry.registerCore(2, duplicateCore));
+	CHECK_FALSE(registry.findSoleCore(instrumentId));
+
+	registry.unregisterCore(2, duplicateCore);
+	registry.unregisterCore(2, core);
+	CHECK_FALSE(registry.findSoleCore(instrumentId));
+}
