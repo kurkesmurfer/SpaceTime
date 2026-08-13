@@ -73,6 +73,12 @@ public:
 		ext_.connected[index] = connected;
 	}
 
+	// EB8: a HeadRemote's HeadDSP::tick() needs the same ExtInputs a fused
+	// engine already has, so Core has to be able to publish what it just
+	// received via setExternal(). No setter existed before because nothing
+	// needed to read it back until now.
+	const ExtInputs& ext() const { return ext_; }
+
 	void handleMidi(uint8_t status, uint8_t data1 = 0, uint8_t data2 = 0) {
 		midi_.handleMessage(status, data1, data2);
 		applyMidiProgramEvents();

@@ -3,10 +3,10 @@
   <!-- SpaceTime HEAD - light Bone design system. -->
   <rect width="50.8" height="128.5" fill="#e7e4de"/>
 
-  <circle cx="1.870" cy="1.870" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
-  <circle cx="48.930" cy="1.870" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
-  <circle cx="1.870" cy="126.630" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
-  <circle cx="48.930" cy="126.630" r="0.735" fill="#aaa39a" stroke="#70685f" stroke-width="0.3"/>
+  <circle cx="3.000" cy="3.500" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="47.800" cy="3.500" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="3.000" cy="125.000" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="47.800" cy="125.000" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
 
   <rect x="4" y="10.05" width="10.9" height="0.27" fill="#a83232" opacity="0.65"/>
   <rect x="35.9" y="10.05" width="10.9" height="0.27" fill="#a83232" opacity="0.65"/>

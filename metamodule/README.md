@@ -20,6 +20,77 @@ cmake --build metamodule/build
 The installable package is written to
 `metamodule/metamodule-plugins/SpaceTime.mmplugin`.
 
+## Panel assets
+
+All SpaceTime MetaModule faceplates use a light theme and a standard 128.5 mm
+height. Regenerate their native-resolution PNGs after editing the SVG sources:
+
+```sh
+python3 metamodule/scripts/render_panels.py
+```
+
+The renderer requires CairoSVG. Program is 32 HP (304 x 240 px) so its full
+control set fits without vertical overflow; Stage4 is 12 HP (114 x 240 px).
+
+## Simulator (intermediate testing, no hardware needed)
+
+4ms ships a desktop simulator as part of `4ms/metamodule` (not the plugin SDK
+repo) -- SDL2, ordinary host compiler, pixel-identical display, real MIDI I/O
+via virtual rtmidi ports. It cannot model the two-core scheduler or CPU load
+(those numbers below stay hardware-only), and as a desktop process it almost
+certainly does not reproduce the undocumented loader `.bss`-zeroing behavior
+the shared bus depends on, so the unload/reload robustness item stays
+hardware-only too. Everything else -- MIDI CC injection, the STATUS_DISPLAY
+text (including the EB6 `!`/`(duplicate Core!)` indication), preset save/load,
+the action menu -- is fair game there, and it's the fast loop for MM2-style
+legibility checks instead of waiting for the next bench session.
+
+Setup: `~/Development/metamodule` already exists on this machine (gcc-12+
+confirmed present) and already builds three other plugins as simulator
+built-ins (Schlappi-vcv, SignalFunctionSet, siren) -- see its own
+`CLAUDE.md`. SpaceTime is now wired in the same way:
+
+- `~/Development/metamodule/simulator/ext-plugins.cmake` has a fourth entry
+  (`SpaceTime`, alongside the existing three), following the file's own
+  established convention of specifying all three `ext_builtin_brand_*` lines
+  explicitly -- the file's own header comment notes the slug line is
+  mandatory once more than one plugin specifies it.
+- `metamodule/src/plugin.cpp` (this repo) got a `#ifdef METAMODULE_BUILTIN`
+  guard around `pluginInstance` and `init()`/`init_SpaceTime()`, matching
+  `Schlappi-vcv/src/plugin.cpp`'s already-working pattern exactly. This is
+  needed here: the local `~/Development/metamodule` checkout (commit
+  `fa28b57`, 2026-03-06) predates the newer automatic
+  init()-rename/symbol-localization pass described in the current upstream
+  `4ms/metamodule-plugin-sdk` and `4ms/metamodule` docs -- its own
+  `ext-plugins.cmake` still says "Don't forget to change init() =>
+  init_BrandSlug(), and add `extern` to the pluginInstance!" `METAMODULE_BUILTIN`
+  is defined only by the simulator build, never by the real hardware build
+  (`metamodule/CMakeLists.txt`'s own `create_plugin()`), so this is inert
+  outside the simulator. If `~/Development/metamodule` is ever updated to a
+  newer commit with the automatic pass, this guard can very likely come back
+  out -- worth rechecking against its `ext-plugins.cmake` header comment and
+  whether `simulator/localize-ext-plugin.cmake` exists before removing it,
+  rather than assuming.
+- Only SDL2 itself (`brew install sdl2`) is still needed on this machine to
+  finish the setup -- confirmed by running `cmake -S simulator -B <tmp> -G
+  Ninja` here: configuration gets past the compiler check cleanly and fails
+  only at `lvgl_drv`'s `find_package(SDL2)`, nothing else.
+
+Build and run:
+
+```sh
+cd ~/Development/metamodule/simulator
+make config-sim
+make
+make run
+```
+
+SpaceTime should appear as a built-in brand alongside the other three.
+
+Note: `~/Development/metamodule` is shared with whatever session manages the
+Schlappi port (see its `CLAUDE.md`, "Parallel development") -- worth a quick
+check that nothing else changed there since, before assuming a clean build.
+
 ## Core hardware test
 
 This test is now required before further remote-panel work.

@@ -1,6 +1,8 @@
 #include "doctest.h"
 #include "MetaModuleRemoteBus.hpp"
 #include "MetaModuleTimingBus.hpp"
+#include "MidiCore.hpp"
+#include "SpaceTimeEngine.hpp"
 
 using namespace spacetime;
 
@@ -287,4 +289,458 @@ TEST_CASE("Bank and head heartbeats advance only on publish, for a caller's own 
 	HeadConfig config;
 	headRegistry.publishHead(0, 3, config);
 	CHECK(headRegistry.headHeartbeat(0, 3) == 1);
+}
+
+// ---- EB8: head relocation -- Core publishes the full table, a HeadRemote
+// runs its own HeadDSP and publishes its output back. See
+// MetaModuleRemoteBus.hpp's class comments for why the table registry has no
+// ownership CAS of its own (composes with MetaModuleTimingBusRegistry's
+// coreCount instead) and why head output shares HeadConfig's claimed slot.
+
+TEST_CASE("Stage table publish/read round-trips all 64 stages through the flat field array") {
+	MetaModuleStageTableRegistry registry;
+	StageTable table;
+	table.count = 40;
+	for (int i = 0; i < kMaxStages; i++) {
+		table.voltage[i] = (float)i * 0.1f;
+		table.time[i] = (float)(i % 10) * 0.05f;
+	}
+	table.program[0].setQuantize(true);
+	table.program[63].setPulse1(true);
+	registry.publishTable(2, table);
+
+	StageTable read;
+	CHECK(registry.readTable(2, /*coreValid=*/true, read));
+	CHECK(read.count == table.count);
+	for (int i = 0; i < kMaxStages; i++) {
+		CHECK(read.voltage[i] == doctest::Approx(table.voltage[i]));
+		CHECK(read.time[i] == doctest::Approx(table.time[i]));
+	}
+	CHECK(read.program[0].quantize());
+	CHECK(read.program[63].pulse1());
+}
+
+TEST_CASE("Stage table read is gated on caller-supplied core validity, not just publish state") {
+	MetaModuleStageTableRegistry registry;
+	StageTable table;
+	table.count = 8;
+	table.voltage[0] = 5.f;
+	registry.publishTable(0, table);
+
+	// Published, but the caller's own MetaModuleTimingBusRegistry check says
+	// there's no valid sole Core right now (e.g. zero or duplicate Cores) --
+	// this registry has no way to know that itself by design, so it must
+	// trust the caller.
+	StageTable read;
+	read.voltage[0] = 9.f;  // pre-dirty
+	CHECK_FALSE(registry.readTable(0, /*coreValid=*/false, read));
+	StageTable defaults;
+	CHECK(read.voltage[0] == doctest::Approx(defaults.voltage[0]));
+	CHECK(read.count == defaults.count);
+
+	CHECK(registry.readTable(0, /*coreValid=*/true, read));
+	CHECK(read.voltage[0] == doctest::Approx(5.f));
+}
+
+TEST_CASE("Stage table read fails on zero heartbeat even when core is valid") {
+	MetaModuleStageTableRegistry registry;
+	CHECK(registry.tableHeartbeat(1) == 0);
+	StageTable read;
+	CHECK_FALSE(registry.readTable(1, /*coreValid=*/true, read));
+}
+
+TEST_CASE("Core broadcast context (ExtInputs/Globals/ScaleKey) round-trips independently of the table") {
+	MetaModuleStageTableRegistry registry;
+	ExtInputs ext;
+	ext.v[2] = 3.3f;
+	ext.connected[2] = true;
+	Globals globals;
+	globals.slewFrac1 = 0.4f;
+	globals.slopeLaw = 1;
+	globals.pulseRetrig = false;
+	ScaleKey scaleKey;
+	scaleKey.key = 7;
+	scaleKey.scale = 1;
+	registry.publishContext(0, ext, globals, scaleKey);
+
+	ExtInputs readExt;
+	Globals readGlobals;
+	ScaleKey readScaleKey;
+	CHECK(registry.readContext(0, /*coreValid=*/true, readExt, readGlobals, readScaleKey));
+	CHECK(readExt.v[2] == doctest::Approx(3.3f));
+	CHECK(readExt.connected[2]);
+	CHECK_FALSE(readExt.connected[0]);
+	CHECK(readGlobals.slewFrac1 == doctest::Approx(0.4f));
+	CHECK(readGlobals.slopeLaw == 1);
+	CHECK_FALSE(readGlobals.pulseRetrig);
+	CHECK(readScaleKey.key == 7);
+	CHECK(readScaleKey.scale == 1);
+
+	// The table channel is untouched -- these are genuinely independent
+	// snapshots on the same registry, not one payload split in two calls.
+	CHECK(registry.tableHeartbeat(0) == 0);
+	StageTable table;
+	CHECK_FALSE(registry.readTable(0, /*coreValid=*/true, table));
+}
+
+TEST_CASE("Core broadcast context read is gated on core validity and heartbeat, same as the table") {
+	MetaModuleStageTableRegistry registry;
+	ExtInputs ext;
+	Globals globals;
+	ScaleKey scaleKey;
+	CHECK_FALSE(registry.readContext(4, /*coreValid=*/true, ext, globals, scaleKey));  // never published
+
+	registry.publishContext(4, ext, globals, scaleKey);
+	CHECK_FALSE(registry.readContext(4, /*coreValid=*/false, ext, globals, scaleKey));
+	CHECK(registry.readContext(4, /*coreValid=*/true, ext, globals, scaleKey));
+	CHECK(registry.contextHeartbeat(4) == 1);
+}
+
+TEST_CASE("Head output publish/read round-trips and does not disturb the config half of the same slot") {
+	MetaModuleHeadRegistry registry;
+	uint32_t token = registry.makeToken();
+	CHECK(registry.registerHead(0, 5, token));
+
+	HeadConfig config;
+	config.direction = 2;
+	registry.publishHead(0, 5, config);
+
+	HeadOut out;
+	out.cv = 7.25f;
+	out.timeOut = 3.5f;
+	out.ref = 1.5f;
+	out.pulse1 = true;
+	out.pulse2 = false;
+	out.allPulse = true;
+	out.eoc = true;
+	out.currentStage = 12;
+	out.phase = 0.75f;
+	out.runState = RUN_RUNNING;
+	registry.publishHeadOutput(0, 5, out);
+
+	HeadOut readOut;
+	CHECK(registry.readHeadOutput(0, 5, readOut));
+	CHECK(readOut.cv == doctest::Approx(out.cv));
+	CHECK(readOut.timeOut == doctest::Approx(out.timeOut));
+	CHECK(readOut.ref == doctest::Approx(out.ref));
+	CHECK(readOut.pulse1 == out.pulse1);
+	CHECK(readOut.pulse2 == out.pulse2);
+	CHECK(readOut.allPulse == out.allPulse);
+	CHECK(readOut.eoc == out.eoc);
+	CHECK(readOut.currentStage == out.currentStage);
+	CHECK(readOut.phase == doctest::Approx(out.phase));
+	CHECK(readOut.runState == out.runState);
+
+	// Config, published earlier on the same claimed slot, is untouched.
+	HeadConfig readConfig;
+	CHECK(registry.readHead(0, 5, readConfig));
+	CHECK(readConfig.direction == config.direction);
+}
+
+TEST_CASE("An unclaimed head's output reads as HeadOut defaults") {
+	MetaModuleHeadRegistry registry;
+	HeadOut out;
+	out.cv = 9.f;  // pre-dirty
+	CHECK_FALSE(registry.readHeadOutput(0, 6, out));
+	HeadOut defaults;
+	CHECK(out.cv == doctest::Approx(defaults.cv));
+	CHECK(out.runState == defaults.runState);
+}
+
+TEST_CASE("Duplicate heads' output reports DUP and neither is trusted on read") {
+	MetaModuleHeadRegistry registry;
+	uint32_t first = registry.makeToken();
+	uint32_t second = registry.makeToken();
+	CHECK(registry.registerHead(0, 7, first));
+	CHECK_FALSE(registry.registerHead(0, 7, second));
+
+	HeadOut out;
+	out.cv = 4.f;
+	registry.publishHeadOutput(0, 7, out);
+
+	HeadOut read;
+	CHECK_FALSE(registry.readHeadOutput(0, 7, read));
+	CHECK(read.cv == doctest::Approx(0.f));
+
+	registry.unregisterHead(0, 7, second);
+	CHECK(registry.readHeadOutput(0, 7, read));
+	CHECK(read.cv == doctest::Approx(4.f));
+}
+
+// The actual hypothesis EB8 stands or falls on: a HeadDSP driven entirely by
+// registry-sourced (table published by "Core", config published by the
+// HeadRemote itself) inputs behaves identically, tick for tick, to the same
+// HeadDSP driven directly by the same table/config objects -- i.e. relocating
+// a head out of Core costs nothing in behavior, only in bus overhead. Runs a
+// real start-and-advance sequence, not a static snapshot, so slew/phase/
+// stage-entry state (all of which is internal to HeadDSP, not part of the
+// published/read payloads) has real work to disagree over if the round trip
+// ever lost precision.
+TEST_CASE("A head computed from registry-sourced table and config matches direct computation") {
+	StageTable table;
+	table.count = 8;
+	for (int i = 0; i < table.count; i++) {
+		table.voltage[i] = (float)(i + 1) * 1.25f;
+		table.time[i] = 0.02f;  // short intervals so the sequence advances fast
+	}
+	table.program[0].setPulse1(true);
+
+	HeadConfig cfg;
+	cfg.continuous = false;
+	cfg.direction = 0;  // forward
+	cfg.clkExt = true;  // listen to in.extClock, not internal per-stage timing
+	cfg.clkDivIndex = 4;  // x1
+	cfg.loopMode = 1;  // LOOP_FIRST_LAST
+
+	ExtInputs ext;
+	Globals globals;
+	ScaleKey scaleKey;
+
+	// Round-trip both inputs through the EB8 registries exactly as a real
+	// Core (table) and HeadRemote (config, published about itself) would.
+	MetaModuleStageTableRegistry tableRegistry;
+	tableRegistry.publishTable(0, table);
+	StageTable registryTable;
+	CHECK(tableRegistry.readTable(0, /*coreValid=*/true, registryTable));
+
+	MetaModuleHeadRegistry headRegistry;
+	uint32_t token = headRegistry.makeToken();
+	CHECK(headRegistry.registerHead(0, 0, token));
+	headRegistry.publishHead(0, 0, cfg);
+	HeadConfig registryConfig;
+	CHECK(headRegistry.readHead(0, 0, registryConfig));
+
+	HeadDSP direct;
+	HeadDSP viaRegistry;
+	HeadOut directOut, registryOut;
+
+	auto step = [&](float startGate, float clockGate) {
+		HeadSignals in;
+		in.start = startGate;
+		in.extClock = clockGate;
+		direct.tick(table, ext, globals, scaleKey, cfg, in, 1.f / 48000.f, directOut);
+		viaRegistry.tick(registryTable, ext, globals, scaleKey, registryConfig, in,
+			1.f / 48000.f, registryOut);
+	};
+
+	step(10.f, 0.f);   // start
+	for (int tick = 0; tick < 6; tick++) {
+		step(0.f, 10.f);   // clock edge
+		step(0.f, 0.f);    // release, matches the edge() rising-edge discipline
+		CHECK(directOut.currentStage == registryOut.currentStage);
+		CHECK(directOut.cv == doctest::Approx(registryOut.cv));
+		CHECK(directOut.runState == registryOut.runState);
+	}
+
+	CHECK(directOut.cv == doctest::Approx(registryOut.cv));
+	CHECK(directOut.timeOut == doctest::Approx(registryOut.timeOut));
+	CHECK(directOut.ref == doctest::Approx(registryOut.ref));
+	CHECK(directOut.pulse1 == registryOut.pulse1);
+	CHECK(directOut.pulse2 == registryOut.pulse2);
+	CHECK(directOut.allPulse == registryOut.allPulse);
+	CHECK(directOut.currentStage == registryOut.currentStage);
+	CHECK(directOut.phase == doctest::Approx(registryOut.phase));
+	CHECK(directOut.runState == registryOut.runState);
+
+	// Close the loop: the HeadRemote publishes what it computed, and
+	// whatever reads it back (Core, for detected-count/ack purposes, or a
+	// future monitor) sees exactly that, matching the direct computation too.
+	headRegistry.publishHeadOutput(0, 0, registryOut);
+	HeadOut ack;
+	CHECK(headRegistry.readHeadOutput(0, 0, ack));
+	CHECK(ack.cv == doctest::Approx(directOut.cv));
+	CHECK(ack.currentStage == directOut.currentStage);
+	CHECK(headRegistry.headOutputHeartbeat(0, 0) == 1);
+}
+
+// ---- EB8 extension: per-head MIDI CC forwarding (Core -> HeadRemote) ------
+// Mirrors VCV's Midi.cpp -> AnchorToHeadsMsg -> Head.cpp path (headCcSeq/
+// headCcValue, addressed by headId) over the MetaModule bus instead of an
+// expander pointer. See MetaModuleHeadMidiRegistry's header comment for why
+// this deliberately carries only the MIDI subset, not the whole
+// AnchorToHeadsMsg (the table already has its own channel).
+
+TEST_CASE("Head MIDI snapshot publish/read round-trips all heads and CCs") {
+	MetaModuleHeadMidiRegistry registry;
+	MetaModuleHeadMidiSnapshot snapshot;
+	snapshot.midiClockSeq = 5;
+	snapshot.midiStartSeq = 2;
+	snapshot.midiStopSeq = 1;
+	snapshot.midiContinueSeq = 3;
+	for (int h = 0; h < kMaxHeads; h++) {
+		for (int c = 0; c < kMidiHeadControls; c++) {
+			snapshot.headCcSeq[h][c] = (uint32_t)(h * kMidiHeadControls + c + 1);
+			snapshot.headCcValue[h][c] = (float)h + (float)c * 0.01f;
+		}
+	}
+	registry.publishMidi(1, snapshot);
+
+	MetaModuleHeadMidiSnapshot read;
+	CHECK(registry.readMidi(1, /*coreValid=*/true, read));
+	CHECK(read.midiClockSeq == snapshot.midiClockSeq);
+	CHECK(read.midiStartSeq == snapshot.midiStartSeq);
+	CHECK(read.midiStopSeq == snapshot.midiStopSeq);
+	CHECK(read.midiContinueSeq == snapshot.midiContinueSeq);
+	for (int h = 0; h < kMaxHeads; h++) {
+		for (int c = 0; c < kMidiHeadControls; c++) {
+			CHECK(read.headCcSeq[h][c] == snapshot.headCcSeq[h][c]);
+			CHECK(read.headCcValue[h][c] == doctest::Approx(snapshot.headCcValue[h][c]));
+		}
+	}
+}
+
+TEST_CASE("Head MIDI snapshot read is gated on caller-supplied core validity and heartbeat") {
+	MetaModuleHeadMidiRegistry registry;
+	CHECK(registry.midiHeartbeat(2) == 0);
+	MetaModuleHeadMidiSnapshot out;
+	CHECK_FALSE(registry.readMidi(2, /*coreValid=*/true, out));  // never published
+
+	MetaModuleHeadMidiSnapshot snapshot;
+	snapshot.midiClockSeq = 7;
+	registry.publishMidi(2, snapshot);
+	CHECK(registry.midiHeartbeat(2) == 1);
+
+	MetaModuleHeadMidiSnapshot dirty;
+	dirty.midiClockSeq = 99;
+	CHECK_FALSE(registry.readMidi(2, /*coreValid=*/false, dirty));
+	CHECK(dirty.midiClockSeq == MetaModuleHeadMidiSnapshot().midiClockSeq);  // reset to default
+
+	CHECK(registry.readMidi(2, /*coreValid=*/true, dirty));
+	CHECK(dirty.midiClockSeq == 7);
+}
+
+// The parity claim this needs to earn: whatever real Core.cpp will one day
+// publish (MidiCore's actual state, not a hand-built stand-in) survives the
+// bus round trip exactly. Drives a real SpaceTimeEngine through
+// engine.handleMidi() -- the same call Core.cpp makes -- so the CC seq/value
+// data is genuinely what MidiCore produces, not a guess at its shape.
+TEST_CASE("A real MidiCore's per-head CC state survives the bus round trip exactly") {
+	SpaceTimeEngine engine;
+	// Head 3 (channel 0xB3): address knob (CC 5) and direction (CC 8).
+	engine.handleMidi(0xB3, 5, 100);
+	engine.handleMidi(0xB3, 8, 2);
+	// Head 0 (channel 0xB0): virtual clock select (CC 9) then a Start (CC 1).
+	engine.handleMidi(0xB0, 9, 127);
+	engine.handleMidi(0xB0, 1, 127);
+	// Global transport: MIDI clock edge and Start.
+	engine.handleMidi(0xF8);
+	engine.handleMidi(0xFA);
+
+	AnchorToHeadsMsg wire;
+	engine.midi().injectMidi(wire);
+
+	MetaModuleHeadMidiSnapshot snapshot;
+	snapshot.midiClockSeq = wire.midiClockSeq;
+	snapshot.midiStartSeq = wire.midiStartSeq;
+	snapshot.midiStopSeq = wire.midiStopSeq;
+	snapshot.midiContinueSeq = wire.midiContinueSeq;
+	for (int h = 0; h < kMaxHeads; h++) {
+		for (int c = 0; c < kMidiHeadControls; c++) {
+			snapshot.headCcSeq[h][c] = wire.headCcSeq[h][c];
+			snapshot.headCcValue[h][c] = wire.headCcValue[h][c];
+		}
+	}
+
+	MetaModuleHeadMidiRegistry registry;
+	registry.publishMidi(3, snapshot);
+	MetaModuleHeadMidiSnapshot read;
+	CHECK(registry.readMidi(3, /*coreValid=*/true, read));
+
+	CHECK(read.midiClockSeq == engine.midi().midiClockSeq);
+	CHECK(read.midiStartSeq == engine.midi().midiStartSeq);
+	CHECK(read.midiStopSeq == engine.midi().midiStopSeq);
+	CHECK(read.midiContinueSeq == engine.midi().midiContinueSeq);
+	CHECK(read.headCcSeq[3][5] == engine.midi().headCcSeq[3][5]);
+	CHECK(read.headCcValue[3][5] == doctest::Approx(engine.midi().headCcValue[3][5]));
+	CHECK(read.headCcSeq[3][8] == engine.midi().headCcSeq[3][8]);
+	CHECK(read.headCcValue[3][8] == doctest::Approx(engine.midi().headCcValue[3][8]));
+	CHECK(read.headCcSeq[0][9] == engine.midi().headCcSeq[0][9]);
+	CHECK(read.headCcSeq[0][1] == engine.midi().headCcSeq[0][1]);
+	CHECK(read.midiClockSeq > 0);
+	CHECK(read.midiStartSeq > 0);
+}
+
+// ---- MIDI activity/channel status (Core -> MidiMonitor) --------------------
+
+TEST_CASE("MetaModuleMidiStatusRegistry round-trips a snapshot losslessly") {
+	MetaModuleMidiStatusRegistry registry;
+	MetaModuleMidiStatusSnapshot snapshot;
+	snapshot.inSeq = 42;
+	snapshot.clkSeq = 7;
+	snapshot.outSeq = 3;
+	snapshot.controlChannel = 16 - 1;
+	snapshot.sliderChannel = 15 - 1;
+	snapshot.lastStatus = 0xB4;
+	snapshot.lastChannel = 4;
+	snapshot.lastNumber = 9;
+	snapshot.lastValue = 127;
+	snapshot.lastRoute = MIDI_ROUTE_HEAD;
+
+	registry.publish(1, snapshot);
+	MetaModuleMidiStatusSnapshot read;
+	CHECK(registry.read(1, /*coreValid=*/true, read));
+	CHECK(read.inSeq == 42);
+	CHECK(read.clkSeq == 7);
+	CHECK(read.outSeq == 3);
+	CHECK(read.controlChannel == 15);
+	CHECK(read.sliderChannel == 14);
+	CHECK(read.lastStatus == 0xB4);
+	CHECK(read.lastChannel == 4);
+	CHECK(read.lastNumber == 9);
+	CHECK(read.lastValue == 127);
+	CHECK(read.lastRoute == (uint8_t)MIDI_ROUTE_HEAD);
+}
+
+TEST_CASE("MetaModuleMidiStatusRegistry preserves -1 sentinels (no MIDI seen yet)") {
+	MetaModuleMidiStatusRegistry registry;
+	MetaModuleMidiStatusSnapshot snapshot;  // defaults: lastStatus/Channel/Number/Value = -1
+	registry.publish(2, snapshot);
+	MetaModuleMidiStatusSnapshot read;
+	CHECK(registry.read(2, /*coreValid=*/true, read));
+	CHECK(read.lastStatus == -1);
+	CHECK(read.lastChannel == -1);
+	CHECK(read.lastNumber == -1);
+	CHECK(read.lastValue == -1);
+}
+
+TEST_CASE("MetaModuleMidiStatusRegistry gates on coreValid and heartbeat, same as the other EB8 buses") {
+	MetaModuleMidiStatusRegistry registry;
+	MetaModuleMidiStatusSnapshot never;
+	CHECK_FALSE(registry.read(3, /*coreValid=*/true, never));  // never published
+
+	MetaModuleMidiStatusSnapshot snapshot;
+	snapshot.inSeq = 5;
+	registry.publish(3, snapshot);
+	CHECK_FALSE(registry.read(3, /*coreValid=*/false, never));  // no valid Core
+
+	MetaModuleMidiStatusSnapshot read;
+	CHECK(registry.read(3, /*coreValid=*/true, read));
+	CHECK(read.inSeq == 5);
+}
+
+// Parity claim: a real MidiCore's own last-event/channel state, as Core.cpp
+// will read it, survives the bus round trip exactly.
+TEST_CASE("A real MidiCore's status fields survive the MetaModuleMidiStatusRegistry round trip") {
+	SpaceTimeEngine engine;
+	engine.handleMidi(0xB0, 9, 127);  // head 0, CC 9 (clock source)
+
+	MetaModuleMidiStatusSnapshot snapshot;
+	snapshot.controlChannel = (uint8_t)engine.midi().controlChannel;
+	snapshot.sliderChannel = (uint8_t)engine.midi().sliderChannel;
+	snapshot.lastStatus = engine.midi().lastStatus;
+	snapshot.lastChannel = engine.midi().lastChannel;
+	snapshot.lastNumber = engine.midi().lastNumber;
+	snapshot.lastValue = engine.midi().lastValue;
+	snapshot.lastRoute = engine.midi().lastRoute;
+
+	MetaModuleMidiStatusRegistry registry;
+	registry.publish(0, snapshot);
+	MetaModuleMidiStatusSnapshot read;
+	CHECK(registry.read(0, /*coreValid=*/true, read));
+	CHECK(read.lastStatus == engine.midi().lastStatus);
+	CHECK(read.lastChannel == engine.midi().lastChannel);
+	CHECK(read.lastNumber == engine.midi().lastNumber);
+	CHECK(read.lastValue == engine.midi().lastValue);
+	CHECK(read.lastRoute == engine.midi().lastRoute);
+	CHECK(read.lastRoute == (uint8_t)MIDI_ROUTE_HEAD);
 }

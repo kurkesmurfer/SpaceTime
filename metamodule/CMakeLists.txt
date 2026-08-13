@@ -21,9 +21,13 @@ project(SpaceTimeMetaModule
 
 add_library(SpaceTime STATIC)
 target_sources(SpaceTime PRIVATE
-        src/Core.cpp
+        src/Program.cpp
         src/TimingBus.cpp
         src/TimingMonitor.cpp
+        src/RemoteBus.cpp
+        src/Head.cpp
+        src/Stage4.cpp
+        src/Midi.cpp
         src/Probe.cpp
         src/plugin.cpp)
 target_include_directories(SpaceTime PRIVATE

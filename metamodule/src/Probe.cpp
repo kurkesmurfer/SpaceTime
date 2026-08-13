@@ -19,9 +19,32 @@ enum class ProbeStatus { Waiting, Linked, Duplicate };
 
 spacetime::MetaModuleBusProbeRegistry probeRegistry;
 
+// Reads the CPU's own affinity/multiprocessor-ID register to tell which
+// physical core this code is currently running on -- purely diagnostic (the
+// "C1"/"C2" suffix on the probe's display, verified against real hardware
+// distribution in the Bus-probe hardware test). The real MetaModule target
+// is AArch32 (Cortex-A7), where this has always been `mrc p15, 0, %0, c0, c0,
+// 5` (MPIDR via CP15) -- unchanged below. That instruction doesn't exist in
+// AArch64, so it fails to build for the simulator on an Apple Silicon Mac
+// (AArch64 host); this only came up once the simulator started actually
+// building SpaceTime, since the hardware build never compiles this path
+// through anything but a real arm-none-eabi-gcc AArch32 target.
 uint32_t currentProcessorCore() {
 	uint32_t affinity = 0;
+#if defined(__arm__)
 	asm volatile("mrc p15, 0, %0, c0, c0, 5" : "=r"(affinity));
+#elif defined(__aarch64__)
+	// AArch64 equivalent register (e.g. simulator on Apple Silicon). Reports
+	// a real host core affinity, but the simulator doesn't model
+	// MetaModule's own dual-core scheduler/plugin distribution, so treat
+	// this as "doesn't crash" rather than "meaningful cross-core test."
+	uint64_t mpidr = 0;
+	asm volatile("mrs %0, mpidr_el1" : "=r"(mpidr));
+	affinity = (uint32_t)mpidr;
+#else
+	// No affinity register on this host (e.g. x86_64 simulator build) --
+	// nothing meaningful to read, so this stays at its 0 default.
+#endif
 	return affinity & 0xff;
 }
 

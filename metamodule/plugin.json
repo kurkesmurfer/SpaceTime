@@ -8,14 +8,29 @@
   "authorEmail": "",
   "modules": [
     {
-      "slug": "Core",
-      "name": "SpaceTime Core",
-      "description": "64-stage, eight-head SpaceTime engine with integrated MIDI"
+      "slug": "Program",
+      "name": "SpaceTime Program",
+      "description": "64-stage, eight-head SpaceTime engine with integrated MIDI -- the MetaModule twin of VCV's Program, merged with Core"
     },
     {
       "slug": "TimingMonitor",
       "name": "SpaceTime Timing Monitor",
       "description": "Diagnostic clock-to-stage timing monitor for eight SpaceTime heads"
+    },
+    {
+      "slug": "Head",
+      "name": "SpaceTime Head",
+      "description": "Relocated SpaceTime head: runs its own Function Generator, bound to a Program over the shared-memory bus. Slug matches VCV's real Head (mechanics differ: bus-bound, not expander-chained)"
+    },
+    {
+      "slug": "Stage4",
+      "name": "SpaceTime Stage4",
+      "description": "Publishes 4 stages' voltage/time to a Program over the shared-memory bus; owns no data. Slug matches VCV's real Stage4 (mechanics differ: bus-bound, not expander-chained, no local program-word storage)"
+    },
+    {
+      "slug": "Midi",
+      "name": "SpaceTime Midi",
+      "description": "Read-only MIDI activity and channel monitor for a Program, matching VCV's separate Midi module's slug (mechanics differ: read-only, no device queues)"
     },
     {
       "slug": "BusProbeCore",

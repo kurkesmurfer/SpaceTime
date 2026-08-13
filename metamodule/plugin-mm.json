@@ -1,11 +1,15 @@
 {
+  "MetaModuleBrandName": "Kurkesmurfer",
   "MetaModulePluginMaintainer": "Kurkesmurfer",
   "MetaModulePluginMaintainerEmail": "",
   "MetaModulePluginMaintainerUrl": "https://www.kurkesmurfer.com/",
   "MetaModuleDescription": "SpaceTime Core development plugin with shared-bus probes",
   "MetaModuleIncludedModules": [
-    { "slug": "Core", "name": "SpaceTime Core" },
+    { "slug": "Program", "name": "SpaceTime Program" },
     { "slug": "TimingMonitor", "name": "SpaceTime Timing Monitor" },
+    { "slug": "Head", "name": "SpaceTime Head" },
+    { "slug": "Stage4", "name": "SpaceTime Stage4" },
+    { "slug": "Midi", "name": "SpaceTime Midi" },
     { "slug": "BusProbeCore", "name": "BUS PROBE CORE" },
     { "slug": "BusProbeRemote", "name": "BUS PROBE REMOTE" }
   ]
