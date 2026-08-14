@@ -454,6 +454,7 @@ struct Program : Module {
 
 		// ---- Message out to the blocks
 		om.selectedStage = (uint8_t)logic.selectedStage();
+		om.scaleKey = logic.scaleKey();
 		om.headCount = statusValid ? sm->headCount : 0;
 		for (int i = 0; i < om.headCount; i++)
 			om.status[i] = sm->status[i];

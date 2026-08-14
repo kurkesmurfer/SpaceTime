@@ -314,6 +314,8 @@ TEST_CASE("blockRelayRight increments hop index, payload intact") {
 	AnchorToBlocksMsg in;
 	in.valid = true;
 	in.selectedStage = 13;
+	in.scaleKey.key = 9;
+	in.scaleKey.scale = 1;
 	in.headCount = 2;
 	in.status[1].headId = 1;
 	in.status[1].currentStage = 30;
@@ -324,6 +326,8 @@ TEST_CASE("blockRelayRight increments hop index, payload intact") {
 	blockRelayRight(in, out);
 	CHECK(out.hopIndex == 1);
 	CHECK(out.selectedStage == 13);
+	CHECK(out.scaleKey.key == 9);
+	CHECK(out.scaleKey.scale == 1);
 	CHECK(out.opCount == 2);
 	CHECK((out.ops[1].flags & EDIT_OP_MOVE_SLIDER) != 0);
 	CHECK(out.status[1].currentStage == 30);

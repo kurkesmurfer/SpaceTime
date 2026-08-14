@@ -31,6 +31,10 @@ python3 metamodule/scripts/render_panels.py
 
 The renderer requires CairoSVG. Program is 32 HP (304 x 240 px) so its full
 control set fits without vertical overflow; Stage4 is 12 HP (114 x 240 px).
+Stage4 reads Program's authoritative key, scale and stage table to show the
+same note/cent and nominal-time annotations as its VCV counterpart. External
+voltage or time sources are shown as `EXT` because their live result belongs to
+the connected Program inputs and Head timing context.
 
 ## Simulator (intermediate testing, no hardware needed)
 
@@ -134,6 +138,24 @@ DROID remote patch.
 
 The Core screen and action menu are the MM2 layout review. Note anything clipped,
 ambiguous or too small at the normal 240 px and reduced 180 px display scales.
+
+## Stage4 annotation hardware test
+
+1. Install the rebuilt `SpaceTime.mmplugin`, then add Program and Stage4 with
+   matching Instrument IDs and Bank 1. Wait for Stage4 to report `LINK`.
+2. Quantize stages 1-4 and move their voltage sliders. The four note names must
+   update; changing Program key or scale must update them without touching the
+   Stage4 sliders.
+3. Disable quantize on one stage. Its nearest note and cent offset must both be
+   visible. Select External voltage and confirm that stage reads `EXT`.
+4. Exercise all four time ranges and move each time slider. The compact nominal
+   times must update from milliseconds through seconds. Select External time and
+   confirm that stage reads `EXT`.
+5. Repeat one voltage and one time change over MIDI. The annotations must follow
+   Program's authoritative table even when the physical Stage4 slider position
+   is stale by design.
+6. Inspect the module at normal 240 px and reduced 180 px scales. Report clipped,
+   merged or ambiguous pitch, cents, time or stage-number text.
 
 ## Timing Monitor hardware test
 

@@ -160,7 +160,14 @@ slider crosses them (takeover), so nothing jumps.
 ## STAGE4
 
 Top sliders set stage voltage (0–10 V), bottom sliders the interval time
-within the stage's range. The A–D letters beside the travel mark the
+within the stage's range.
+The annotation below each voltage slider translates internally sourced voltage
+into a compact musical note: quantized stages show their exact note, while
+continuous stages show the nearest note and cent offset. The value above each
+interval slider shows its programmed nominal time in milliseconds or seconds.
+`EXT CV` and `EXT TIME` identify values that depend on Program's external inputs;
+Head TIME CV and external clocking can still alter the performed duration. The
+A–D letters beside the travel mark the
 quartile mapping used when a stage's voltage or time source is External. The
 LED cluster shows the edit selection and up to eight colour-coded head
 positions (dimmed when that head is stopped). Blocks may be added, removed

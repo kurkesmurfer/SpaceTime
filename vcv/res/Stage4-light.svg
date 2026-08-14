@@ -13,11 +13,11 @@
 
   <rect x="4" y="15.7" width="7" height="0.27" fill="#9a9288"/>
   <rect x="39.8" y="15.7" width="7" height="0.27" fill="#9a9288"/>
-  <rect x="4" y="63.9" width="8.5" height="0.27" fill="#9a9288"/>
-  <rect x="38.3" y="63.9" width="8.5" height="0.27" fill="#9a9288"/>
+  <rect x="4" y="73.4" width="8.5" height="0.27" fill="#9a9288"/>
+  <rect x="38.3" y="73.4" width="8.5" height="0.27" fill="#9a9288"/>
 
-  <rect x="4.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
-  <rect x="15.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
-  <rect x="26.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
-  <rect x="37.7" y="48.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="4.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="15.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="26.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
+  <rect x="37.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#2b2723" stroke="#81786e" stroke-width="0.25"/>
 </svg>
