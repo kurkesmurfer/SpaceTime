@@ -14,8 +14,8 @@
 
 namespace LayoutM {
 constexpr float CX = 10.16f;
-constexpr float ACT_Y0 = 25.0f;
-constexpr float ACT_PITCH = 9.0f;
+constexpr float ACT_Y0 = 48.2f;
+constexpr float ACT_PITCH = 10.5f;
 constexpr float OUT_Y = 116.0f;
 } // namespace LayoutM
 
@@ -349,25 +349,24 @@ struct MidiWidget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/Midi.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, CX, 5.6f, "Midi");
-		spacetime::addSubtitle(this, CX, 10.2f, "CONTROL");
+		spacetime::addVerticalHeaderLockup(this, 20.32f, "Midi", "CONTROL");
 
-		spacetime::addSectionHeading(this, CX, 16.8f, "ACTIVITY");
+		spacetime::addSectionHeading(this, CX, 42.0f, "ACTIVITY");
 		spacetime::addMicroLabel(this, CX + 5.1f, ACT_Y0 + 1.0f, "IN");
 		spacetime::addMicroLabel(this, CX + 5.1f, ACT_Y0 + ACT_PITCH + 1.0f, "CLK");
 		spacetime::addMicroLabel(this, CX + 5.1f, ACT_Y0 + 2.f * ACT_PITCH + 1.0f, "OUT");
 
-		spacetime::addSectionHeading(this, CX, 55.2f, "PROGRAM");
-		spacetime::addSectionHeading(this, CX, 78.2f, "HEADS");
-		spacetime::addMicroLabel(this, CX, 101.0f, "MIDI IN");
+		spacetime::addSectionHeading(this, CX, 78.2f, "PROGRAM");
+		spacetime::addSectionHeading(this, CX, 99.2f, "HEADS");
+		spacetime::addMicroLabel(this, CX, 109.0f, "MIDI IN");
 		spacetime::addMicroLabel(this, CX, OUT_Y + 4.6f, "MIDI OUT");
 
 		auto* ch = new MidiReadout;
 		ch->module = module;
-		ch->box.pos = mm2px(Vec(2.7f, 59.0f));
+		ch->box.pos = mm2px(Vec(2.7f, 82.0f));
 		ch->box.size = mm2px(Vec(14.9f, 12.0f));
 		addChild(ch);
-		spacetime::addMicroLabel(this, CX, 87.5f, "CH 1-8");
+		spacetime::addMicroLabel(this, CX, 103.5f, "CH 1-8");
 #endif
 
 		addChild(createLightCentered<MediumLight<GreenLight>>(mm2px(Vec(CX - 3.7f, ACT_Y0)), module, Midi::IN_LIGHT));

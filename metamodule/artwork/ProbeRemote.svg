@@ -1,10 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="40.64mm" height="128.5mm" viewBox="0 0 40.64 128.5">
-  <rect width="40.64" height="128.5" fill="#f0eee7"/>
+  <rect width="40.64" height="128.5" fill="#e7e4de"/>
   <rect x="0.5" y="0.5" width="39.64" height="127.5" fill="none" stroke="#a9a49b" stroke-width="0.5"/>
-  <text x="20.32" y="7" fill="#24211d" font-family="sans-serif" font-size="4" text-anchor="middle">BUS PROBE</text>
-  <text x="20.32" y="12" fill="#2e7d77" font-family="sans-serif" font-size="3" text-anchor="middle">REMOTE</text>
-  <text x="20.32" y="45" fill="#57524c" font-family="sans-serif" font-size="3" text-anchor="middle">SEND</text>
-  <text x="20.32" y="73" fill="#57524c" font-family="sans-serif" font-size="3" text-anchor="middle">SEEN CORE</text>
-  <text x="20.32" y="101" fill="#57524c" font-family="sans-serif" font-size="3" text-anchor="middle">STATUS</text>
-  <text x="20.32" y="123" fill="#d66a16" font-family="sans-serif" font-size="2.5" text-anchor="middle">KURKESMURFER</text>
+  <!-- kurkesmurfer-style-v1 -->
+  <image href="../../vcv/res/kurkesmurfer-panel-logo.svg" x="6.960" y="3.2" width="2.57" height="5.2"/>
+  <text x="22.205" y="5.8" text-anchor="middle" dominant-baseline="middle" fill="#2b2520" font-family="Fraunces" font-weight="600" font-size="5.4187" letter-spacing="0.1355">Bus Probe</text>
+  <path d="M 3 10.2 H 15.420" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+  <text x="20.320" y="10.2" text-anchor="middle" dominant-baseline="middle" fill="#5d554d" font-family="Barlow Condensed" font-weight="500" font-size="2.3707" letter-spacing="0.2032">REMOTE</text>
+  <path d="M 25.220 10.2 H 37.640" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+  <rect x="3.2" y="13.0" width="34.24" height="18.0" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="38.5" width="34.24" height="80.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <text x="20.32" y="45" fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="3" text-anchor="middle">SEND</text>
+  <text x="20.32" y="73" fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="3" text-anchor="middle">SEEN CORE</text>
+  <text x="20.32" y="101" fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="3" text-anchor="middle">STATUS</text>
+  <text x="20.32" y="125.0" fill="#332d27" font-family="Barlow Condensed" font-weight="600" font-size="5.1477" letter-spacing="0.2540" text-anchor="middle" dominant-baseline="middle">kurkesmurfer</text>
 </svg>

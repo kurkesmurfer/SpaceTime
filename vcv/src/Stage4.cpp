@@ -326,7 +326,7 @@ struct Stage4Widget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/Stage4.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, 25.4f, 5.6f, "Stage4");
+		spacetime::addHeaderLockup(this, 50.8f, "Stage4", 18.40f);
 		spacetime::addSubtitle(this, 25.4f, 10.2f, "STAGE BLOCK");
 		spacetime::addSectionHeading(this, 25.4f, 15.8f, "OUTPUT VOLTAGE");
 		spacetime::addSectionHeading(this, 25.4f, INTERVAL_HEADING_Y, "INTERVAL TIME");
@@ -344,7 +344,7 @@ struct Stage4Widget : ModuleWidget {
 		for (int s = 0; s < 4; s++)
 			spacetime::addKnobLabel(this, COL_X0 + COL_PITCH * s, STAGE_LABEL_Y,
 				string::f("%d", s + 1));
-		addChild(new spacetime::CornerMark(50.8f, 128.5f, 0.70f, 3.21f, 4.f));
+		spacetime::addManufacturerWordmark(this, 50.8f);
 #endif
 
 		for (int s = 0; s < 4; s++) {

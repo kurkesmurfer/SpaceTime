@@ -230,7 +230,7 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 107.5f)), module, SpaceTimeStage4::TIME_PARAMS + s));
 		}
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 6.f)), module, SpaceTimeStage4::LINK_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 42.f)), module, SpaceTimeStage4::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

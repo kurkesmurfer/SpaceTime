@@ -139,6 +139,80 @@ inline void addMicroLabel(ModuleWidget* w, float xmm, float ymm, const std::stri
 	addLabel(w, xmm, ymm, text, fontLabelSemiBold(), 5.5f, colorLabelCV(), 0.4f, colorLabelCVLight());
 }
 
+inline void addHeaderLockup(ModuleWidget* w, float panelWidthMm,
+		const std::string& title, float titleWidthMm) {
+	constexpr float markHeightMm = 5.2f;
+	constexpr float markWidthMm = markHeightMm * (5.41f / 10.94f);
+	constexpr float gapMm = 1.2f;
+	float leftMm = (panelWidthMm - markWidthMm - gapMm - titleWidthMm) * 0.5f;
+	addTitle(w, leftMm + markWidthMm + gapMm + titleWidthMm * 0.5f, 5.8f, title);
+}
+
+struct RotatedPanelText : PanelText {
+	float rotation = 0.f;
+	void draw(const DrawArgs& args) override {
+		nvgSave(args.vg);
+		nvgRotate(args.vg, rotation);
+		PanelText::draw(args);
+		nvgRestore(args.vg);
+	}
+};
+
+inline void addVerticalHeaderLockup(ModuleWidget* w, float panelWidthMm,
+		const std::string& title, const std::string& subtitle) {
+	auto addRotated = [=](float y, const std::string& text,
+			std::shared_ptr<rack::window::Font> font, float size,
+			NVGcolor dark, float spacing, NVGcolor light) {
+		auto* t = new RotatedPanelText;
+		t->text = text;
+		t->font = font;
+		t->fontSize = size;
+		t->color = dark;
+		t->lightColor = light;
+		t->themeAware = true;
+		t->letterSpacing = spacing;
+		t->rotation = 0.5f * M_PI;
+		t->box.pos = mm2px(Vec(panelWidthMm * 0.5f, y));
+		t->box.size = Vec(0, 0);
+		w->addChild(t);
+	};
+	addRotated(18.2f, title, fontTitle(), 16.f, colorTitle(), 0.4f, colorTitleLight());
+	addRotated(33.5f, subtitle, fontLabelMedium(), 7.f,
+		colorSubtitle(), 0.6f, colorSubtitleLight());
+}
+
+struct ManufacturerWordmark : PanelText {
+	float panelWidthPx = 0.f;
+	void draw(const DrawArgs& args) override {
+		auto f = font ? font : APP->window->uiFont;
+		if (!f || !f->handle) return;
+		nvgFontFaceId(args.vg, f->handle);
+		nvgFontSize(args.vg, fontSize);
+		nvgTextLetterSpacing(args.vg, letterSpacing);
+		float wordWidth = nvgTextBounds(args.vg, 0.f, 0.f, text.c_str(), NULL, NULL);
+		float characterSpace = nvgTextBounds(args.vg, 0.f, 0.f, " ", NULL, NULL);
+		float screwInnerEdgePx = mm2px(Vec(4.5f, 0.f)).x;
+		if (wordWidth + 2.f * characterSpace > panelWidthPx - 2.f * screwInnerEdgePx)
+			return;
+		PanelText::draw(args);
+	}
+};
+
+inline void addManufacturerWordmark(ModuleWidget* w, float panelWidthMm) {
+	auto* t = new ManufacturerWordmark;
+	t->text = "kurkesmurfer";
+	t->font = fontLabelSemiBold();
+	t->fontSize = 15.2f;
+	t->color = colorLabelPrimary();
+	t->lightColor = colorLabelPrimaryLight();
+	t->themeAware = true;
+	t->letterSpacing = 0.75f;
+	t->panelWidthPx = mm2px(Vec(panelWidthMm, 0.f)).x;
+	t->box.pos = mm2px(Vec(panelWidthMm * 0.5f, 125.f));
+	t->box.size = Vec(0, 0);
+	w->addChild(t);
+}
+
 // Kurkesmurfer's bent-corkscrew mark is deliberately a single continuous
 // spiral with a K-like handle. The panel SVG is the subdued Rack treatment:
 // 65% spiral opacity and 75% handle/joint opacity. Keep the full-strength

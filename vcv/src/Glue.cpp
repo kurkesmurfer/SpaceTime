@@ -293,18 +293,13 @@ struct GlueWidget : ModuleWidget {
 			asset::plugin(pluginInstance, lightPanel),
 			asset::plugin(pluginInstance, darkPanel)));
 #ifndef METAMODULE
-		spacetime::addMicroLabel(this, 5.08f, 6.f, "GLUE");
-		spacetime::addLabel(this, 5.08f, 12.f, direction, spacetime::fontTitle(),
-		                    13.f, spacetime::colorTitle(), 0.f,
-		                    spacetime::colorTitleLight());
-		spacetime::addMicroLabel(this, 5.08f, 18.f, "LINK");
-		addChild(new spacetime::CornerMark(10.16f, 128.5f, 0.70f, 1.04f, 4.f));
+		spacetime::addVerticalHeaderLockup(this, 10.16f, "Glue", direction);
 #endif
 		addChild(createLightCentered<MediumLight<GreenRedLight>>(
-			mm2px(Vec(5.08f, 25.f)), module, GlueEndpoint::LINK_LIGHT_GREEN));
+			mm2px(Vec(5.08f, 48.2f)), module, GlueEndpoint::LINK_LIGHT_GREEN));
 		GlueReadout* readout = new GlueReadout;
 		readout->module = module;
-		readout->box.pos = mm2px(Vec(5.08f, 36.f));
+		readout->box.pos = mm2px(Vec(5.08f, 60.f));
 		addChild(readout);
 	}
 

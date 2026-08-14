@@ -224,7 +224,7 @@ struct HeadAllWidget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/HeadAll.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, CX, 5.6f, "Head All");
+		spacetime::addHeaderLockup(this, 50.8f, "Head All", 23.27f);
 		spacetime::addSubtitle(this, CX, 10.2f, "COMMON CONTROL");
 		spacetime::addSectionHeading(this, CX, 14.7f, "TRANSPORT");
 		static const char* btnNames[4] = {"START", "STOP", "ADV", "RST"};
@@ -260,7 +260,7 @@ struct HeadAllWidget : ModuleWidget {
 			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.6f, in2[i]);
 		}
 		spacetime::addSectionHeading(this, CX, 109.f, "COMMON HEAD BUS");
-		addChild(new spacetime::CornerMark(50.8f, 128.5f, 0.70f, 3.21f, 4.f));
+		spacetime::addManufacturerWordmark(this, 50.8f);
 #endif
 
 		addParam(createParamCentered<VCVButton>(mm2px(Vec(BTN_X0, BTN_Y)), module, HeadAll::START_PARAM));

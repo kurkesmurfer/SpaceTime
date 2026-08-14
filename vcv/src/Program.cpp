@@ -684,7 +684,7 @@ struct ProgramWidget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/Program.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, 45.72f, 5.6f, "Program");
+		spacetime::addHeaderLockup(this, 91.44f, "Program", 24.16f);
 		spacetime::addSubtitle(this, 45.72f, 10.2f, "PROGRAMMING SECTION");
 		spacetime::addKnobLabel(this, DISPLAY_X, 13.2f, "STAGE");
 		spacetime::addKnobLabel(this, SCROLL_X, 13.2f, "SELECT");

@@ -473,7 +473,7 @@ struct HeadWidget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/Head.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, CX, 5.6f, "Head");
+		spacetime::addHeaderLockup(this, 50.8f, "Head", 14.20f);
 		spacetime::addSubtitle(this, CX, 10.2f, "FUNCTION GENERATOR");
 
 		spacetime::addSectionHeading(this, CX, 14.7f, "TRANSPORT");
