@@ -20,7 +20,7 @@ constexpr float COL_X0 = 9.4f, COL_PITCH = 11.f;
 constexpr float VSLIDER_Y = 33.f;
 constexpr float ANNOTATION_Y = 47.8f;
 constexpr float DOTS_Y0 = 62.5f;
-constexpr float INTERVAL_HEADING_Y = 73.5f;
+constexpr float INTERVAL_HEADING_Y = 74.5f;
 constexpr float DURATION_Y = 80.5f;
 constexpr float TSLIDER_Y = 97.25f;
 constexpr float STAGE_LABEL_Y = 114.5f;

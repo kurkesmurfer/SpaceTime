@@ -21,7 +21,7 @@ constexpr float DIR_X = 10.f, CLKSRC_X = 25.4f, CLKDIV_X = 41.f;
 constexpr float PLAY2_Y = 78.f;
 constexpr float TIMECV_X = 10.f, LOOP_X = 25.4f, LINK_X = 41.f;
 constexpr float JACK_X0 = 9.4f, JACK_PITCH = 11.f;
-constexpr float IN1_Y = 89.f, IN2_Y = 98.5f;
+constexpr float IN1_Y = 92.f, IN2_Y = 100.f;
 } // namespace LayoutHA
 
 struct HeadAll : Module {
@@ -232,7 +232,7 @@ struct HeadAllWidget : ModuleWidget {
 			spacetime::addCvLabel(this, BTN_X0 + BTN_PITCH * i, 26.5f, btnNames[i]);
 		spacetime::addMicroLabel(this, LINK_X, 33.8f, "LINK");
 
-		spacetime::addSectionHeading(this, CX, 36.7f, "ADDRESS");
+		spacetime::addSectionHeading(this, 9.f, 37.7f, "ADDRESS");
 		spacetime::addCvLabel(this, ADDR_KNOB_X, 53.f, "ADDRESS");
 		spacetime::addMicroLabel(this, ADDR_SRC_X, 40.f, "EXT");
 		spacetime::addMicroLabel(this, ADDR_SRC_X, 50.6f, "INT");
@@ -240,7 +240,7 @@ struct HeadAllWidget : ModuleWidget {
 		spacetime::addMicroLabel(this, ADDR_MODE_X + 5.f, 45.f, "SEQ");
 		spacetime::addMicroLabel(this, ADDR_MODE_X + 5.f, 49.f, "STRB");
 
-		spacetime::addSectionHeading(this, CX, 56.2f, "PLAYBACK");
+		spacetime::addSectionHeading(this, 9.f, 57.0f, "PLAYBACK");
 		spacetime::addCvLabel(this, DIR_X, 71.8f, "DIRECTION");
 		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 58.6f, "VCLK");
 		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 62.0f, "MIDI");
@@ -253,13 +253,14 @@ struct HeadAllWidget : ModuleWidget {
 		spacetime::addMicroLabel(this, LOOP_X + 5.6f, 82.f, "1-SHOT");
 		spacetime::addMicroLabel(this, LINK_X, 83.8f, "ALL");
 
+		spacetime::addMicroLabel(this, 7.5f, 86.8f, "INPUTS");
 		static const char* in1[4] = {"START", "STOP", "ADV", "STRB"};
 		static const char* in2[4] = {"ADDR", "CLK", "TIME", "RST"};
 		for (int i = 0; i < 4; i++) {
-			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 4.6f, in1[i]);
-			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.6f, in2[i]);
+			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 4.1f, in1[i]);
+			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.1f, in2[i]);
 		}
-		spacetime::addSectionHeading(this, CX, 109.f, "COMMON HEAD BUS");
+		spacetime::addSectionHeading(this, CX, 108.f, "COMMON HEAD BUS");
 		spacetime::addManufacturerWordmark(this, 50.8f);
 #endif
 

@@ -25,21 +25,21 @@ constexpr float SCROLL_X = 30.f;
 constexpr float CLEAR_X = 43.f;
 constexpr float PULSE1_X = 57.f;
 constexpr float PULSE2_X = 69.f;
-constexpr float VOLT_Y = 41.5f;
+constexpr float VOLT_Y = 42.f;
 constexpr float QUANT_X = 13.f;
 constexpr float SLOPE_X = 29.f;
 constexpr float RANGE_X = 45.f;
 constexpr float VSRC_X = 61.f;
-constexpr float LTD_Y = 57.5f;
+constexpr float LTD_Y = 58.f;
 constexpr float LTD_X0 = 13.f, LTD_PITCH = 12.f;
-constexpr float MODE_Y = 75.5f;
+constexpr float MODE_Y = 76.f;
 constexpr float MODE_X0 = 13.f, MODE_PITCH = 13.f;
-constexpr float TIME_Y = 94.f;
+constexpr float TIME_Y = 95.f;
 constexpr float TRANGE_X0 = 13.f, TRANGE_PITCH = 10.f;
 constexpr float TSRC_X = 64.f;
-constexpr float PRESET_Y = 110.f;
+constexpr float PRESET_Y = 109.5f;
 constexpr float PRESET_X0 = 5.5f, PRESET_PITCH = 6.3f;
-constexpr float PROW2_Y = 120.5f;
+constexpr float PROW2_Y = 116.8f;
 constexpr float LOAD_X = 14.f, SAVE_X = 28.f, KEY_X = 42.f, SCALE_X = 56.f;
 constexpr float EXT_X = 84.f;
 constexpr float EXT_Y0 = 20.f, EXT_PITCH = 9.5f;
@@ -691,52 +691,52 @@ struct ProgramWidget : ModuleWidget {
 		spacetime::addKnobLabel(this, CLEAR_X, 13.2f, "CLEAR");
 		spacetime::addKnobLabel(this, PULSE1_X, 13.2f, "PULSE 1");
 		spacetime::addKnobLabel(this, PULSE2_X, 13.2f, "PULSE 2");
-		spacetime::addSectionHeading(this, 37.f, 28.1f, "OUTPUT VOLTAGE");
-		spacetime::addKnobLabel(this, QUANT_X, 33.4f, "QUANT");
-		spacetime::addKnobLabel(this, SLOPE_X, 33.4f, "SLOPE");
-		spacetime::addKnobLabel(this, RANGE_X, 33.4f, "RANGE");
-		spacetime::addKnobLabel(this, VSRC_X, 33.4f, "SOURCE");
-		spacetime::addCvLabel(this, QUANT_X, 48.9f, "CONT");
-		spacetime::addCvLabel(this, SLOPE_X, 48.9f, "STEP");
-		spacetime::addCvLabel(this, VSRC_X, 48.9f, "INT / EXT");
+		spacetime::addSectionHeading(this, 37.f, 30.5f, "OUTPUT VOLTAGE");
+		spacetime::addKnobLabel(this, QUANT_X, 34.9f, "QUANT");
+		spacetime::addKnobLabel(this, SLOPE_X, 34.9f, "SLOPE");
+		spacetime::addKnobLabel(this, RANGE_X, 34.9f, "RANGE");
+		spacetime::addKnobLabel(this, VSRC_X, 34.9f, "SOURCE");
+		spacetime::addCvLabel(this, QUANT_X, 49.4f, "CONT");
+		spacetime::addCvLabel(this, SLOPE_X, 49.4f, "STEP");
+		spacetime::addCvLabel(this, VSRC_X, 49.4f, "INT / EXT");
 		spacetime::addMicroLabel(this, SLOPE_X + 7.8f, 39.6f, "1");
 		spacetime::addMicroLabel(this, SLOPE_X + 7.8f, 43.6f, "2");
 		spacetime::addMicroLabel(this, RANGE_X + 8.f, 38.6f, "F");
 		spacetime::addMicroLabel(this, RANGE_X + 8.f, 41.6f, "H");
 		spacetime::addMicroLabel(this, RANGE_X + 8.f, 44.6f, "L");
-		spacetime::addCvLabel(this, 37.f, 52.5f, "LIMITED RANGE / OCTAVE");
+		spacetime::addCvLabel(this, 37.f, 53.0f, "LIMITED RANGE / OCTAVE");
 		{
 			static const char* ltdNames[5] = {"-2", "-1", "0", "+1", "+2"};
 			for (int i = 0; i < 5; i++)
-				spacetime::addCvLabel(this, LTD_X0 + LTD_PITCH * i, 61.9f, ltdNames[i]);
+				spacetime::addCvLabel(this, LTD_X0 + LTD_PITCH * i, 62.2f, ltdNames[i]);
 		}
-		spacetime::addSectionHeading(this, 39.f, 66.1f, "OPERATING MODE");
+		spacetime::addSectionHeading(this, 39.f, 68.0f, "OPERATING MODE");
 		{
 			static const char* modeNames[5] = {"STOP", "SUST", "ENBL", "FIRST", "LAST"};
 			for (int i = 0; i < 5; i++)
-				spacetime::addKnobLabel(this, MODE_X0 + MODE_PITCH * i, 82.6f, modeNames[i]);
+				spacetime::addKnobLabel(this, MODE_X0 + MODE_PITCH * i, 83.1f, modeNames[i]);
 		}
 		spacetime::addMicroLabel(this, MODE_X0 + MODE_PITCH * 3.5f, 85.4f, "- CYCLE -");
-		spacetime::addSectionHeading(this, 39.f, 88.f, "INTERVAL TIME");
+		spacetime::addSectionHeading(this, 39.f, 89.9f, "INTERVAL TIME");
 		{
 			static const char* trangeLabels[4] = {".03", ".3", "3", "30"};
 			for (int i = 0; i < 4; i++)
-				spacetime::addCvLabel(this, TRANGE_X0 + TRANGE_PITCH * i, 98.5f, trangeLabels[i]);
+				spacetime::addCvLabel(this, TRANGE_X0 + TRANGE_PITCH * i, 99.4f, trangeLabels[i]);
 		}
-		spacetime::addMicroLabel(this, 52.5f, 98.5f, "SEC");
-		spacetime::addCvLabel(this, TSRC_X, 101.2f, "SOURCE");
-		spacetime::addSectionHeading(this, 39.f, 104.3f, "PRESETS / KEY / SCALE");
+		spacetime::addMicroLabel(this, 52.5f, 99.4f, "SEC");
+		spacetime::addCvLabel(this, TSRC_X, 101.5f, "SOURCE");
+		spacetime::addSectionHeading(this, 39.f, 105.8f, "PRESETS / KEY / SCALE");
 		{
 			static const char* notes[12] = {"C", "C#", "D", "D#", "E", "F",
 				"F#", "G", "G#", "A", "A#", "B"};
 			for (int i = 0; i < 12; i++)
-				spacetime::addMicroLabel(this, PRESET_X0 + PRESET_PITCH * i, 114.4f, notes[i]);
+				spacetime::addMicroLabel(this, PRESET_X0 + PRESET_PITCH * i, 113.5f, notes[i]);
 		}
-		spacetime::addKnobLabel(this, LOAD_X, 124.7f, "LOAD");
-		spacetime::addKnobLabel(this, SAVE_X, 124.7f, "SAVE");
-		spacetime::addKnobLabel(this, KEY_X, 124.7f, "KEY");
-		spacetime::addKnobLabel(this, SCALE_X, 124.7f, "SCALE");
-		spacetime::addIoLabel(this, EXT_X, 13.2f, "EXT");
+		spacetime::addKnobLabel(this, LOAD_X, 121.4f, "LOAD");
+		spacetime::addKnobLabel(this, SAVE_X, 121.4f, "SAVE");
+		spacetime::addKnobLabel(this, KEY_X, 121.4f, "KEY");
+		spacetime::addKnobLabel(this, SCALE_X, 121.4f, "SCALE");
+		spacetime::addSectionHeading(this, EXT_X - 2.f, 14.2f, "EXTERNAL");
 		for (int i = 0; i < 4; i++) {
 			static const char* extNames[4] = {"A", "B", "C", "D"};
 			spacetime::addIoLabel(this, EXT_X - 5.7f, EXT_Y0 + EXT_PITCH * i, extNames[i]);
@@ -767,11 +767,11 @@ struct ProgramWidget : ModuleWidget {
 		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(VSRC_X, VOLT_Y)), module, Program::VSOURCE_PARAM));
 
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(QUANT_X + 4.5f, VOLT_Y)), module, Program::QUANTIZE_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(SLOPE_X + 4.5f, 39.5f)), module, Program::SLOPE1_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(SLOPE_X + 4.5f, 43.5f)), module, Program::SLOPE2_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 38.5f)), module, Program::RANGE_FULL_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 41.5f)), module, Program::RANGE_HALF_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 44.5f)), module, Program::RANGE_LTD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(SLOPE_X + 4.5f, 40.f)), module, Program::SLOPE1_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(SLOPE_X + 4.5f, 44.f)), module, Program::SLOPE2_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 39.f)), module, Program::RANGE_FULL_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 42.f)), module, Program::RANGE_HALF_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(RANGE_X + 4.5f, 45.f)), module, Program::RANGE_LTD_LIGHT));
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(VSRC_X + 4.5f, VOLT_Y)), module, Program::VSOURCE_LIGHT));
 
 		spacetime::addLimitedBank(this, module, LTD_X0, LTD_Y, LTD_PITCH,
@@ -784,7 +784,7 @@ struct ProgramWidget : ModuleWidget {
 		for (int i = 0; i < 5; i++) {
 			float x = MODE_X0 + MODE_PITCH * i;
 			addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(x, MODE_Y)), module, modeParams[i]));
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(x + 4.2f, 71.5f)), module, modeLights[i]));
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(x + 4.2f, 72.f)), module, modeLights[i]));
 		}
 
 		for (int i = 0; i < 4; i++) {
@@ -793,7 +793,7 @@ struct ProgramWidget : ModuleWidget {
 			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, TIME_Y)), module, Program::TRANGE_LIGHTS + i));
 		}
 		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(TSRC_X, TIME_Y)), module, Program::TSOURCE_PARAM));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(TSRC_X + 4.2f, 90.5f)), module, Program::TSOURCE_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(TSRC_X + 4.2f, 91.5f)), module, Program::TSOURCE_LIGHT));
 
 		spacetime::addPresetRow(this, module, PRESET_X0, PRESET_Y, PRESET_PITCH,
 			Program::PRESET_PARAMS, Program::PRESET_LIGHTS);

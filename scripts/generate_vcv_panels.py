@@ -53,16 +53,23 @@ def render(name, width, title_width, subtitle_width, profile, theme):
         lines.append(f'<path d="M {width/2-3:.3f} 10.2 H {width/2+3:.3f}" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>')
 
     if name == "Stage4":
-        box(lines, 3.0, 47.8, 14.2, 57.5, zone, opacity); box(lines, 3.0, 47.8, 74.7, 44.8, zone, opacity)
+        box(lines, 3.0, 47.8, 13.0, 58.7, zone, opacity); box(lines, 3.0, 47.8, 72.7, 48.8, zone, opacity)
         for x in (4.7, 15.7, 26.7, 37.7):
             lines.append(f'<rect x="{x}" y="55.6" width="9.4" height="12.8" rx="1.2" fill="{inset}" stroke="{ring}" stroke-width="0.25"/>')
     elif name in ("Head", "HeadAll"):
-        for y, h in ((13.5, 21.7), (36.7, 18.0), (56.2, 29.3)):
+        for y, h in ((13.0, 22.5), (36.2, 18.6), (55.5, 29.0)):
             box(lines, 3.2, 47.6, y, h, zone, opacity)
-        box(lines, 3.2, 47.6, 86.5, 37.0 if name == "Head" else 18.0, zone, opacity)
+        if name == "Head":
+            box(lines, 3.2, 47.6, 85.5, 37.7, zone, opacity)
+        else:
+            box(lines, 3.2, 47.6, 85.5, 20.0, zone, opacity)
+            box(lines, 3.2, 47.6, 106.3, 13.7, zone, opacity)
     elif name == "Program":
-        for y, h in ((14.2, 13.8), (29.0, 36.0), (67.0, 19.9), (88.9, 14.3), (104.2, 19.3)):
-            box(lines, 2.5, 88.9, y, h, zone, opacity)
+        for y, h in ((12.0, 15.2), (28.5, 36.0), (65.5, 21.0), (87.5, 15.5), (103.7, 19.5)):
+            box(lines, 2.0, 73.0, y, h, zone, opacity)
+        box(lines, 74.5, 89.7, 12.0, 41.5, zone, opacity)
+        box(lines, 74.5, 89.7, 55.0, 31.5, zone, opacity)
+        box(lines, 74.5, 89.7, 103.7, 17.8, zone, opacity)
         lines.append(f'<rect x="8" y="16.5" width="12" height="7" rx="0.8" fill="{inset}" stroke="{ring}" stroke-width="0.3"/>')
     elif name == "Midi":
         for y, h in ((41.0, 34.5), (77.5, 19.0), (98.5, 12.5), (112.0, 9.5)):

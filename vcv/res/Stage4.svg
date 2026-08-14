@@ -15,8 +15,8 @@
   <path opacity="0.75" fill="url(#grip)" stroke="#963713" stroke-width="2" stroke-linejoin="round" d="M84 143 C90 145 96 147 100 148 C103 146 106 144 109 143 C108 147 106 150 104 152 C106 157 108 163 109 170 C105 165 102 159 100 155 C94 155 88 153 82 150 C81 147 82 145 84 143 Z"/></g></g>
 <path d="M 3 10.185 H 18.190" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
 <path d="M 32.610 10.185 H 47.800" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
-<rect x="3.0" y="14.2" width="44.800" height="57.5" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
-<rect x="3.0" y="74.7" width="44.800" height="44.8" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.0" y="13.0" width="44.800" height="58.7" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.0" y="72.7" width="44.800" height="48.8" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
 <rect x="4.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
 <rect x="15.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>
 <rect x="26.7" y="55.6" width="9.4" height="12.8" rx="1.2" fill="#262019" stroke="#362c24" stroke-width="0.25"/>

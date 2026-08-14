@@ -15,8 +15,9 @@
   <path opacity="0.75" fill="url(#grip)" stroke="#963713" stroke-width="2" stroke-linejoin="round" d="M84 143 C90 145 96 147 100 148 C103 146 106 144 109 143 C108 147 106 150 104 152 C106 157 108 163 109 170 C105 165 102 159 100 155 C94 155 88 153 82 150 C81 147 82 145 84 143 Z"/></g></g>
 <path d="M 3 10.185 H 15.895" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
 <path d="M 34.905 10.185 H 47.800" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
-<rect x="3.2" y="13.5" width="44.400" height="21.7" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
-<rect x="3.2" y="36.7" width="44.400" height="18.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
-<rect x="3.2" y="56.2" width="44.400" height="29.3" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
-<rect x="3.2" y="86.5" width="44.400" height="18.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.2" y="13.0" width="44.400" height="22.5" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.2" y="36.2" width="44.400" height="18.6" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.2" y="55.5" width="44.400" height="29.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.2" y="85.5" width="44.400" height="20.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
+<rect x="3.2" y="106.3" width="44.400" height="13.7" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.5"/>
 </svg>

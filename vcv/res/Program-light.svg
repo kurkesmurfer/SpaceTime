@@ -15,10 +15,13 @@
   <path opacity="0.75" fill="url(#grip)" stroke="#963713" stroke-width="2" stroke-linejoin="round" d="M84 143 C90 145 96 147 100 148 C103 146 106 144 109 143 C108 147 106 150 104 152 C106 157 108 163 109 170 C105 165 102 159 100 155 C94 155 88 153 82 150 C81 147 82 145 84 143 Z"/></g></g>
 <path d="M 3 10.185 H 33.610" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
 <path d="M 57.830 10.185 H 88.440" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
-<rect x="2.5" y="14.2" width="86.400" height="13.8" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
-<rect x="2.5" y="29.0" width="86.400" height="36.0" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
-<rect x="2.5" y="67.0" width="86.400" height="19.9" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
-<rect x="2.5" y="88.9" width="86.400" height="14.3" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
-<rect x="2.5" y="104.2" width="86.400" height="19.3" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="2.0" y="12.0" width="71.000" height="15.2" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="2.0" y="28.5" width="71.000" height="36.0" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="2.0" y="65.5" width="71.000" height="21.0" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="2.0" y="87.5" width="71.000" height="15.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="2.0" y="103.7" width="71.000" height="19.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="74.5" y="12.0" width="15.200" height="41.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="74.5" y="55.0" width="15.200" height="31.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+<rect x="74.5" y="103.7" width="15.200" height="17.8" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
 <rect x="8" y="16.5" width="12" height="7" rx="0.8" fill="#d5d1ca" stroke="#70685f" stroke-width="0.3"/>
 </svg>
