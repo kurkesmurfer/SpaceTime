@@ -53,9 +53,11 @@ def render(name, width, title_width, subtitle_width, profile, theme):
         lines.append(f'<path d="M {width/2-3:.3f} 10.2 H {width/2+3:.3f}" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>')
 
     if name == "Stage4":
-        box(lines, 3.0, 47.8, 13.0, 58.7, zone, opacity); box(lines, 3.0, 47.8, 72.7, 48.8, zone, opacity)
+        box(lines, 3.0, 47.8, 13.0, 40.5, zone, opacity)
+        box(lines, 3.0, 47.8, 54.5, 16.8, zone, opacity)
+        box(lines, 3.0, 47.8, 72.3, 49.2, zone, opacity)
         for x in (4.7, 15.7, 26.7, 37.7):
-            lines.append(f'<rect x="{x}" y="55.6" width="9.4" height="12.8" rx="1.2" fill="{inset}" stroke="{ring}" stroke-width="0.25"/>')
+            lines.append(f'<rect x="{x}" y="55.6" width="9.4" height="12.0" rx="1.2" fill="{inset}" stroke="{ring}" stroke-width="0.25"/>')
     elif name in ("Head", "HeadAll"):
         for y, h in ((13.0, 22.5), (36.2, 18.6), (55.5, 29.0)):
             box(lines, 3.2, 47.6, y, h, zone, opacity)

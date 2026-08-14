@@ -329,6 +329,7 @@ struct Stage4Widget : ModuleWidget {
 		spacetime::addHeaderLockup(this, 50.8f, "Stage4", 18.40f);
 		spacetime::addSubtitle(this, 25.4f, 10.2f, "STAGE BLOCK");
 		spacetime::addSectionHeading(this, 25.4f, 15.8f, "OUTPUT VOLTAGE");
+		spacetime::addMicroLabel(this, 25.4f, 69.5f, "EDIT / HEADS");
 		spacetime::addSectionHeading(this, 25.4f, INTERVAL_HEADING_Y, "INTERVAL TIME");
 		{
 			static const char* quart[4] = {"D", "C", "B", "A"};
