@@ -24,8 +24,10 @@ constexpr float INTERVAL_HEADING_Y = 74.5f;
 constexpr float DURATION_Y = 80.5f;
 constexpr float TSLIDER_Y = 97.25f;
 constexpr float STAGE_LABEL_Y = 114.5f;
-constexpr float LEFT_X = 3.2f;
-constexpr float RIGHT_X = 47.8f;
+// Keep the scale legends halfway between the grouping borders and the
+// outer slider columns, so the border strokes cannot run through the text.
+constexpr float LEFT_X = 6.2f;
+constexpr float RIGHT_X = 45.1f;
 } // namespace Layout4
 
 struct Stage4 : Module {
