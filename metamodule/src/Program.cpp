@@ -697,9 +697,10 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		addParam(createParamCentered<CKSSThree>(mm2px(Vec(137.f, 52.f)), module, SpaceTimeProgram::SCALE_PARAM));
 		addParam(createParamCentered<LEDButton>(mm2px(Vec(156.f, 52.f)), module, SpaceTimeProgram::BULK_PARAM));
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(69.f, 6.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(75.f, 6.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(81.f, 6.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
+		// MIDI activity sits between the display and I/O row, outside the header.
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(69.f, 45.5f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(75.f, 45.5f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(81.f, 45.5f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
 
 		// Four modifier fields per row: Down/Up pairs across eight columns.
 		static const float gestureX[8] = {11.f, 31.f, 51.f, 71.f, 91.f, 111.f, 131.f, 151.f};

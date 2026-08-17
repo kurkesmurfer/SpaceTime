@@ -496,10 +496,11 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(OUT_X0 + i * OUT_PITCH, OUT_JACK_Y)), module,
 				SpaceTimeHead::CV_OUTPUT + i));
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(50.f, 6.5f)), module, SpaceTimeHead::RUN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(58.f, 6.5f)), module, SpaceTimeHead::HOLD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(66.f, 6.5f)), module, SpaceTimeHead::STOPPED_LIGHT));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(74.f, 6.5f)), module, SpaceTimeHead::LINK_LIGHT));
+		// Status belongs to the first functional row; keep the identity band clear.
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(50.f, 46.8f)), module, SpaceTimeHead::RUN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(58.f, 46.8f)), module, SpaceTimeHead::HOLD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(66.f, 46.8f)), module, SpaceTimeHead::STOPPED_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(74.f, 46.8f)), module, SpaceTimeHead::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

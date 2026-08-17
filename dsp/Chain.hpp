@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 6;
+static const uint32_t kChainProtocolVersion = 7;
 static const int kMidiHeadControls = 14;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
@@ -221,6 +221,7 @@ struct AnchorToBlocksMsg {
 	EditOp ops[kMaxOpsPerTick];
 	uint8_t opCount;
 	uint8_t selectedStage;         // global stage index for edit-select LED
+	ScaleKey scaleKey;             // musical context for Stage4 note readouts
 	HeadStatus status[kMaxHeads];  // merged, for head-position dots
 	uint8_t headCount;
 	uint8_t hopIndex;              // block id of the receiver

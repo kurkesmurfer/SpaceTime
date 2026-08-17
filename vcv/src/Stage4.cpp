@@ -3,6 +3,7 @@
 #include "spacetime_widgets.hpp"
 #include "ChainAdapter.hpp"
 #include "ProgramLogic.hpp"  // SliderTakeover
+#include "StageAnnotation.hpp"
 
 // ============================================================================
 // STAGE4 — WP7 integrated.
@@ -17,10 +18,16 @@
 namespace Layout4 {
 constexpr float COL_X0 = 9.4f, COL_PITCH = 11.f;
 constexpr float VSLIDER_Y = 33.f;
-constexpr float TSLIDER_Y = 81.5f;
-constexpr float DOTS_Y0 = 55.5f;
-constexpr float LEFT_X = 3.2f;
-constexpr float RIGHT_X = 47.8f;
+constexpr float ANNOTATION_Y = 47.8f;
+constexpr float DOTS_Y0 = 62.5f;
+constexpr float INTERVAL_HEADING_Y = 74.5f;
+constexpr float DURATION_Y = 80.5f;
+constexpr float TSLIDER_Y = 97.25f;
+constexpr float STAGE_LABEL_Y = 114.5f;
+// Keep the scale legends halfway between the grouping borders and the
+// outer slider columns, so the border strokes cannot run through the text.
+constexpr float LEFT_X = 6.2f;
+constexpr float RIGHT_X = 45.1f;
 } // namespace Layout4
 
 struct Stage4 : Module {
@@ -56,6 +63,8 @@ struct Stage4 : Module {
 	uint8_t lastOpStage = 0;
 	uint8_t lastOpField = 0;
 	float lastOpValue = 0.f;
+	spacetime::ScaleKey scaleKey;
+	bool musicalContextValid = false;
 	dsp::ClockDivider divider;
 
 	Stage4() {
@@ -99,6 +108,9 @@ struct Stage4 : Module {
 		const AnchorToBlocksMsg* am = leftPort.consume(leftExpander);
 		bool amValid = leftIsChain && am->valid;
 		int blockIndex = amValid ? am->hopIndex : 0;
+		musicalContextValid = amValid;
+		if (amValid)
+			scaleKey = am->scaleKey;
 
 		if (amValid && am->seq != lastSeq) {
 			lastSeq = am->seq;
@@ -258,6 +270,55 @@ struct Stage4 : Module {
 	}
 };
 
+#ifndef METAMODULE
+struct StageAnnotation : Widget {
+	Stage4* module = NULL;
+	int stage = 0;
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer != 1)
+			return;
+		auto pitchFont = spacetime::fontLabelBold();
+		auto detailFont = spacetime::fontLabelSemiBold();
+		if (!pitchFont || !pitchFont->handle || !detailFont || !detailFont->handle)
+			return;
+
+		spacetime::StageAnnotation annotation;
+		annotation.pitch = "--";
+		annotation.duration = "--";
+		if (module) {
+			const spacetime::ProgramWord& word = module->program[stage];
+			annotation = spacetime::makeStageAnnotation(
+				module->effVoltage(stage), module->effTime(stage), word,
+				module->scaleKey, module->musicalContextValid);
+		}
+
+		bool dark = spacetime::useDarkPanels();
+		NVGcolor primary = dark ? spacetime::colorLabelPrimary()
+		                           : spacetime::colorLabelPrimaryLight();
+		NVGcolor secondary = dark ? spacetime::colorLabelCV()
+		                             : spacetime::colorLabelCVLight();
+		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgTextLetterSpacing(args.vg, 0.f);
+		nvgFillColor(args.vg, primary);
+		nvgFontFaceId(args.vg, pitchFont->handle);
+		nvgFontSize(args.vg, 9.f);
+		nvgText(args.vg, box.size.x / 2.f, mm2px(2.2f), annotation.pitch.c_str(), NULL);
+		if (!annotation.cents.empty()) {
+			nvgFillColor(args.vg, secondary);
+			nvgFontFaceId(args.vg, detailFont->handle);
+			nvgFontSize(args.vg, 6.f);
+			nvgText(args.vg, box.size.x / 2.f, mm2px(4.8f), annotation.cents.c_str(), NULL);
+		}
+		nvgFillColor(args.vg, secondary);
+		nvgFontFaceId(args.vg, pitchFont->handle);
+		nvgFontSize(args.vg, 9.f);
+		nvgText(args.vg, box.size.x / 2.f,
+			mm2px(Layout4::DURATION_Y - Layout4::ANNOTATION_Y), annotation.duration.c_str(), NULL);
+	}
+};
+#endif
+
 struct Stage4Widget : ModuleWidget {
 	Stage4Widget(Stage4* module) {
 		using namespace Layout4;
@@ -267,25 +328,26 @@ struct Stage4Widget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/Stage4.svg")));
 
 #ifndef METAMODULE
-		spacetime::addTitle(this, 25.4f, 5.6f, "Stage4");
+		spacetime::addHeaderLockup(this, 50.8f, "Stage4", 18.40f);
 		spacetime::addSubtitle(this, 25.4f, 10.2f, "STAGE BLOCK");
 		spacetime::addSectionHeading(this, 25.4f, 15.8f, "OUTPUT VOLTAGE");
-		spacetime::addSectionHeading(this, 25.4f, 64.f, "INTERVAL TIME");
+		spacetime::addMicroLabel(this, 25.4f, 69.5f, "EDIT / HEADS");
+		spacetime::addSectionHeading(this, 25.4f, INTERVAL_HEADING_Y, "INTERVAL TIME");
 		{
 			static const char* quart[4] = {"D", "C", "B", "A"};
 			for (int i = 0; i < 4; i++) {
 				spacetime::addMicroLabel(this, LEFT_X, 22.5f + 6.f * i, quart[i]);
-				spacetime::addMicroLabel(this, LEFT_X, 71.f + 6.f * i, quart[i]);
+				spacetime::addMicroLabel(this, LEFT_X, 86.75f + 6.f * i, quart[i]);
 			}
 		}
 		spacetime::addMicroLabel(this, RIGHT_X, 21.f, "10");
 		spacetime::addMicroLabel(this, RIGHT_X, 45.f, "0");
-		spacetime::addMicroLabel(this, RIGHT_X, 69.5f, "30");
-		spacetime::addMicroLabel(this, RIGHT_X, 93.5f, "2");
+		spacetime::addMicroLabel(this, RIGHT_X, 85.25f, "30");
+		spacetime::addMicroLabel(this, RIGHT_X, 109.25f, "2");
 		for (int s = 0; s < 4; s++)
-			spacetime::addKnobLabel(this, COL_X0 + COL_PITCH * s, 100.5f,
+			spacetime::addKnobLabel(this, COL_X0 + COL_PITCH * s, STAGE_LABEL_Y,
 				string::f("%d", s + 1));
-		addChild(new spacetime::CornerMark(50.8f, 128.5f, 0.70f, 3.21f, 4.f));
+		spacetime::addManufacturerWordmark(this, 50.8f);
 #endif
 
 		for (int s = 0; s < 4; s++) {
@@ -294,6 +356,14 @@ struct Stage4Widget : ModuleWidget {
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(x, TSLIDER_Y)), module, Stage4::TIME_PARAMS + s));
 			spacetime::addStageLedCluster(this, module, x, DOTS_Y0,
 				Stage4::EDIT_LIGHTS + s, Stage4::HEAD_LIGHTS + s * 8 * 3);
+#ifndef METAMODULE
+			StageAnnotation* annotation = createWidget<StageAnnotation>(
+				mm2px(Vec(x - 5.f, ANNOTATION_Y)));
+			annotation->box.size = mm2px(Vec(10.f, 35.f));
+			annotation->module = module;
+			annotation->stage = s;
+			addChild(annotation);
+#endif
 		}
 	}
 

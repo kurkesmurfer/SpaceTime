@@ -1,34 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="60.96mm" height="128.5mm" viewBox="0 0 60.96 128.5">
-  <rect width="60.96" height="128.5" fill="#f0eee7"/>
+  <rect width="60.96" height="128.5" fill="#e7e4de"/>
   <rect x="0.5" y="0.5" width="59.96" height="127.5" fill="none" stroke="#a9a49b" stroke-width="0.5"/>
-  <g fill="#c7c1b8" stroke="#8f887e" stroke-width="0.4">
+  <g fill="#aaa39a" stroke="#70685f" stroke-width="0.4">
     <circle cx="3.000" cy="3.500" r="1.5"/>
     <circle cx="57.960" cy="3.500" r="1.5"/>
     <circle cx="3.000" cy="125.000" r="1.5"/>
     <circle cx="57.960" cy="125.000" r="1.5"/>
   </g>
 
-  <text x="4" y="7.3" fill="#24211d" font-family="sans-serif" font-size="4.2">SPACETIME</text>
-  <text x="56.5" y="7.3" fill="#57524c" font-family="sans-serif" font-size="2.8" text-anchor="end">STAGE4</text>
-  <text x="52" y="8.9" fill="#2f8d5c" font-family="sans-serif" font-size="2.0" text-anchor="middle">LNK</text>
-  <rect x="4" y="9.8" width="52.96" height="0.27" fill="#c13c36" opacity="0.7"/>
+  <text x="56" y="35.5" fill="#2f8d5c" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="middle">LNK</text>
+
+  <!-- kurkesmurfer-style-v1 -->
+  <image href="../../vcv/res/kurkesmurfer-panel-logo.svg" x="20.945" y="3.2" width="2.57" height="5.2"/>
+  <text x="32.365" y="5.8" text-anchor="middle" dominant-baseline="middle" fill="#2b2520" font-family="Fraunces" font-weight="600" font-size="5.4187" letter-spacing="0.1355">Stage4</text>
+  <path d="M 3 10.2 H 23.255" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+  <text x="30.480" y="10.2" text-anchor="middle" dominant-baseline="middle" fill="#5d554d" font-family="Barlow Condensed" font-weight="500" font-size="2.3707" letter-spacing="0.2032">STAGE BLOCK</text>
+  <path d="M 37.705 10.2 H 57.960" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+    <rect x="3.2" y="11.1" width="54.56" height="21" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="33.2" width="54.56" height="14.3" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="48.7" width="54.56" height="37.6" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="87.7" width="54.56" height="34.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
   <rect x="3.2" y="11.1" width="54.56" height="21" rx="1.5" fill="#12100e" stroke="#a9a49b" stroke-width="0.35"/>
 
-  <g fill="#57524c" font-family="sans-serif" font-size="2.8" text-anchor="middle">
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.8" text-anchor="middle">
     <text x="15" y="35.5">INSTRUMENT ID</text>
     <text x="45" y="35.5">BANK</text>
   </g>
 
-  <rect x="4" y="48" width="52.96" height="0.27" fill="#c2bcb2"/>
-  <text x="30.48" y="52.2" fill="#24211d" font-family="sans-serif" font-size="3.0" text-anchor="middle">VOLTAGE</text>
-  <g fill="#57524c" font-family="sans-serif" font-size="2.6" text-anchor="middle">
-    <text x="10" y="79.5">1</text><text x="23.6" y="79.5">2</text><text x="37.2" y="79.5">3</text><text x="50.8" y="79.5">4</text>
+  <text x="30.48" y="52.2" fill="#24211d" font-family="Barlow Condensed" font-weight="600" font-size="3.0" text-anchor="middle">VOLTAGE</text>
+  <text x="30.48" y="90.8" fill="#24211d" font-family="Barlow Condensed" font-weight="600" font-size="3.0" text-anchor="middle">TIME</text>
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.6" text-anchor="middle">
+    <text x="10" y="121">1</text><text x="23.6" y="121">2</text><text x="37.2" y="121">3</text><text x="50.8" y="121">4</text>
   </g>
-
-  <rect x="4" y="84" width="52.96" height="0.27" fill="#c2bcb2"/>
-  <text x="30.48" y="88.2" fill="#24211d" font-family="sans-serif" font-size="3.0" text-anchor="middle">TIME</text>
-  <g fill="#57524c" font-family="sans-serif" font-size="2.6" text-anchor="middle">
-    <text x="10" y="116.5">1</text><text x="23.6" y="116.5">2</text><text x="37.2" y="116.5">3</text><text x="50.8" y="116.5">4</text>
-  </g>
-  <text x="30.48" y="126.3" fill="#d66a16" opacity="0.85" font-family="sans-serif" font-size="2.5" text-anchor="middle">KURKESMURFER</text>
 </svg>

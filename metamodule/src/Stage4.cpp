@@ -4,6 +4,7 @@
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
 #include "Chain.hpp"
+#include "StageAnnotation.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -48,6 +49,8 @@ struct SpaceTimeStage4 : Module {
 	enum LightId {
 		LINK_LIGHT,
 		STATUS_DISPLAY,
+		ENUMS(PITCH_DISPLAYS, 4),
+		ENUMS(TIME_DISPLAYS, 4),
 		LIGHTS_LEN
 	};
 
@@ -143,7 +146,13 @@ struct SpaceTimeStage4 : Module {
 	}
 
 	size_t get_display_text(int lightId, std::span<char> text) override {
-		if (lightId != STATUS_DISPLAY || text.empty())
+		if (text.empty())
+			return 0;
+		if (lightId >= PITCH_DISPLAYS && lightId < PITCH_DISPLAYS + 4)
+			return copyAnnotationText(lightId - PITCH_DISPLAYS, true, text);
+		if (lightId >= TIME_DISPLAYS && lightId < TIME_DISPLAYS + 4)
+			return copyAnnotationText(lightId - TIME_DISPLAYS, false, text);
+		if (lightId != STATUS_DISPLAY)
 			return 0;
 		const char* linkName = coreLink == CoreLink::Linked ? "LINK" :
 			(coreLink == CoreLink::Duplicate ? "DUP" : "WAIT");
@@ -158,6 +167,27 @@ struct SpaceTimeStage4 : Module {
 			return 0;
 		size_t copyLength = std::min(text.size(), (size_t)length);
 		std::copy(buffer, buffer + copyLength, text.begin());
+		return copyLength;
+	}
+
+	size_t copyAnnotationText(int localStage, bool pitch, std::span<char> text) {
+		int stage = bankIndex * spacetime::kStagesPerBlock + localStage;
+		std::string value = "--";
+		if (coreLink == CoreLink::Linked && stage < table.count) {
+			spacetime::StageAnnotation annotation = spacetime::makeStageAnnotation(
+				table.voltage[stage], table.time[stage], table.program[stage], scaleKey, true);
+			if (pitch) {
+				value = annotation.pitch == "EXT CV" ? "EXT" : annotation.pitch;
+				if (!annotation.cents.empty())
+					value += "\n" + annotation.cents;
+			}
+			else {
+				value = annotation.duration == "EXT TIME" ? "EXT" : annotation.duration;
+				value.erase(std::remove(value.begin(), value.end(), ' '), value.end());
+			}
+		}
+		size_t copyLength = std::min(text.size(), value.size());
+		std::copy(value.begin(), value.begin() + copyLength, text.begin());
 		return copyLength;
 	}
 };
@@ -183,10 +213,24 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 		static const float colX[4] = {10.f, 23.6f, 37.2f, 50.8f};
 		for (int s = 0; s < 4; s++) {
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 66.f)), module, SpaceTimeStage4::VOLTAGE_PARAMS + s));
-			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 103.f)), module, SpaceTimeStage4::TIME_PARAMS + s));
+			auto pitch = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 6.2f, 77.f)));
+			pitch->box.size = mm2px(Vec(12.4f, 10.f));
+			pitch->firstLightId = SpaceTimeStage4::PITCH_DISPLAYS + s;
+			pitch->font = "Default_10";
+			pitch->color = Colors565::Black;
+			addChild(pitch);
+
+			auto time = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 6.2f, 92.f)));
+			time->box.size = mm2px(Vec(12.4f, 6.f));
+			time->firstLightId = SpaceTimeStage4::TIME_DISPLAYS + s;
+			time->font = "Default_10";
+			time->color = Colors565::Black;
+			addChild(time);
+
+			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 107.5f)), module, SpaceTimeStage4::TIME_PARAMS + s));
 		}
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 6.f)), module, SpaceTimeStage4::LINK_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 42.f)), module, SpaceTimeStage4::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {
