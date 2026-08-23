@@ -1,7 +1,14 @@
 # SpaceTime MetaModule Implementation Plan
 
 **Created:** 2026-07-13  
-**Target SDK:** local MetaModule Plugin SDK 2.2 (`97ee128`)  
+**Target SDK:** local MetaModule Plugin SDK 2.2 (`97ee128`) at time of writing;
+the checkout has since moved to **SDK 2.3** (`api-v2.3.0-4-g3ef315d`,
+2026-08-23). No SpaceTime source change was required for the bump: the adapter
+uses `midi::InputQueue`/`midi::Output`, which are unchanged, and none of the
+new v2.3 APIs (plugin-host exceptions, USB query functions,
+`MidiInput`/`MidiOutput` -- whose missing headers made them unusable in
+v2.2.x) are consumed yet. Toolchain support widened to ARM GNU 13.2/13.3,
+14.2/14.3, 15.2/15.3 in addition to 12.2/12.3; this machine builds with 12.3.  
 **Feasibility:** **GO as Core plus remote panels; shared-bus principle verified on hardware**
 
 ## Feasibility result

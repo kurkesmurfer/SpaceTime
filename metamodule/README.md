@@ -7,8 +7,11 @@ the package until the first remote control surface is complete.
 
 ## Build
 
-MetaModule requires ARM GNU Toolchain 12.2 or 12.3. VCV and Daisy may continue
-using their existing ARM GNU 10 toolchains; this target does not change them.
+The SDK (v2.2.1 and later) ships prebuilt plugin-libc archives for ARM GNU
+Toolchain 12.2/12.3 and 15.3, and supports 13.2/13.3, 14.2/14.3 and 15.2 via a
+library-build script; 12.3 remains what is installed on this machine. VCV and
+Daisy may continue using their existing ARM GNU 10 toolchains; this target does
+not change them.
 
 ```sh
 cmake --fresh -S metamodule -B metamodule/build -G Ninja \
