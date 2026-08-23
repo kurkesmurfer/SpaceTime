@@ -273,7 +273,10 @@ public:
 			checkEnable(table, in);
 		}
 		if (advEdge) {
-			advance(table, cfg.loopMode, cfg.direction);
+			// MARF Step is a direct manual traversal control: First/Last flags
+			// bound clocked sequences, but must not prevent stepping into a
+			// neighbouring region. Direction still applies.
+			advance(table, LOOP_FULL_CHAIN, cfg.direction);
 			stoppedOnStop_ = false;
 			oneShotComplete_ = false;
 			if (running_)

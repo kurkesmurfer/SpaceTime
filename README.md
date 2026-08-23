@@ -193,6 +193,11 @@ stopped, the address sweeps the stages, red status), latches center for
 **Sequential**, and is momentary down for **Strobe** (load the addressed
 stage once).
 
+The manual **ADV** control follows the selected direction but ignores First/Last
+region markers, matching the MARF Step control. This allows a head to be stepped
+between independently marked sequence regions; clocked traversal remains bounded
+by the region containing the head.
+
 **Playback extensions (not on the hardware):** DIRECTION
 (forward/reverse/pendulum/random/brownian), clock source INT/EXT/MIDI/VIRTUAL with
 /16…×16 DIV/MULT, TIME CV attenuverter scaling all stage times, and a loop

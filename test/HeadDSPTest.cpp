@@ -276,6 +276,34 @@ TEST_CASE("multiple First/Last pairs form independent regions (Stazma patch)") {
 		CHECK(seqC[i] >= 8);
 }
 
+TEST_CASE("manual ADV crosses First/Last boundaries in either direction") {
+	Sim forward;
+	forward.makeTable(16);
+	forward.cfg.loopMode = LOOP_FIRST_LAST;
+	forward.t.program[0].setFirst(true);
+	forward.t.program[7].setLast(true);
+	forward.t.program[8].setFirst(true);
+	forward.t.program[15].setLast(true);
+	for (int i = 0; i < 8; i++)
+		forward.pulseAdvance();
+	CHECK(forward.out.currentStage == 8);  // crosses Last 8 -> First 9
+
+	Sim reverse;
+	reverse.makeTable(16);
+	reverse.cfg.loopMode = LOOP_FIRST_LAST;
+	reverse.cfg.direction = DIR_REVERSE;
+	reverse.t.program[0].setFirst(true);
+	reverse.t.program[7].setLast(true);
+	reverse.t.program[8].setFirst(true);
+	reverse.t.program[15].setLast(true);
+	reverse.cfg.addrExt = true;
+	reverse.in.addressCv = 8.5f * 10.f / 16.f;
+	reverse.pulseStrobe();
+	REQUIRE(reverse.out.currentStage == 8);
+	reverse.pulseAdvance();
+	CHECK(reverse.out.currentStage == 7);  // crosses First 9 -> Last 8
+}
+
 // ---------------------------------------------------------------------------
 // 3. Stop stage retrigger
 // ---------------------------------------------------------------------------
