@@ -56,6 +56,24 @@
       "tags": ["Expander", "Utility"]
     },
     {
+      "slug": "MMProgram",
+      "name": "MM PROGRAM",
+      "description": "Portable Program and MIDI owner for VCV-authored MetaModule patches",
+      "tags": ["Sequencer", "MIDI", "Polyphonic"]
+    },
+    {
+      "slug": "MMStage4",
+      "name": "MM STAGE4",
+      "description": "Portable four-stage bank viewer and editor",
+      "tags": ["Sequencer", "Controller"]
+    },
+    {
+      "slug": "MMHead",
+      "name": "MM HEAD",
+      "description": "Portable SpaceTime Function Generator head with complete I/O",
+      "tags": ["Function generator", "Sequencer"]
+    },
+    {
       "slug": "WidgetTest",
       "name": "WidgetTest",
       "description": "Development widget exerciser — not for patches",

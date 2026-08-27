@@ -1,9 +1,6 @@
 // SpaceTime -- HeadRemoteController tests (EB8: head relocation).
-// Two things to prove: (1) standalone behavior is sane on its own, and
-// (2) it produces byte-identical results to SpaceTimeEngine's own internal
-// per-head logic for the same MIDI stream -- the parity claim this class
-// exists to earn, since it is a deliberate duplication of already-shipped
-// logic (see HeadRemoteController.hpp's header comment for why).
+// Proves the shared controller works standalone and through SpaceTimeEngine's
+// fallback-head integration with identical results for the same MIDI stream.
 #include "doctest.h"
 #include "HeadRemoteController.hpp"
 #include "SpaceTimeEngine.hpp"

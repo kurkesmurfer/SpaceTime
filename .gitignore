@@ -7,5 +7,6 @@ test/run
 test/*.o
 *.vcvplugin
 metamodule/metamodule-plugins/
+metamodule/build-*/
 .DS_Store
 Buchla__Tiptop_Audio_248t.pdf

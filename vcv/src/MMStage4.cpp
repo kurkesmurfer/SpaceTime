@@ -1,8 +1,6 @@
-#include <rack.hpp>
-#include <metamodule/VCVTextDisplay.hpp>
+#include "plugin.hpp"
 
-#include "TimingBus.hpp"
-#include "RemoteBus.hpp"
+#include "MMBus.hpp"
 #include "MMModuleContracts.hpp"
 #include "Chain.hpp"
 #include "StageAnnotation.hpp"
@@ -18,7 +16,7 @@ namespace {
 
 // Portable MMStage4 viewer/editor. Program owns the table; this surface binds
 // by Instrument ID and bank, publishes slider edits, and reads the authoritative
-// table/context for annotations. The VCV twin uses the same contract and bus.
+// table/context for annotations. The MetaModule twin uses the same contract and bus.
 //
 // No local mirror/shadow state is needed here the way MMHead needs one:
 // there is exactly one legitimate writer to these two sliders on this
@@ -141,7 +139,8 @@ struct SpaceTimeStage4 : Module {
 		coreLink = CoreLink::Waiting;
 	}
 
-	size_t get_display_text(int lightId, std::span<char> text) override {
+	#if 0
+	size_t get_display_text(int lightId, std::span<char> text) {
 		if (text.empty())
 			return 0;
 		if (lightId >= PITCH_DISPLAYS && lightId < PITCH_DISPLAYS + 4)
@@ -165,7 +164,9 @@ struct SpaceTimeStage4 : Module {
 		std::copy(buffer, buffer + copyLength, text.begin());
 		return copyLength;
 	}
+	#endif
 
+	#if 0
 	size_t copyAnnotationText(int localStage, bool pitch, std::span<char> text) {
 		int stage = bankIndex * spacetime::kStagesPerBlock + localStage;
 		std::string value = "--";
@@ -186,19 +187,22 @@ struct SpaceTimeStage4 : Module {
 		std::copy(value.begin(), value.begin() + copyLength, text.begin());
 		return copyLength;
 	}
+	#endif
 };
 
 struct SpaceTimeStage4Widget : ModuleWidget {
 	SpaceTimeStage4Widget(SpaceTimeStage4* module) {
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Stage4.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/MMStage4.svg")));
 
+		#if 0
 		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 12.f)));
 		display->box.size = mm2px(Vec(53.f, 20.f));
 		display->firstLightId = SpaceTimeStage4::STATUS_DISPLAY;
 		display->font = "Default_10";
 		display->color = Colors565::White;
 		addChild(display);
+		#endif
 
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(15.f, 42.f)), module, SpaceTimeStage4::INSTRUMENT_PARAM));
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(45.f, 42.f)), module, SpaceTimeStage4::BANK_PARAM));
@@ -210,6 +214,7 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 		static const float colX[4] = {10.f, 23.6f, 37.2f, 50.8f};
 		for (int s = 0; s < 4; s++) {
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 66.f)), module, SpaceTimeStage4::VOLTAGE_PARAMS + s));
+			#if 0
 			auto pitch = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 6.2f, 77.f)));
 			pitch->box.size = mm2px(Vec(12.4f, 10.f));
 			pitch->firstLightId = SpaceTimeStage4::PITCH_DISPLAYS + s;
@@ -223,6 +228,7 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 			time->font = "Default_10";
 			time->color = Colors565::Black;
 			addChild(time);
+			#endif
 
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 107.5f)), module, SpaceTimeStage4::TIME_PARAMS + s));
 		}
@@ -236,10 +242,9 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 			return;
 		menu->addChild(new MenuSeparator);
 		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
-		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
-			return std::string(instrumentLabels[module->instrumentId]) +
-				(module->bankConflict ? " (duplicate bank!)" : "");
-		}, [=](Menu* ids) {
+		menu->addChild(createSubmenuItem("Instrument ID",
+			std::string(instrumentLabels[module->instrumentId]) +
+				(module->bankConflict ? " (duplicate bank!)" : ""), [=](Menu* ids) {
 			for (int id = 0; id < 4; id++)
 				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
 					[=]() { return module->instrumentId == id; },
@@ -248,10 +253,9 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 						module->setBinding(id, module->bankIndex);
 					}));
 		}));
-		menu->addChild(createSubmenuItem("Bank index", [=]() {
-			return string::f("%d (stages %d-%d)", module->bankIndex + 1,
-				module->bankIndex * 4 + 1, module->bankIndex * 4 + 4);
-		}, [=](Menu* banks) {
+		menu->addChild(createSubmenuItem("Bank index",
+			string::f("%d (stages %d-%d)", module->bankIndex + 1,
+				module->bankIndex * 4 + 1, module->bankIndex * 4 + 4), [=](Menu* banks) {
 			for (int b = 0; b < 16; b++)
 				banks->addChild(createCheckMenuItem(string::f("%d (stages %d-%d)", b + 1, b * 4 + 1, b * 4 + 4), "",
 					[=]() { return module->bankIndex == b; },
@@ -265,4 +269,4 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeStage4 = createModel<SpaceTimeStage4, SpaceTimeStage4Widget>(spacetime::MMStage4Contract::slug);
+Model* modelMMStage4 = createModel<SpaceTimeStage4, SpaceTimeStage4Widget>(spacetime::MMStage4Contract::slug);

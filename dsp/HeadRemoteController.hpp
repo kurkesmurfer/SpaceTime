@@ -1,21 +1,9 @@
 #pragma once
 
-// Standalone, single-head MIDI-to-signals controller for a MetaModule
-// HeadRemote (head relocation, METAMODULE_EXPANDER_BUS_PLAN.md EB8).
-//
-// This is the same translation SpaceTimeEngine already does internally, per
-// head, inside applyMidiToHeads()/applyHeadCc()/processHeads() -- factored
-// out rather than reused in place, deliberately: SpaceTimeEngine is shipped,
-// hardware-tested (Core.cpp's fused path, Singularity's VCV twin) code, and
-// this is a brand new, unverified module. Refactoring SpaceTimeEngine to
-// share this class internally is a legitimate future cleanup once
-// HeadRemote itself is proven -- not done here, same reasoning as deferring
-// the MetaModuleStageBankRegistry/MetaModuleHeadRegistry template
-// generalization until a second real consumer existed. The duplication is
-// real and small (one switch statement, one signal-building block); a host
-// test (HeadRemoteControllerTest.cpp) proves this produces byte-identical
-// HeadConfig/signal behavior to SpaceTimeEngine's own for the same CC
-// stream, so the two can't silently drift without a test failing.
+// Shared single-head MIDI-to-signals controller. SpaceTimeEngine uses eight
+// instances for its fallback heads; each portable MMHead uses one instance
+// when it claims that head. This keeps the control translation, timers and
+// HeadDSP ownership in one implementation.
 //
 // Deliberately takes plain parameters, not MetaModuleHeadMidiSnapshot
 // (MetaModuleRemoteBus.hpp) -- this class knows nothing about the
@@ -37,6 +25,13 @@ namespace spacetime {
 
 class HeadRemoteController {
 public:
+	struct MidiEventCounts {
+		uint32_t midiClock;
+		uint32_t virtualClock;
+
+		MidiEventCounts() : midiClock(0), virtualClock(0) {}
+	};
+
 	HeadRemoteController() { dsp_.reset(1); }
 
 	void reset(uint32_t seed) {
@@ -59,63 +54,32 @@ public:
 	// this head's row from the MIDI-forwarding bus; the four transport seqs
 	// are the shared/global ones (same fields MetaModuleHeadMidiSnapshot
 	// carries).
-	void applyMidi(const uint32_t (&ccSeq)[kMidiHeadControls],
+	MidiEventCounts applyMidi(const uint32_t (&ccSeq)[kMidiHeadControls],
 	               const float (&ccValue)[kMidiHeadControls],
 	               uint32_t midiClockSeq, uint32_t midiStartSeq,
 	               uint32_t midiStopSeq, uint32_t midiContinueSeq) {
-		bool clockChanged = midiClockSeq != runtime_.lastClockSeq;
-		if (clockChanged) {
-			runtime_.lastClockSeq = midiClockSeq;
-			runtime_.midiClockTimer = 1e-3f;
-		}
-		bool startChanged = midiStartSeq != runtime_.lastStartSeq;
-		bool stopChanged = midiStopSeq != runtime_.lastStopSeq;
-		bool continueChanged = midiContinueSeq != runtime_.lastContinueSeq;
-		runtime_.lastStartSeq = midiStartSeq;
-		runtime_.lastStopSeq = midiStopSeq;
-		runtime_.lastContinueSeq = midiContinueSeq;
-		if (runtime_.followMidiTransport && (startChanged || continueChanged))
-			runtime_.startTimer = 1e-3f;
-		if (runtime_.followMidiTransport && stopChanged)
-			runtime_.stopTimer = 1e-3f;
-		if (runtime_.followMidiTransport && (startChanged || continueChanged || stopChanged || clockChanged))
-			runtime_.forceTick = true;
-
-		for (int control = 0; control < kMidiHeadControls; control++) {
-			uint32_t sequence = ccSeq[control];
-			if (sequence == runtime_.lastCcSeq[control])
-				continue;
-			runtime_.lastCcSeq[control] = sequence;
-			applyHeadCc(control, ccValue[control]);
-			runtime_.forceTick = true;
-		}
+		return applyMidiImpl(ccSeq, ccValue, midiClockSeq, midiStartSeq,
+			midiStopSeq, midiContinueSeq, false, 0);
 	}
 
-	// Merges MIDI/CC-driven timers with locally-supplied signals (real
-	// panel jacks, if this HeadRemote exposes any) and ticks HeadDSP.
-	// `local` may leave any field at 0.f/false for signals this module has
-	// no jack for -- exactly as Head.cpp's own jack-vs-MIDI merge already
-	// works (both write into the same signal, whichever is higher/newer
-	// wins for a gate). Preserves SpaceTimeEngine::processHeads' idle-head
-	// refresh gating (skip full audio-rate ticks for a stopped, non-
-	// continuous head with no pending event, refresh at ~3 kHz instead) --
-	// the same optimization the Core hardware test measured at ~3.5 points
-	// of CPU per active head, still worth keeping per HeadRemote instance.
+	// SpaceTimeEngine receives MidiCore's aggregate per-head sequence and uses
+	// it to avoid scanning all CC lanes at audio rate when nothing changed.
+	MidiEventCounts applyMidiWithHeadEventSeq(
+	               const uint32_t (&ccSeq)[kMidiHeadControls],
+	               const float (&ccValue)[kMidiHeadControls],
+	               uint32_t midiClockSeq, uint32_t midiStartSeq,
+	               uint32_t midiStopSeq, uint32_t midiContinueSeq,
+	               uint32_t headEventSeq) {
+		return applyMidiImpl(ccSeq, ccValue, midiClockSeq, midiStartSeq,
+			midiStopSeq, midiContinueSeq, true, headEventSeq);
+	}
+
+	// Merges MIDI/CC-driven timers with locally-supplied signals and ticks the
+	// single HeadDSP owned by this controller.
 	void tick(const StageTable& table, const ExtInputs& ext, const Globals& g,
 	          const ScaleKey& sk, const HeadSignals& local, float dt, HeadOut& out) {
 		runtime_.idleTime += dt;
 		bool refreshIdle = runtime_.idleTime >= 1.f / 3000.f;
-		// SpaceTimeEngine's own audioRate condition, plus one HeadRemote-
-		// specific addition: Core and Singularity have no real per-head
-		// start/stop/advance/strobe/reset/clock jacks (MIDI is their only
-		// input for those), so this case never arose there. HeadRemote, by
-		// design, does have real local jacks -- without this, a cold
-		// controller's very first tick with only a local jack signal active
-		// (no MIDI forceTick yet, not already running, not continuous)
-		// would be silently skipped by the idle-refresh gate and miss the
-		// edge entirely. Caught by
-		// "HeadRemoteController local jack signals merge with MIDI-driven
-		// ones" before this shipped anywhere.
 		bool localSignalActive = local.start >= kGateThreshold || local.stop >= kGateThreshold ||
 			local.advance >= kGateThreshold || local.strobe >= kGateThreshold ||
 			local.extClock >= kGateThreshold || local.reset;
@@ -146,6 +110,50 @@ public:
 	}
 
 private:
+	MidiEventCounts applyMidiImpl(const uint32_t (&ccSeq)[kMidiHeadControls],
+	               const float (&ccValue)[kMidiHeadControls],
+	               uint32_t midiClockSeq, uint32_t midiStartSeq,
+	               uint32_t midiStopSeq, uint32_t midiContinueSeq,
+	               bool useHeadEventSeq, uint32_t headEventSeq) {
+		MidiEventCounts counts;
+		bool clockChanged = midiClockSeq != runtime_.lastClockSeq;
+		if (clockChanged) {
+			uint32_t delta = midiClockSeq - runtime_.lastClockSeq;
+			runtime_.lastClockSeq = midiClockSeq;
+			runtime_.midiClockTimer = 1e-3f;
+			if (runtime_.clockSource == 2)
+				counts.midiClock = delta;
+		}
+		bool startChanged = midiStartSeq != runtime_.lastStartSeq;
+		bool stopChanged = midiStopSeq != runtime_.lastStopSeq;
+		bool continueChanged = midiContinueSeq != runtime_.lastContinueSeq;
+		runtime_.lastStartSeq = midiStartSeq;
+		runtime_.lastStopSeq = midiStopSeq;
+		runtime_.lastContinueSeq = midiContinueSeq;
+		if (runtime_.followMidiTransport && (startChanged || continueChanged))
+			runtime_.startTimer = 1e-3f;
+		if (runtime_.followMidiTransport && stopChanged)
+			runtime_.stopTimer = 1e-3f;
+		if ((runtime_.followMidiTransport && (startChanged || continueChanged || stopChanged)) || clockChanged)
+			runtime_.forceTick = true;
+
+		if (useHeadEventSeq && headEventSeq == runtime_.lastHeadEventSeq)
+			return counts;
+		if (useHeadEventSeq)
+			runtime_.lastHeadEventSeq = headEventSeq;
+		for (int control = 0; control < kMidiHeadControls; control++) {
+			uint32_t sequence = ccSeq[control];
+			if (sequence == runtime_.lastCcSeq[control])
+				continue;
+			uint32_t delta = sequence - runtime_.lastCcSeq[control];
+			runtime_.lastCcSeq[control] = sequence;
+			if (control == 0 && runtime_.clockSource == 3)
+				counts.virtualClock += delta;
+			applyHeadCc(control, ccValue[control]);
+			runtime_.forceTick = true;
+		}
+		return counts;
+	}
 	struct Runtime {
 		int clockSource;
 		bool followMidiTransport;
@@ -162,19 +170,20 @@ private:
 		uint32_t lastStartSeq;
 		uint32_t lastStopSeq;
 		uint32_t lastContinueSeq;
+		uint32_t lastHeadEventSeq;
 		uint32_t lastCcSeq[kMidiHeadControls];
 
 		Runtime()
 			: clockSource(0), followMidiTransport(false), resetPending(false), forceTick(false),
 			  midiClockTimer(0.f), virtualClockTimer(0.f), startTimer(0.f), stopTimer(0.f),
 			  advanceTimer(0.f), strobeTimer(0.f), idleTime(0.f),
-			  lastClockSeq(0), lastStartSeq(0), lastStopSeq(0), lastContinueSeq(0) {
+			  lastClockSeq(0), lastStartSeq(0), lastStopSeq(0), lastContinueSeq(0),
+			  lastHeadEventSeq(0) {
 			for (int c = 0; c < kMidiHeadControls; c++)
 				lastCcSeq[c] = 0;
 		}
 	};
 
-	// Same switch as SpaceTimeEngine::applyHeadCc, verbatim.
 	void applyHeadCc(int cc, float value) {
 		switch (cc) {
 			case 0: runtime_.virtualClockTimer = 1e-3f; break;
@@ -209,11 +218,6 @@ private:
 		return a > b ? a : b;
 	}
 
-	// Verbatim copy of SpaceTimeEngine's own pulseGate: reads the current
-	// gate level and decays the timer by dt in the same call, called
-	// exactly once per timer per tick() -- matching processHeads' own
-	// single-call-per-timer discipline so decay never runs twice for one
-	// tick.
 	static float pulseGate(float& timer, float dt) {
 		float value = timer > 0.f ? 10.f : 0.f;
 		timer = timer > dt ? timer - dt : 0.f;

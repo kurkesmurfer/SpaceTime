@@ -24,6 +24,21 @@ TEST_CASE("SpaceTime engine applies all 64 voltage and time slider CCs") {
 	CHECK(engine.table().time[63] == doctest::Approx(1.f));
 }
 
+TEST_CASE("SpaceTime engine ignores MIDI slider writes beyond the active stage count") {
+	SpaceTimeEngine engine;
+	engine.setStageBanks(2);
+	engine.table().voltage[8] = 3.f;
+	engine.table().time[8] = 0.25f;
+	engine.handleMidi(0xBE, 8, 127);
+	engine.handleMidi(0xBE, 64 + 8, 127);
+	CHECK(engine.table().voltage[8] == doctest::Approx(3.f));
+	CHECK(engine.table().time[8] == doctest::Approx(0.25f));
+	engine.handleMidi(0xBE, 7, 127);
+	engine.handleMidi(0xBE, 64 + 7, 127);
+	CHECK(engine.table().voltage[7] == doctest::Approx(10.f));
+	CHECK(engine.table().time[7] == doctest::Approx(1.f));
+}
+
 TEST_CASE("SpaceTime engine keeps Program MIDI channel filtering") {
 	SpaceTimeEngine engine;
 	engine.handleMidi(0xBF, 65, 127);
@@ -109,6 +124,25 @@ TEST_CASE("SpaceTime engine runs all eight HeadDSP instances from one table") {
 	engine.processHeads(1.f / 48000.f);
 	for (int head = 0; head < kMaxHeads; head++)
 		CHECK(engine.headOut(head).cv == doctest::Approx(4.f));
+}
+
+TEST_CASE("SpaceTime engine does not run an externally owned head") {
+	SpaceTimeEngine engine;
+	engine.table().voltage[0] = 2.f;
+	engine.headConfig(0).continuous = true;
+	engine.processHeads(1.f / 48000.f);
+	CHECK(engine.headOut(0).cv == doctest::Approx(2.f));
+
+	HeadOut remote;
+	remote.cv = 7.f;
+	remote.currentStage = 3;
+	remote.runState = RUN_RUNNING;
+	engine.setExternalHeadOut(0, remote);
+	engine.table().voltage[0] = 9.f;
+	engine.processHeads(1.f / 48000.f, 0x01);
+	CHECK(engine.headOut(0).cv == doctest::Approx(7.f));
+	CHECK(engine.headOut(0).currentStage == 3);
+	CHECK(engine.headOut(0).runState == RUN_RUNNING);
 }
 
 TEST_CASE("SpaceTime engine refreshes stopped heads at idle control rate") {

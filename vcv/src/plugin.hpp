@@ -56,6 +56,9 @@ extern Model* modelMidi;
 extern Model* modelGlueLeft;
 extern Model* modelGlueRight;
 extern Model* modelWidgetTest;  // WP3 dev-only; hide at release (WP8)
+extern Model* modelMMProgram;
+extern Model* modelMMStage4;
+extern Model* modelMMHead;
 
 // Returns the chain module beyond a valid paired Glue endpoint, or NULL.
 engine::Module* gluePartnerOutward(engine::Module* endpoint);

@@ -4,7 +4,8 @@
 // MIDI and direct program actions into this class; no expander transport is
 // involved here.
 
-#include "HeadDSP.hpp"
+#include "HeadRemoteController.hpp"
+#include "MMModuleContracts.hpp"
 #include "MidiCore.hpp"
 #include "ProgramLogic.hpp"
 
@@ -27,15 +28,12 @@ public:
 		lastAppliedMidiIndex_ = 0;
 		lastAppliedMidiValue_ = 0;
 		appliedMidiEvents_ = 0;
-		idleHeadTime_ = 0.f;
 		for (int h = 0; h < kMaxHeads; h++) {
 			sourceClockEvents_[h] = 0;
 			stageEntries_[h] = 0;
-			headDsp_[h].reset((uint32_t)(h + 1));
-			headConfig_[h] = HeadConfig();
+			headController_[h].reset((uint32_t)(h + 1));
 			headSignals_[h] = HeadSignals();
 			headOut_[h] = HeadOut();
-			headRuntime_[h] = HeadRuntime();
 		}
 	}
 
@@ -48,22 +46,33 @@ public:
 	Globals& globals() { return globals_; }
 	const Globals& globals() const { return globals_; }
 
-	HeadConfig& headConfig(int head) { return headConfig_[clampHead(head)]; }
-	const HeadConfig& headConfig(int head) const { return headConfig_[clampHead(head)]; }
+	void setStageBanks(int banks) {
+		table_.count = stageCountFromBanks(banks);
+		if (program_.selectedStage() >= table_.count)
+			program_.setSelected(table_.count - 1);
+	}
+	int stageBanks() const { return stageBanksFromCount(table_.count); }
+	int stageCount() const { return table_.count; }
+
+	HeadConfig& headConfig(int head) { return headController_[clampHead(head)].config(); }
+	const HeadConfig& headConfig(int head) const { return headController_[clampHead(head)].config(); }
 	HeadSignals& headSignals(int head) { return headSignals_[clampHead(head)]; }
 	const HeadSignals& headSignals(int head) const { return headSignals_[clampHead(head)]; }
 	const HeadOut& headOut(int head) const { return headOut_[clampHead(head)]; }
+	void setExternalHeadOut(int head, const HeadOut& out) {
+		headOut_[clampHead(head)] = out;
+	}
 	uint32_t sourceClockEvents(int head) const { return sourceClockEvents_[clampHead(head)]; }
 	uint32_t stageEntries(int head) const { return stageEntries_[clampHead(head)]; }
-	int headClockSource(int head) const { return headRuntime_[clampHead(head)].clockSource; }
+	int headClockSource(int head) const { return headController_[clampHead(head)].clockSource(); }
 	void setHeadClockSource(int head, int source) {
-		headRuntime_[clampHead(head)].clockSource = clampInt(source, 0, 3);
+		headController_[clampHead(head)].setClockSource(source);
 	}
 	bool headFollowsMidiTransport(int head) const {
-		return headRuntime_[clampHead(head)].followMidiTransport;
+		return headController_[clampHead(head)].followsMidiTransport();
 	}
 	void setHeadFollowsMidiTransport(int head, bool follow) {
-		headRuntime_[clampHead(head)].followMidiTransport = follow;
+		headController_[clampHead(head)].setFollowsMidiTransport(follow);
 	}
 
 	void setExternal(int index, float voltage, bool connected) {
@@ -94,39 +103,17 @@ public:
 		applyOps(ops, count);
 	}
 
-	void processHeads(float dt) {
+	void processHeads(float dt, uint8_t externalHeadMask = 0) {
 		applyMidiToHeads();
-		idleHeadTime_ += dt;
-		bool refreshIdleHeads = idleHeadTime_ >= 1.f / 3000.f;
 		for (int h = 0; h < kMaxHeads; h++) {
-			HeadRuntime& runtime = headRuntime_[h];
-			bool audioRate = headDsp_[h].isRunning() || headConfig_[h].continuous ||
-				headDsp_[h].hasTransientOutput() || runtime.forceTick;
-			if (!audioRate && !refreshIdleHeads)
+			if ((externalHeadMask & (uint8_t)(1u << h)) != 0)
 				continue;
 			uint8_t previousStage = headOut_[h].currentStage;
-			HeadSignals signals = headSignals_[h];
-			signals.start = maxFloat(signals.start, pulseGate(runtime.startTimer, dt));
-			signals.stop = maxFloat(signals.stop, pulseGate(runtime.stopTimer, dt));
-			signals.advance = maxFloat(signals.advance, pulseGate(runtime.advanceTimer, dt));
-			signals.strobe = maxFloat(signals.strobe, pulseGate(runtime.strobeTimer, dt));
-			if (runtime.clockSource == 2)
-				signals.extClock = pulseGate(runtime.midiClockTimer, dt);
-			else if (runtime.clockSource == 3)
-				signals.extClock = pulseGate(runtime.virtualClockTimer, dt);
-			else if (runtime.clockSource == 0)
-				signals.extClock = 0.f;
-			signals.reset = signals.reset || runtime.resetPending;
-			runtime.resetPending = false;
-			runtime.forceTick = false;
-			headConfig_[h].clkExt = runtime.clockSource != 0;
-			headDsp_[h].tick(table_, ext_, globals_, program_.scaleKey(),
-				headConfig_[h], signals, audioRate ? dt : idleHeadTime_, headOut_[h]);
+			headController_[h].tick(table_, ext_, globals_, program_.scaleKey(),
+				headSignals_[h], dt, headOut_[h]);
 			if (headOut_[h].currentStage != previousStage)
 				stageEntries_[h]++;
 		}
-		if (refreshIdleHeads)
-			idleHeadTime_ = 0.f;
 	}
 
 	void processMidiOutput(float dt, MidiOutputSink& sink) {
@@ -179,39 +166,9 @@ private:
 	MidiCore midi_;
 	Globals globals_;
 	ExtInputs ext_;
-	HeadDSP headDsp_[kMaxHeads];
-	HeadConfig headConfig_[kMaxHeads];
+	HeadRemoteController headController_[kMaxHeads];
 	HeadSignals headSignals_[kMaxHeads];
 	HeadOut headOut_[kMaxHeads];
-	struct HeadRuntime {
-		int clockSource;
-		bool followMidiTransport;
-		bool resetPending;
-		bool forceTick;
-		float midiClockTimer;
-		float virtualClockTimer;
-		float startTimer;
-		float stopTimer;
-		float advanceTimer;
-		float strobeTimer;
-		uint32_t lastClockSeq;
-		uint32_t lastStartSeq;
-		uint32_t lastStopSeq;
-		uint32_t lastContinueSeq;
-		uint32_t lastHeadEventSeq;
-		uint32_t lastCcSeq[kMidiHeadControls];
-
-		HeadRuntime()
-			: clockSource(0), followMidiTransport(false), resetPending(false), forceTick(false),
-			  midiClockTimer(0.f), virtualClockTimer(0.f), startTimer(0.f),
-			  stopTimer(0.f), advanceTimer(0.f), strobeTimer(0.f),
-			  lastClockSeq(0), lastStartSeq(0), lastStopSeq(0), lastContinueSeq(0) {
-			lastHeadEventSeq = 0;
-			for (int control = 0; control < kMidiHeadControls; control++)
-				lastCcSeq[control] = 0;
-		}
-	};
-	HeadRuntime headRuntime_[kMaxHeads];
 	uint32_t lastMidiEventSeq_ = 0;
 	uint32_t appliedMidiEvents_ = 0;
 	uint8_t lastAppliedMidiType_ = MIDI_PROG_NONE;
@@ -219,24 +176,9 @@ private:
 	uint8_t lastAppliedMidiValue_ = 0;
 	uint32_t sourceClockEvents_[kMaxHeads] = {};
 	uint32_t stageEntries_[kMaxHeads] = {};
-	float idleHeadTime_ = 0.f;
 
 	static int clampHead(int head) {
 		return head < 0 ? 0 : (head >= kMaxHeads ? kMaxHeads - 1 : head);
-	}
-
-	static int clampInt(int value, int low, int high) {
-		return value < low ? low : (value > high ? high : value);
-	}
-
-	static float maxFloat(float a, float b) {
-		return a > b ? a : b;
-	}
-
-	static float pulseGate(float& timer, float dt) {
-		float value = timer > 0.f ? 10.f : 0.f;
-		timer = timer > dt ? timer - dt : 0.f;
-		return value;
 	}
 
 	static Field midiGestureField(int cc) {
@@ -264,72 +206,12 @@ private:
 
 	void applyMidiToHeads() {
 		for (int h = 0; h < kMaxHeads; h++) {
-			HeadRuntime& runtime = headRuntime_[h];
-			bool clockChanged = midi_.midiClockSeq != runtime.lastClockSeq;
-			if (clockChanged) {
-				uint32_t clockDelta = midi_.midiClockSeq - runtime.lastClockSeq;
-				runtime.lastClockSeq = midi_.midiClockSeq;
-				runtime.midiClockTimer = 1e-3f;
-				if (runtime.clockSource == 2)
-					sourceClockEvents_[h] += clockDelta;
-			}
-			bool startChanged = midi_.midiStartSeq != runtime.lastStartSeq;
-			bool stopChanged = midi_.midiStopSeq != runtime.lastStopSeq;
-			bool continueChanged = midi_.midiContinueSeq != runtime.lastContinueSeq;
-			runtime.lastStartSeq = midi_.midiStartSeq;
-			runtime.lastStopSeq = midi_.midiStopSeq;
-			runtime.lastContinueSeq = midi_.midiContinueSeq;
-			if (runtime.followMidiTransport && (startChanged || continueChanged))
-				runtime.startTimer = 1e-3f;
-			if (runtime.followMidiTransport && stopChanged)
-				runtime.stopTimer = 1e-3f;
-			if ((runtime.followMidiTransport && (startChanged || continueChanged || stopChanged)) ||
-				clockChanged)
-				runtime.forceTick = true;
-			if (midi_.headEventSeq[h] == runtime.lastHeadEventSeq)
-				continue;
-			runtime.lastHeadEventSeq = midi_.headEventSeq[h];
-			for (int control = 0; control < kMidiHeadControls; control++) {
-				uint32_t sequence = midi_.headCcSeq[h][control];
-				if (sequence == runtime.lastCcSeq[control])
-					continue;
-				uint32_t eventDelta = sequence - runtime.lastCcSeq[control];
-				runtime.lastCcSeq[control] = sequence;
-				if (control == 0 && runtime.clockSource == 3)
-					sourceClockEvents_[h] += eventDelta;
-				applyHeadCc(h, control, midi_.headCcValue[h][control]);
-				runtime.forceTick = true;
-			}
-		}
-	}
-
-	void applyHeadCc(int head, int cc, float value) {
-		HeadConfig& config = headConfig_[head];
-		HeadRuntime& runtime = headRuntime_[head];
-		switch (cc) {
-			case 0:
-				runtime.virtualClockTimer = 1e-3f;
-				break;
-			case 1: runtime.startTimer = 1e-3f; break;
-			case 2: runtime.stopTimer = 1e-3f; break;
-			case 3: runtime.advanceTimer = 1e-3f; break;
-			case 4: runtime.resetPending = true; break;
-			case 5: config.addressKnob = value < 0.f ? 0.f : (value > 10.f ? 10.f : value); break;
-			case 6: config.addrExt = value >= 0.5f; break;
-			case 7: {
-				int mode = clampInt((int)std::round(value), 0, 2);
-				if (mode == 0)
-					runtime.strobeTimer = 1e-3f;
-				else
-					config.continuous = mode == 2;
-				break;
-			}
-			case 8: config.direction = (uint8_t)clampInt((int)std::round(value), 0, 4); break;
-			case 9: runtime.clockSource = clampInt((int)std::round(value), 0, 3); break;
-			case 10: config.clkDivIndex = (uint8_t)clampInt((int)std::round(value), 0, 8); break;
-			case 11: config.timeCvAmount = value < -1.f ? -1.f : (value > 1.f ? 1.f : value); break;
-			case 12: config.loopMode = (uint8_t)clampInt((int)std::round(value), 0, 2); break;
-			default: break;
+			HeadRemoteController::MidiEventCounts counts =
+				headController_[h].applyMidiWithHeadEventSeq(
+					midi_.headCcSeq[h], midi_.headCcValue[h], midi_.midiClockSeq,
+					midi_.midiStartSeq, midi_.midiStopSeq, midi_.midiContinueSeq,
+					midi_.headEventSeq[h]);
+			sourceClockEvents_[h] += counts.midiClock + counts.virtualClock;
 		}
 	}
 
@@ -383,9 +265,10 @@ private:
 				globals_.pulseRetrig = event.index != 0;
 				break;
 			case MIDI_PROG_SLIDER:
-				if (event.index < kMaxStages)
+				if (event.index < table_.count)
 					apply(table_, EditOp(event.index, Field::Voltage, event.fvalue, event.flags));
-				else if (event.index < 2 * kMaxStages)
+				else if (event.index >= kMaxStages &&
+					(event.index - kMaxStages) < table_.count)
 					apply(table_, EditOp((uint8_t)(event.index - kMaxStages),
 						Field::Time, event.fvalue, event.flags));
 				break;

@@ -1,8 +1,6 @@
-#include <rack.hpp>
-#include <metamodule/VCVTextDisplay.hpp>
+#include "plugin.hpp"
 
-#include "TimingBus.hpp"
-#include "RemoteBus.hpp"
+#include "MMBus.hpp"
 #include "HeadRemoteController.hpp"
 #include "MMModuleContracts.hpp"
 
@@ -403,7 +401,8 @@ struct SpaceTimeHead : Module {
 			shadowClkDiv = shadowTimeCv = shadowLoop = shadowAddrMode = -1000.f;
 	}
 
-	size_t get_display_text(int lightId, std::span<char> text) override {
+	#if 0
+	size_t get_display_text(int lightId, std::span<char> text) {
 		if (lightId != STATUS_DISPLAY || text.empty())
 			return 0;
 		const char* linkName = coreLink == CoreLink::Linked ? "LINK" :
@@ -432,6 +431,7 @@ struct SpaceTimeHead : Module {
 		std::copy(buffer, buffer + copyLength, text.begin());
 		return copyLength;
 	}
+	#endif
 
 	// Every field except followMidiTransport is now a real Param (Rack
 	// auto-persists params[] on every module, no manual JSON needed) --
@@ -457,14 +457,16 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 	SpaceTimeHeadWidget(SpaceTimeHead* module) {
 		using namespace LayoutHR;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Head.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/MMHead.svg")));
 
+		#if 0
 		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 14.2f)));
 		display->box.size = mm2px(Vec(73.f, 27.f));
 		display->firstLightId = SpaceTimeHead::STATUS_DISPLAY;
 		display->font = "Default_10";
 		display->color = Colors565::White;
 		addChild(display);
+		#endif
 
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(IH_X0, IH_KNOB_Y)), module,
 			SpaceTimeHead::INSTRUMENT_PARAM));
@@ -511,10 +513,9 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 			return;
 		menu->addChild(new MenuSeparator);
 		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
-		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
-			return std::string(instrumentLabels[module->instrumentId]) +
-				(module->headConflict ? " (duplicate head slot!)" : "");
-		}, [=](Menu* ids) {
+		menu->addChild(createSubmenuItem("Instrument ID",
+			std::string(instrumentLabels[module->instrumentId]) +
+				(module->headConflict ? " (duplicate head slot!)" : ""), [=](Menu* ids) {
 			for (int id = 0; id < 4; id++)
 				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
 					[=]() { return module->instrumentId == id; },
@@ -523,9 +524,7 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 						module->setBinding(id, module->headIndex);
 					}));
 		}));
-		menu->addChild(createSubmenuItem("Head index", [=]() {
-			return string::f("%d", module->headIndex + 1);
-		}, [=](Menu* heads) {
+		menu->addChild(createSubmenuItem("Head index", string::f("%d", module->headIndex + 1), [=](Menu* heads) {
 			for (int h = 0; h < spacetime::kMaxHeads; h++)
 				heads->addChild(createCheckMenuItem(string::f("%d", h + 1), "",
 					[=]() { return module->headIndex == h; },
@@ -542,4 +541,4 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeHead = createModel<SpaceTimeHead, SpaceTimeHeadWidget>(spacetime::MMHeadContract::slug);
+Model* modelMMHead = createModel<SpaceTimeHead, SpaceTimeHeadWidget>(spacetime::MMHeadContract::slug);

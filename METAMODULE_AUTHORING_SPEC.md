@@ -443,9 +443,8 @@ processing.
 2. Add shared module-ID contract headers.
 3. Add compile-time index/count tests.
 4. Capture current ARM `size`, package size and hardware CPU figures.
-5. Freeze new slugs and the Number of Stages default. **Slugs done:**
-   `MMProgram`, `MMStage4`, `MMHead`; `MMHeadAll` reserved. Stage-count default
-   remains to be frozen.
+5. Freeze new slugs and the Number of Stages default. **Done:**
+   `MMProgram`, `MMStage4`, `MMHead`; `MMHeadAll` reserved; 64 stages by default.
 
 **Exit:** contracts compile on host, VCV and ARM; no current VCV patch changes.
 
@@ -635,7 +634,6 @@ Accepted on 2026-08-27:
 
 Open checkpoints before contract freeze:
 
-- Number of Stages default (64 recommended);
 - Program poly-output strategy;
 - MetaModule performance/feedback MIDI output routing;
 - recreation versus migration of provisional MetaModule presets.

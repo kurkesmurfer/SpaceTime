@@ -1,9 +1,11 @@
 # SpaceTime for MetaModule
 
-The development package contains the first fused SpaceTime Core and the accepted
-shared-memory bus probes. Core owns all 64 stages, all eight continuously running
-heads, Program state, presets and the MIDI implementation. The probes remain in
-the package until the first remote control surface is complete.
+The development package contains the portable `MMProgram`, `MMStage4` and
+`MMHead` authoring family plus the accepted shared-memory bus probes.
+`MMProgram` owns a 64-stage-capacity table, Program state, presets and MIDI. Its
+snapped **STAGES** parameter selects 1-16 four-stage banks (4-64 active stages)
+and is identical in VCV Rack and MetaModule. A claimed `MMHead` owns that head's
+only active DSP instance; Program's matching fallback head is skipped.
 
 ## Build
 
@@ -98,9 +100,10 @@ Note: `~/Development/metamodule` is shared with whatever session manages the
 Schlappi port (see its `CLAUDE.md`, "Parallel development") -- worth a quick
 check that nothing else changed there since, before assuming a clean build.
 
-## Core hardware test
+## Legacy fused-Core hardware baseline
 
-This test is now required before further remote-panel work.
+These measurements document the pre-`MM*` fused-Core baseline. Use the portable
+authoring test in `METAMODULE_AUTHORING_SPEC.md` for new verification.
 
 Initial Core build `40813fd` loaded successfully on firmware 2.2.0 but reported
 59% CPU at startup in an otherwise empty patch. That is the performance baseline,

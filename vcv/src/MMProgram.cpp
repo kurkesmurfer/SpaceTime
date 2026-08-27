@@ -1,9 +1,7 @@
-#include <rack.hpp>
-#include <metamodule/VCVTextDisplay.hpp>
+#include "plugin.hpp"
 #include "SpaceTimeEngine.hpp"
 #include "MMModuleContracts.hpp"
-#include "TimingBus.hpp"
-#include "RemoteBus.hpp"
+#include "MMBus.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -14,8 +12,8 @@ extern Plugin* pluginInstance;
 
 namespace {
 
-// Portable MMProgram owner. The frozen MM contract is shared with its VCV
-// authoring twin; the native expander-chain Program remains a separate module.
+// Portable MMProgram owner. The frozen MM contract is shared with its
+// MetaModule twin; the native expander-chain Program remains a separate module.
 // This module owns the table, Program state, presets, MIDI and fallback heads.
 //
 // 2026-08-09 (Peet, correcting the first pass of this section): "did not
@@ -419,7 +417,8 @@ struct SpaceTimeProgram : Module {
 		return timingBusRegistry.bus(instrumentId).coreCount.load(std::memory_order_acquire) != 1;
 	}
 
-	size_t get_display_text(int lightId, std::span<char> text) override {
+	#if 0
+	size_t get_display_text(int lightId, std::span<char> text) {
 		if (lightId != STATUS_DISPLAY || text.empty())
 			return 0;
 		int selected = clamp(engine.program().selectedStage(), 0, spacetime::kMaxStages - 1);
@@ -451,6 +450,7 @@ struct SpaceTimeProgram : Module {
 		std::copy(buffer, buffer + copyLength, text.begin());
 		return copyLength;
 	}
+	#endif
 
 	json_t* dataToJson() override {
 		json_t* root = json_object();
@@ -686,13 +686,15 @@ struct SpaceTimeProgram : Module {
 struct SpaceTimeProgramWidget : ModuleWidget {
 	SpaceTimeProgramWidget(SpaceTimeProgram* module) {
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/Program.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/MMProgram.svg")));
+		#if 0
 		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 12.f)));
 		display->box.size = mm2px(Vec(73.f, 27.f));
 		display->firstLightId = SpaceTimeProgram::STATUS_DISPLAY;
 		display->font = "Default_10";
 		display->color = Colors565::White;
 		addChild(display);
+		#endif
 
 		// Standard-height, full-display-width layout. The previous 16 HP panel
 		// was stretched to 305 mm to stack these controls vertically, which is
@@ -750,12 +752,9 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 			return;
 		menu->addChild(new MenuSeparator);
 		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
-		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
-			// EB6: same '!' convention as the panel display, spelled out here
-			// since the menu has room for the word rather than just the glyph.
-			return std::string(instrumentLabels[module->instrumentId]) +
-				(module->coreConflict() ? " (duplicate Program!)" : "");
-		}, [=](Menu* ids) {
+		menu->addChild(createSubmenuItem("Instrument ID",
+			std::string(instrumentLabels[module->instrumentId]) +
+				(module->coreConflict() ? " (duplicate Program!)" : ""), [=](Menu* ids) {
 			for (int id = 0; id < 4; id++)
 				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
 					[=]() { return module->instrumentId == id; },
@@ -767,31 +766,27 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		static const char* gates[] = {"Pulse 1", "Pulse 2", "ALL"};
 		for (int h = 0; h < spacetime::kMaxHeads; h++) {
 			menu->addChild(createSubmenuItem(string::f("Head %d", h + 1),
-				[=]() { return modes[module->engine.midi().outLane[h].mode]; },
-				[=](Menu* sub) {
+				modes[module->engine.midi().outLane[h].mode], [=](Menu* sub) {
 					for (int mode = 0; mode < 3; mode++)
 						sub->addChild(createCheckMenuItem(modes[mode], "",
 							[=]() { return module->engine.midi().outLane[h].mode == mode; },
 							[=]() { module->engine.midi().outLane[h].mode = (uint8_t)mode; }));
-					sub->addChild(createSubmenuItem("Channel", [=]() {
-						return string::f("%d", module->engine.midi().outLane[h].channel + 1);
-					}, [=](Menu* channels) {
+					sub->addChild(createSubmenuItem("Channel",
+						string::f("%d", module->engine.midi().outLane[h].channel + 1), [=](Menu* channels) {
 						for (int channel = 0; channel < 16; channel++)
 							channels->addChild(createCheckMenuItem(string::f("%d", channel + 1), "",
 								[=]() { return module->engine.midi().outLane[h].channel == channel; },
 								[=]() { module->engine.midi().outLane[h].channel = (uint8_t)channel; }));
 					}));
-					sub->addChild(createSubmenuItem("Note gate source", [=]() {
-						return gates[module->engine.midi().outLane[h].gateSource];
-					}, [=](Menu* sources) {
+					sub->addChild(createSubmenuItem("Note gate source",
+						gates[module->engine.midi().outLane[h].gateSource], [=](Menu* sources) {
 						for (int source = 0; source < 3; source++)
 							sources->addChild(createCheckMenuItem(gates[source], "",
 								[=]() { return module->engine.midi().outLane[h].gateSource == source; },
 								[=]() { module->engine.midi().outLane[h].gateSource = (uint8_t)source; }));
 					}));
-					sub->addChild(createSubmenuItem("CC number", [=]() {
-						return string::f("%d", module->engine.midi().outLane[h].cc);
-					}, [=](Menu* numbers) {
+					sub->addChild(createSubmenuItem("CC number",
+						string::f("%d", module->engine.midi().outLane[h].cc), [=](Menu* numbers) {
 						for (int cc = 0; cc < 128; cc++)
 							numbers->addChild(createCheckMenuItem(string::f("%d", cc), "",
 								[=]() { return module->engine.midi().outLane[h].cc == cc; },
@@ -808,4 +803,4 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeProgram = createModel<SpaceTimeProgram, SpaceTimeProgramWidget>(spacetime::MMProgramContract::slug);
+Model* modelMMProgram = createModel<SpaceTimeProgram, SpaceTimeProgramWidget>(spacetime::MMProgramContract::slug);

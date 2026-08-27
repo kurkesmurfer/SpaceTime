@@ -1,0 +1,8 @@
+#include "MMBus.hpp"
+
+spacetime::MetaModuleTimingBusRegistry mmTimingBusRegistry;
+spacetime::MetaModuleHeadRegistry mmHeadRegistry;
+spacetime::MetaModuleStageTableRegistry mmStageTableRegistry;
+spacetime::MetaModuleHeadMidiRegistry mmHeadMidiRegistry;
+spacetime::MetaModuleMidiStatusRegistry mmMidiStatusRegistry;
+spacetime::MetaModuleStageBankRegistry mmStageBankRegistry;

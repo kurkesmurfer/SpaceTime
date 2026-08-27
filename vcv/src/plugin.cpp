@@ -34,6 +34,9 @@ void init(Plugin* p) {
 	p->addModel(modelGlueLeft);
 	p->addModel(modelGlueRight);
 	p->addModel(modelWidgetTest);
+	p->addModel(modelMMProgram);
+	p->addModel(modelMMStage4);
+	p->addModel(modelMMHead);
 }
 
 json_t* settingsToJson() {

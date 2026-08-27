@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="81.28mm" height="128.5mm" viewBox="0 0 81.28 128.5">
+  <rect width="81.28" height="128.5" fill="#e7e4de"/>
+  <rect x="0.5" y="0.5" width="80.28" height="127.5" fill="none" stroke="#a9a49b" stroke-width="0.5"/>
+  <circle cx="3.000" cy="3.500" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="78.280" cy="3.500" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="3.000" cy="125.000" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+  <circle cx="78.280" cy="125.000" r="1.5" fill="#aaa39a" stroke="#70685f" stroke-width="0.4"/>
+
+  <!-- Legibility pass (2026-08-09, Peet: "go for legibility, as that
+       facilitates testing as well"). Coordinates mirror
+       src/Head.cpp's LayoutHR namespace exactly  -  keep both in sync
+       by hand, there is no shared source of truth between the two files. -->
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="middle">
+    <text x="50" y="43.8">RUN</text>
+    <text x="58" y="43.8">HLD</text>
+    <text x="66" y="43.8">STP</text>
+    <text x="74" y="43.8">LNK</text>
+  </g>
+
+  <!-- kurkesmurfer-style-v1 -->
+  <image href="../../vcv/res/kurkesmurfer-panel-logo.svg" x="33.655" y="3.2" width="2.57" height="5.2"/>
+  <text x="42.525" y="5.8" text-anchor="middle" dominant-baseline="middle" fill="#2b2520" font-family="Fraunces" font-weight="600" font-size="5.4187" letter-spacing="0.1355">Head</text>
+  <path d="M 3 10.2 H 29.390" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+  <text x="40.640" y="10.2" text-anchor="middle" dominant-baseline="middle" fill="#5d554d" font-family="Barlow Condensed" font-weight="500" font-size="2.3707" letter-spacing="0.2032">FUNCTION GENERATOR</text>
+  <path d="M 51.890 10.2 H 78.280" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+    <rect x="3.2" y="13.3" width="74.88" height="29" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="43.5" width="74.88" height="14.3" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="59.0" width="74.88" height="14.0" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="74.7" width="74.88" height="14.2" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="90.7" width="74.88" height="16.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="108.7" width="74.88" height="16.5" rx="1.8" fill="none" stroke="#9a9288" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="13.3" width="74.88" height="29" rx="1.5" fill="#12100e" stroke="#70685f" stroke-width="0.35"/>
+
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.8" text-anchor="middle">
+    <text x="20" y="57.0">INSTRUMENT ID</text>
+    <text x="61" y="57.0">HEAD INDEX</text>
+  </g>
+
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.6" text-anchor="middle">
+    <text x="11" y="62.0">START</text>
+    <text x="31" y="62.0">STOP</text>
+    <text x="51" y="62.0">ADV</text>
+    <text x="71" y="62.0">RST</text>
+  </g>
+
+  <!-- Full HeadConfig parity, one row of 8 (pitch 10.4mm)  -  ADDRESS,
+       ADDR SOURCE, ADDR MODE, DIRECTION, CLK SOURCE, CLK DIV, TIME CV, LOOP.
+       Short labels are the compromise this pitch allows; the digital
+       STATUS_DISPLAY spells full state out (source/division/direction/loop
+       names) for anyone who needs the unabbreviated reading. -->
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
+    <text x="4.5" y="78.0">ADDR</text>
+    <text x="14.9" y="78.0">SRC</text>
+    <text x="25.3" y="78.0">MODE</text>
+    <text x="35.7" y="78.0">DIR</text>
+    <text x="46.1" y="78.0">CLK</text>
+    <text x="56.5" y="78.0">DIV</text>
+    <text x="66.9" y="78.0">TIME</text>
+    <text x="77.3" y="78.0">LOOP</text>
+  </g>
+
+  <text x="40.64" y="94.4" fill="#24211d" font-family="Barlow Condensed" font-weight="600" font-size="2.8" text-anchor="middle">INPUTS</text>
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="middle">
+    <text x="4.5" y="97.1">START</text>
+    <text x="14.9" y="97.1">STOP</text>
+    <text x="25.3" y="97.1">ADV</text>
+    <text x="35.7" y="97.1">STRB</text>
+    <text x="46.1" y="97.1">ADDR</text>
+    <text x="56.5" y="97.1">CLK</text>
+    <text x="66.9" y="97.1">TIME</text>
+    <text x="77.3" y="97.1">RST</text>
+  </g>
+
+  <text x="40.64" y="112.4" fill="#24211d" font-family="Barlow Condensed" font-weight="600" font-size="2.8" text-anchor="middle">OUTPUTS</text>
+  <g fill="#57524c" font-family="Barlow Condensed" font-weight="600" font-size="2.3" text-anchor="middle">
+    <text x="6" y="115.1">CV</text>
+    <text x="17.7" y="115.1">TIME</text>
+    <text x="29.4" y="115.1">REF</text>
+    <text x="41.1" y="115.1">ALL</text>
+    <text x="52.8" y="115.1">P1</text>
+    <text x="64.5" y="115.1">P2</text>
+    <text x="76.2" y="115.1">EOC</text>
+  </g>
+
+</svg>

@@ -8,9 +8,9 @@
   "authorEmail": "",
   "modules": [
     {
-      "slug": "Program",
-      "name": "SpaceTime Program",
-      "description": "64-stage, eight-head SpaceTime engine with integrated MIDI -- the MetaModule twin of VCV's Program, merged with Core"
+      "slug": "MMProgram",
+      "name": "SpaceTime MM Program",
+      "description": "Portable Program and MIDI owner with a manually selectable 4-64 stage range"
     },
     {
       "slug": "TimingMonitor",
@@ -18,14 +18,14 @@
       "description": "Diagnostic clock-to-stage timing monitor for eight SpaceTime heads"
     },
     {
-      "slug": "Head",
-      "name": "SpaceTime Head",
-      "description": "Relocated SpaceTime head: runs its own Function Generator, bound to a Program over the shared-memory bus. Slug matches VCV's real Head (mechanics differ: bus-bound, not expander-chained)"
+      "slug": "MMHead",
+      "name": "SpaceTime MM Head",
+      "description": "Portable Function Generator head and sole DSP owner for its claimed head index"
     },
     {
-      "slug": "Stage4",
-      "name": "SpaceTime Stage4",
-      "description": "Publishes 4 stages' voltage/time to a Program over the shared-memory bus; owns no data. Slug matches VCV's real Stage4 (mechanics differ: bus-bound, not expander-chained, no local program-word storage)"
+      "slug": "MMStage4",
+      "name": "SpaceTime MM Stage4",
+      "description": "Portable four-stage bank viewer and editor for MMProgram"
     },
     {
       "slug": "Midi",
