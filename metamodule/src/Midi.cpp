@@ -147,10 +147,10 @@ struct SpaceTimeMidi : Module {
 			(char)('A' + instrumentId), linkName,
 			snapshot.controlChannel + 1,
 			snapshot.sliderChannel + 1,
-			snapshot.lastChannel < 0 ? 0 : snapshot.lastChannel + 1,
+			(int)(snapshot.lastChannel < 0 ? 0 : snapshot.lastChannel + 1),
 			midiKind,
-			snapshot.lastNumber < 0 ? 0 : snapshot.lastNumber,
-			snapshot.lastValue < 0 ? 0 : snapshot.lastValue,
+			(int)(snapshot.lastNumber < 0 ? 0 : snapshot.lastNumber),
+			(int)(snapshot.lastValue < 0 ? 0 : snapshot.lastValue),
 			spacetime::MidiCore::routeName(snapshot.lastRoute));
 		if (length < 0)
 			return 0;
