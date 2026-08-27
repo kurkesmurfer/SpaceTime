@@ -1,7 +1,7 @@
 # SpaceTime MetaModule Authoring Architecture
 
 **Status:** Accepted product direction; implementation specification and plan  
-**Date:** 2026-08-23  
+**Date:** 2026-08-27
 **Scope:** MetaModule runtime modules, their VCV authoring twins, preset export,
 controller bindings, shared state, MIDI parity, and hardware verification  
 **Related documents:** `docs/ARCHITECTURE.md`,
@@ -69,8 +69,17 @@ The following decisions are accepted and are not implementation options:
     controls and eight inputs as native VCV HEAD ALL, but no signal outputs and
     no HeadDSP.
 15. Native VCV's existing expander-chain modules and old patches remain
-    unchanged. A parallel VCV authoring family provides the exact MetaModule
-    module contracts.
+    unchanged. A parallel, fully functional VCV Rack authoring family provides
+    the exact MetaModule module contracts.
+16. The portable authoring slugs are frozen as `MMProgram`, `MMStage4` and
+    `MMHead`. `MMHeadAll` is reserved for the deferred Head All module.
+17. The VCV authoring modules are complete playable SpaceTime modules, not
+    export-only parameter shells. A patch made from them must run and be
+    testable in VCV before it is exported to MetaModule.
+18. The existing MetaModule MIDI implementation is the accepted foundation.
+    Complete MetaModule controller snapshot/live-feedback support follows after
+    the three-module authoring family is operational.
+19. Head All is deferred and does not block the first portable authoring set.
 
 ## 3. Target Module Family
 
@@ -366,8 +375,8 @@ parameters from overwriting a freshly loaded Program preset.
 ## 9. VCV Authoring Twins
 
 The existing VCV modules keep their current slugs and expander behavior. New
-authoring modules must have unique slugs shared exactly with their MetaModule
-counterparts. Proposed slugs are:
+authoring modules have unique slugs shared exactly with their MetaModule
+counterparts. The frozen slugs are:
 
 ```text
 MMProgram
@@ -376,13 +385,17 @@ MMHead
 MMHeadAll
 ```
 
-Names are a pre-implementation checkpoint, but once released the slugs,
-ParamId, InputId and OutputId orders are append-only.
+`MMProgram`, `MMStage4` and `MMHead` form the first implementation set.
+`MMHeadAll` reserves the namespace for the deferred fourth module. Once
+implemented, ParamId, InputId and OutputId orders are append-only.
 
 The VCV twins use the same Instrument-ID shared bus and the same ownership and
-reflection behavior as MetaModule. They are not expander-chain adapters. A VCV
-preset built from them must therefore behave like the hardware preset before
-export.
+reflection behavior as MetaModule. They are not expander-chain adapters or
+passive export facades. They run the real Program/MIDI, stage-editing and Head
+DSP paths in VCV Rack, expose the complete accepted controls and jacks, save and
+restore their musical state, and produce inspectable audio/CV behavior. A VCV
+preset built from them must therefore be playable and testable before export,
+then behave equivalently on MetaModule.
 
 Shared headers define all parameter, input and output indexes. Both adapters
 include those headers, and compile-time/static unit tests assert every index and
@@ -425,11 +438,14 @@ processing.
 
 ### Phase 0 - Baseline and contracts
 
-1. Commit the accepted pre-refactor baseline separately.
+1. Commit and tag the accepted pre-refactor baseline separately. **Done:**
+   `mm-eb12-baseline`.
 2. Add shared module-ID contract headers.
 3. Add compile-time index/count tests.
 4. Capture current ARM `size`, package size and hardware CPU figures.
-5. Freeze new slugs and the Number of Stages default.
+5. Freeze new slugs and the Number of Stages default. **Slugs done:**
+   `MMProgram`, `MMStage4`, `MMHead`; `MMHeadAll` reserved. Stage-count default
+   remains to be frozen.
 
 **Exit:** contracts compile on host, VCV and ARM; no current VCV patch changes.
 
@@ -447,13 +463,14 @@ processing.
 ### Phase 2 - Portable Program/MIDI owner
 
 1. Separate portable Program state from target MIDI endpoint state.
-2. Integrate full `MidiFeedbackCore` into MetaModule Program.
-3. Verify byte-for-byte incoming route parity against VCV.
-4. Verify DROID snapshot and live-update parity for all 64 stages and eight
-   heads.
-5. Add generation-based Program publication after patch/preset load.
+2. Retain the accepted incoming, clock/transport and outgoing MIDI behavior.
+3. Verify byte-for-byte incoming route parity against native VCV.
+4. Add generation-based Program publication after patch/preset load.
+5. Build the fully functional `MMProgram` VCV authoring twin against the shared
+   contract.
 
-**Exit:** DROID can control and visualize MetaModule Program exactly as VCV.
+**Exit:** `MMProgram` owns identical portable musical state and MIDI behavior in
+VCV and MetaModule; physical endpoint selection remains target-specific.
 
 ### Phase 3 - Stage4 Viewer
 
@@ -479,32 +496,46 @@ processing.
 **Exit:** local Head jacks, outgoing MIDI, feedback and Program telemetry report
 one identical head state; eight Heads distribute across hardware cores.
 
-### Phase 5 - Head All
+### Phase 5 - Portable preset authoring
+
+1. Build a VCV patch with `MMProgram`, `MMStage4` and one to eight `MMHead`
+   instances.
+2. Map representative knobs, buttons and hardware jacks.
+3. Export YML and inspect module/parameter/jack indexes.
+4. Load in the desktop MetaModule simulator and compare behavior.
+5. Load unchanged on hardware and repeat.
+6. Decide whether provisional development presets are recreated or migrated
+   through hidden legacy wrappers.
+
+**Exit:** one preset passes VCV, simulator and hardware without manual index or
+state repair.
+
+### Phase 6 - MetaModule controller feedback
+
+1. Integrate full `MidiFeedbackCore` into MetaModule `MMProgram`.
+2. Preserve the accepted controller capability negotiation and snapshot
+   protocol.
+3. Verify DROID snapshot and live-update parity for all 64 stages and eight
+   heads.
+4. Verify feedback routing and loop prevention with the hardware MIDI endpoint.
+
+**Exit:** DROID can control and visualize MetaModule Program exactly as native
+VCV without changing the established performance MIDI map.
+
+### Phase 7 - Deferred Head All
 
 1. Add singleton-per-Instrument ownership.
 2. Port all twelve controls and eight inputs.
 3. Add aggregate/mixed-state reflection.
 4. Add common-signal normaling to unpatched Head inputs.
 5. Preserve channel 9 MIDI behavior with or without the module.
-6. Build the exact VCV authoring twin.
+6. Build the fully functional `MMHeadAll` VCV authoring twin.
 
 **Exit:** panel, CV and channel 9 operations produce the same all-head results.
 
-### Phase 6 - Preset authoring and migration
+This phase is explicitly deferred and does not block Phases 0-6.
 
-1. Build a VCV patch with MMProgram, MMStage4, one to eight MMHeads and optional
-   MMHeadAll.
-2. Map representative knobs, buttons and hardware jacks.
-3. Export YML and inspect module/parameter/jack indexes.
-4. Load in the desktop MetaModule simulator and compare behavior.
-5. Load unchanged on hardware and repeat.
-6. Decide whether development presets are recreated or migrated through hidden
-   legacy wrappers.
-
-**Exit:** one preset passes VCV, simulator and hardware without manual index or
-state repair.
-
-### Phase 7 - Cleanup and release documentation
+### Phase 8 - Cleanup and release documentation
 
 1. Remove disposable bus probes from the musical package or move them to a
    diagnostic package.
@@ -590,11 +621,20 @@ Accepted on 2026-08-22/23:
 - one DSP owner per claimed head;
 - optional Head All singleton per Instrument ID;
 - MIDI behavior remains identical to native VCV;
-- a separate, index-identical VCV authoring family is required.
+- a separate, index-identical and fully functional VCV authoring family is
+  required.
+
+Accepted on 2026-08-27:
+
+- authoring slugs are `MMProgram`, `MMStage4` and `MMHead`;
+- `MMHeadAll` is reserved but its implementation is deferred;
+- the VCV authoring modules must be playable and testable in VCV Rack;
+- the existing MetaModule MIDI solution is retained;
+- complete MetaModule controller feedback follows after the initial portable
+  authoring set.
 
 Open checkpoints before contract freeze:
 
-- final authoring-module slugs and display names;
 - Number of Stages default (64 recommended);
 - Program poly-output strategy;
 - MetaModule performance/feedback MIDI output routing;
