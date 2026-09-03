@@ -16,19 +16,19 @@ extern Plugin* pluginInstance;
 // All positions in mm; MUST match artwork/Head.svg.
 namespace LayoutHR {
 constexpr float IH_LABEL_Y = 46.0f, IH_KNOB_Y = 52.2f;
-constexpr float IH_X0 = 20.f, IH_X1 = 61.f;
+constexpr float IH_X0 = 23.f, IH_X1 = 68.44f;
 constexpr float DIV2_Y = 58.2f;
 constexpr float TR_LABEL_Y = 62.0f, TR_BTN_Y = 68.2f;
-constexpr float TR_X0 = 11.f, TR_PITCH = 20.f;
+constexpr float TR_X0 = 13.f, TR_PITCH = 22.f;
 constexpr float DIV3_Y = 74.2f;
-constexpr float CFG_LABEL_Y = 78.0f, CFG_CTRL_Y = 84.2f;
-constexpr float CFG_X0 = 4.5f, CFG_PITCH = 10.4f;
+constexpr float CFG_LABEL_Y = 78.0f, CFG_CTRL_Y = 83.8f;
+constexpr float CFG_X0 = 6.5f, CFG_PITCH = 11.2f;
 constexpr float DIV4_Y = 90.2f;
 constexpr float IN_HDR_Y = 94.4f, IN_LABEL_Y = 97.1f, IN_JACK_Y = 102.2f;
-constexpr float IN_X0 = 4.5f, IN_PITCH = 10.4f;
+constexpr float IN_X0 = 6.5f, IN_PITCH = 11.2f;
 constexpr float DIV5_Y = 108.2f;
 constexpr float OUT_HDR_Y = 112.4f, OUT_LABEL_Y = 115.1f, OUT_JACK_Y = 120.2f;
-constexpr float OUT_X0 = 6.f, OUT_PITCH = 11.7f;
+constexpr float OUT_X0 = 7.f, OUT_PITCH = 12.9f;
 } // namespace LayoutHR
 
 namespace {
@@ -460,7 +460,7 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Head.svg")));
 
 		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 14.2f)));
-		display->box.size = mm2px(Vec(73.f, 27.f));
+		display->box.size = mm2px(Vec(83.44f, 27.f));
 		display->firstLightId = SpaceTimeHead::STATUS_DISPLAY;
 		display->font = "Default_10";
 		display->color = Colors565::White;
@@ -499,10 +499,10 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 				SpaceTimeHead::CV_OUTPUT + i));
 
 		// Status belongs to the first functional row; keep the identity band clear.
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(50.f, 46.8f)), module, SpaceTimeHead::RUN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(58.f, 46.8f)), module, SpaceTimeHead::HOLD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(66.f, 46.8f)), module, SpaceTimeHead::STOPPED_LIGHT));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(74.f, 46.8f)), module, SpaceTimeHead::LINK_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(60.f, 38.2f)), module, SpaceTimeHead::RUN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(68.f, 38.2f)), module, SpaceTimeHead::HOLD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(76.f, 38.2f)), module, SpaceTimeHead::STOPPED_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(84.f, 38.2f)), module, SpaceTimeHead::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

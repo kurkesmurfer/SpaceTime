@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -17,7 +18,7 @@ SUPERSAMPLE = 8
 PANELS = {
     "Program": (304, 240),
     "TimingMonitor": (114, 240),
-    "Head": (152, 240),
+    "Head": (171, 240),
     "Stage4": (114, 240),
     "Midi": (114, 240),
     "ProbeCore": (76, 240),
@@ -65,6 +66,19 @@ def render(name: str, target_size: tuple[int, int]) -> None:
     mm_width, mm_height = view[2], view[3]
     parents = {child: parent for parent in tree.iter() for child in parent}
     labels: list[dict[str, str | float]] = []
+
+    # CairoSVG does not reliably follow relative SVG image references when
+    # rendering from an in-memory XML tree. Embed them so panel branding is
+    # present in the packaged PNG on every build host.
+    for element in tree.iter():
+        if element.tag.rsplit("}", 1)[-1] != "image":
+            continue
+        href_key = next((key for key in element.attrib if key.rsplit("}", 1)[-1] == "href"), None)
+        if href_key is None or element.attrib[href_key].startswith("data:"):
+            continue
+        linked = (source.parent / element.attrib[href_key]).resolve()
+        encoded = base64.b64encode(linked.read_bytes()).decode("ascii")
+        element.set(href_key, f"data:image/svg+xml;base64,{encoded}")
 
     for element in list(tree.iter()):
         if element.tag.rsplit("}", 1)[-1] != "text":

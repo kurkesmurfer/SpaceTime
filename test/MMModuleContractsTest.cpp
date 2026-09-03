@@ -8,7 +8,7 @@ TEST_CASE("portable MM module slugs and contract sizes are frozen") {
 	CHECK(std::string(MMProgramContract::slug) == "MMProgram");
 	CHECK(std::string(MMStage4Contract::slug) == "MMStage4");
 	CHECK(std::string(MMHeadContract::slug) == "MMHead");
-	CHECK(MMProgramContract::PARAMS_LEN == 46);
+	CHECK(MMProgramContract::PARAMS_LEN == 48);
 	CHECK(MMProgramContract::INPUTS_LEN == 4);
 	CHECK(MMProgramContract::OUTPUTS_LEN == 3);
 	CHECK(MMStage4Contract::PARAMS_LEN == 11);

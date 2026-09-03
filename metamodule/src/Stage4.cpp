@@ -45,6 +45,8 @@ struct SpaceTimeStage4 : Module {
 		STATUS_DISPLAY,
 		ENUMS(PITCH_DISPLAYS, 4),
 		ENUMS(TIME_DISPLAYS, 4),
+		ENUMS(EDIT_LIGHTS, 4),
+		ENUMS(HEAD_LIGHTS, 4 * 8 * 3),
 		LIGHTS_LEN
 	};
 
@@ -55,11 +57,21 @@ struct SpaceTimeStage4 : Module {
 	spacetime::ExtInputs ext;
 	spacetime::Globals globals;
 	spacetime::ScaleKey scaleKey;
+	spacetime::TimingSnapshot timing;
+	bool timingValid = false;
 
 	uint32_t busToken = stageBankRegistry.makeToken();
 	int instrumentId = 0;
 	int bankIndex = 0;
 	bool ownsBank = false;
+	int selectedStage = -1;
+	bool reflectionReady = false;
+	float lastParamVoltage[4] = {};
+	float lastParamTime[4] = {};
+	float lastTableVoltage[4] = {};
+	float lastTableTime[4] = {};
+	int lastFocusParam = 0;
+	uint32_t focusSequence = 0;
 
 	uint32_t lastTableHeartbeat = 0;
 	float staleTime = 1.f;
@@ -76,6 +88,12 @@ struct SpaceTimeStage4 : Module {
 			configParam(TIME_PARAMS + s, 0.f, 1.f, 0.5f, string::f("Stage %d time (within range)", s + 1));
 		}
 		configLight(LINK_LIGHT, "Linked to Program, no conflicts");
+		for (int s = 0; s < 4; s++) {
+			configLight(EDIT_LIGHTS + s, string::f("Stage %d edit select", s + 1));
+			for (int h = 0; h < 8; h++)
+				configLight(HEAD_LIGHTS + (s * 8 + h) * 3,
+					string::f("Stage %d head %d position", s + 1, h + 1));
+		}
 		controlDivider.setDivision(16);
 		ownsBank = stageBankRegistry.registerBank(instrumentId, bankIndex, busToken);
 	}
@@ -89,6 +107,21 @@ struct SpaceTimeStage4 : Module {
 			processControl(args.sampleTime * controlDivider.getDivision());
 		lights[LINK_LIGHT].setBrightnessSmooth(
 			coreLink == CoreLink::Linked && !bankConflict ? 1.f : 0.f, args.sampleTime);
+		static const float headColors[8][3] = {
+			{1.f, .2f, .2f}, {.2f, .8f, .2f}, {.2f, .4f, 1.f}, {1.f, .8f, 0.f},
+			{.8f, .2f, .8f}, {.2f, .8f, .8f}, {1.f, .53f, .07f}, {.93f, .93f, .93f}};
+		for (int s = 0; s < 4; s++) {
+			int stage = bankIndex * spacetime::kStagesPerBlock + s;
+			lights[EDIT_LIGHTS + s].setBrightnessSmooth(
+				selectedStage == stage ? 1.f : 0.f, args.sampleTime);
+			for (int h = 0; h < spacetime::kMaxHeads; h++) {
+				float brightness = timingValid && timing.stage[h] == stage
+					? (timing.runState[h] == spacetime::RUN_STOPPED ? 0.35f : 1.f) : 0.f;
+				for (int c = 0; c < 3; c++)
+					lights[HEAD_LIGHTS + (s * 8 + h) * 3 + c].setBrightnessSmooth(
+						brightness * headColors[h][c], args.sampleTime);
+			}
+		}
 	}
 
 	void processControl(float dt) {
@@ -98,6 +131,7 @@ struct SpaceTimeStage4 : Module {
 			setBinding(nextInstrument, nextBank);
 
 		bool coreValid = timingBusRegistry.bus(instrumentId).coreCount.load(std::memory_order_acquire) == 1;
+		timingValid = coreValid && timingBusRegistry.bus(instrumentId).telemetry.read(timing);
 		uint32_t heartbeat = stageTableRegistry.tableHeartbeat(instrumentId);
 		if (heartbeat != lastTableHeartbeat) {
 			lastTableHeartbeat = heartbeat;
@@ -110,11 +144,53 @@ struct SpaceTimeStage4 : Module {
 			(coreCount == 1 && staleTime < 0.25f ? CoreLink::Linked : CoreLink::Waiting);
 		bankConflict = stageBankRegistry.bankLinkCount(instrumentId, bankIndex) > 1;
 
-		// Read-only reference: Program's own table for these 4 stages, for
-		// this module's display only -- never republished, never arbitrated
-		// (see the struct-level comment for why Program is sole authority).
-		stageTableRegistry.readTable(instrumentId, coreValid, table);
-		stageTableRegistry.readContext(instrumentId, coreValid, ext, globals, scaleKey);
+		bool tableValid = stageTableRegistry.readTable(instrumentId, coreValid, table);
+		uint8_t selected = 0;
+		bool contextValid = stageTableRegistry.readContext(
+			instrumentId, coreValid, ext, globals, scaleKey, &selected);
+		int focus = clamp((int)std::round(params[FOCUS_PARAM].getValue()), 0, 3);
+		bool focusEdited = reflectionReady && focus != lastFocusParam;
+
+		if (tableValid) {
+			for (int s = 0; s < 4; s++) {
+				int stage = bankIndex * spacetime::kStagesPerBlock + s;
+				float authoritativeV = table.voltage[stage];
+				float authoritativeT = table.time[stage];
+				float currentV = params[VOLTAGE_PARAMS + s].getValue();
+				float currentT = params[TIME_PARAMS + s].getValue();
+				bool tableChanged = !reflectionReady ||
+					authoritativeV != lastTableVoltage[s] ||
+					authoritativeT != lastTableTime[s];
+				if (tableChanged) {
+					params[VOLTAGE_PARAMS + s].setValue(authoritativeV);
+					params[TIME_PARAMS + s].setValue(authoritativeT);
+				} else if (currentV != lastParamVoltage[s] || currentT != lastParamTime[s]) {
+					focus = s;
+					params[FOCUS_PARAM].setValue((float)s);
+					focusEdited = true;
+				}
+				lastTableVoltage[s] = authoritativeV;
+				lastTableTime[s] = authoritativeT;
+				lastParamVoltage[s] = params[VOLTAGE_PARAMS + s].getValue();
+				lastParamTime[s] = params[TIME_PARAMS + s].getValue();
+			}
+			reflectionReady = true;
+		}
+
+		if (focusEdited) {
+			selectedStage = bankIndex * spacetime::kStagesPerBlock + focus;
+			focusSequence++;
+		} else if (contextValid) {
+			selectedStage = clamp((int)selected, 0, spacetime::kMaxStages - 1);
+			int localStage = selectedStage - bankIndex * spacetime::kStagesPerBlock;
+			if (localStage >= 0 && localStage < spacetime::kStagesPerBlock) {
+				params[FOCUS_PARAM].setValue((float)localStage);
+				focus = localStage;
+			}
+		} else {
+			selectedStage = -1;
+		}
+		lastFocusParam = focus;
 
 		spacetime::BlockSegment segment;
 		for (int s = 0; s < 4; s++) {
@@ -127,7 +203,8 @@ struct SpaceTimeStage4 : Module {
 			ownsBank = stageBankRegistry.tryClaimBank(instrumentId, bankIndex, busToken);
 		bool activeBank = bankIndex * spacetime::kStagesPerBlock < table.count;
 		if (activeBank && ownsBank && stageBankRegistry.bankLinkCount(instrumentId, bankIndex) == 1)
-			stageBankRegistry.publishBank(instrumentId, bankIndex, segment);
+			stageBankRegistry.publishBank(instrumentId, bankIndex, segment,
+				(uint8_t)(bankIndex * spacetime::kStagesPerBlock + focus), focusSequence);
 	}
 
 	void setBinding(int nextInstrument, int nextBank) {
@@ -139,6 +216,8 @@ struct SpaceTimeStage4 : Module {
 		lastTableHeartbeat = 0;
 		staleTime = 1.f;
 		coreLink = CoreLink::Waiting;
+		selectedStage = -1;
+		reflectionReady = false;
 	}
 
 	size_t get_display_text(int lightId, std::span<char> text) override {
@@ -153,10 +232,13 @@ struct SpaceTimeStage4 : Module {
 		const char* linkName = coreLink == CoreLink::Linked ? "LINK" :
 			(coreLink == CoreLink::Duplicate ? "DUP" : "WAIT");
 		char buffer[128];
+		bool inBank = selectedStage >= bankIndex * spacetime::kStagesPerBlock &&
+			selectedStage < (bankIndex + 1) * spacetime::kStagesPerBlock;
 		int length = std::snprintf(buffer, sizeof(buffer),
-			"ID %c BANK %02d%s\n%s STAGES %d-%d\nV %.2f %.2f %.2f %.2f",
+			"ID %c BANK %02d%s\n%s %02d-%02d SEL %02d%s\nV %.2f %.2f %.2f %.2f",
 			(char)('A' + instrumentId), bankIndex + 1, bankConflict ? "!" : "",
 			linkName, bankIndex * 4 + 1, bankIndex * 4 + 4,
+			selectedStage < 0 ? 0 : selectedStage + 1, inBank ? "" : " OUT",
 			params[VOLTAGE_PARAMS + 0].getValue(), params[VOLTAGE_PARAMS + 1].getValue(),
 			params[VOLTAGE_PARAMS + 2].getValue(), params[VOLTAGE_PARAMS + 3].getValue());
 		if (length < 0)
@@ -225,6 +307,15 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 			addChild(time);
 
 			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 107.5f)), module, SpaceTimeStage4::TIME_PARAMS + s));
+			addChild(createLightCentered<MediumLight<RedLight>>(
+				mm2px(Vec(colX[s], 78.f)), module, SpaceTimeStage4::EDIT_LIGHTS + s));
+			for (int h = 0; h < 8; h++) {
+				float dx = (h % 4 - 1.5f) * 2.2f;
+				float dy = h < 4 ? 0.f : 3.f;
+				addChild(createLightCentered<SmallLight<RedGreenBlueLight>>(
+					mm2px(Vec(colX[s] + dx, 82.f + dy)), module,
+					SpaceTimeStage4::HEAD_LIGHTS + s * 8 * 3 + h * 3));
+			}
 		}
 
 		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 42.f)), module, SpaceTimeStage4::LINK_LIGHT));

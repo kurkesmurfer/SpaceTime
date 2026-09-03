@@ -101,17 +101,17 @@ public:
 	// cares about one of the two (unlikely, but cheap to allow) isn't forced
 	// to pay for both on every read, and so neither payload's field count
 	// has to change if the other one ever does.
-	static const unsigned kContextFieldCount = 8 + 5 + 2;  // ExtInputs, Globals, ScaleKey
+	static const unsigned kContextFieldCount = 8 + 5 + 2 + 1;  // ExtInputs, Globals, ScaleKey, selection
 
 	void publishContext(unsigned busIndex, const ExtInputs& ext, const Globals& globals,
-			const ScaleKey& scaleKey) {
+			const ScaleKey& scaleKey, uint8_t selectedStage) {
 		uint32_t fields[kContextFieldCount];
-		packContext(ext, globals, scaleKey, fields);
+		packContext(ext, globals, scaleKey, selectedStage, fields);
 		contextBus(busIndex).publish(fields);
 	}
 
 	bool readContext(unsigned busIndex, bool coreValid, ExtInputs& ext, Globals& globals,
-			ScaleKey& scaleKey) {
+			ScaleKey& scaleKey, uint8_t* selectedStage = nullptr) {
 		ext = ExtInputs();
 		globals = Globals();
 		scaleKey = ScaleKey();
@@ -122,7 +122,7 @@ public:
 		uint32_t fields[kContextFieldCount];
 		if (!contextBus(busIndex).read(fields))
 			return false;
-		unpackContext(fields, ext, globals, scaleKey);
+		unpackContext(fields, ext, globals, scaleKey, selectedStage);
 		return true;
 	}
 
@@ -140,6 +140,7 @@ private:
 	}
 
 	static void packContext(const ExtInputs& ext, const Globals& globals, const ScaleKey& scaleKey,
+			uint8_t selectedStage,
 			uint32_t (&fields)[kContextFieldCount]) {
 		for (int i = 0; i < 4; i++) {
 			fields[i] = floatToBits(ext.v[i]);
@@ -152,10 +153,11 @@ private:
 		fields[12] = globals.pulseRetrig ? 1u : 0u;
 		fields[13] = scaleKey.key;
 		fields[14] = scaleKey.scale;
+		fields[15] = selectedStage;
 	}
 
 	static void unpackContext(const uint32_t (&fields)[kContextFieldCount], ExtInputs& ext,
-			Globals& globals, ScaleKey& scaleKey) {
+			Globals& globals, ScaleKey& scaleKey, uint8_t* selectedStage) {
 		for (int i = 0; i < 4; i++) {
 			ext.v[i] = bitsToFloat(fields[i]);
 			ext.connected[i] = fields[4 + i] != 0;
@@ -167,6 +169,8 @@ private:
 		globals.pulseRetrig = fields[12] != 0;
 		scaleKey.key = (uint8_t)fields[13];
 		scaleKey.scale = (uint8_t)fields[14];
+		if (selectedStage)
+			*selectedStage = (uint8_t)fields[15];
 	}
 
 	static void pack(const StageTable& table, uint32_t (&fields)[kFieldCount]) {
@@ -404,7 +408,9 @@ private:
 // ---- Stage banks (StageRemote, kBankCount slots per instrument) -----------
 
 struct MetaModuleStageBankBus {
-	static const unsigned kFieldCount = kStagesPerBlock * 3;  // voltage, time, program.bits
+	// The final two fields carry an event-style focus request. The sequence
+	// distinguishes an intentional viewer action from reflected Program state.
+	static const unsigned kFieldCount = kStagesPerBlock * 3 + 2;
 
 	std::atomic<uint32_t> owner{0};
 	std::atomic<uint32_t> count{0};
@@ -461,9 +467,10 @@ public:
 	// Caller must hold ownership (registerBank/tryClaimBank returned true)
 	// before calling this -- exactly the discipline ProbeModule already
 	// follows. This call does not itself check.
-	void publishBank(unsigned busIndex, unsigned bankIndex, const BlockSegment& segment) {
+	void publishBank(unsigned busIndex, unsigned bankIndex, const BlockSegment& segment,
+			uint8_t focusedStage = 0, uint32_t focusSequence = 0) {
 		uint32_t fields[MetaModuleStageBankBus::kFieldCount];
-		packBlockSegment(segment, fields);
+		packBlockSegment(segment, focusedStage, focusSequence, fields);
 		bank(busIndex, bankIndex).segment.publish(fields);
 	}
 
@@ -480,7 +487,8 @@ public:
 	// to a bus struct left in a structurally-claimed-looking state by an
 	// unclean plugin unload/reload (EB7): looking claimed is not the same
 	// as having ever actually received real data.
-	bool readBank(unsigned busIndex, unsigned bankIndex, BlockSegment& out) {
+	bool readBank(unsigned busIndex, unsigned bankIndex, BlockSegment& out,
+			uint8_t* focusedStage = nullptr, uint32_t* focusSequence = nullptr) {
 		out = BlockSegment();
 		MetaModuleStageBankBus& target = bank(busIndex, bankIndex);
 		if (target.owner.load(std::memory_order_acquire) == 0)
@@ -492,7 +500,7 @@ public:
 		uint32_t fields[MetaModuleStageBankBus::kFieldCount];
 		if (!target.segment.read(fields))
 			return false;
-		unpackBlockSegment(fields, out);
+		unpackBlockSegment(fields, out, focusedStage, focusSequence);
 		return true;
 	}
 
@@ -514,22 +522,29 @@ private:
 	static unsigned clampBus(unsigned index) { return index < kBusCount ? index : 0; }
 	static unsigned clampBank(unsigned index) { return index < kBankCount ? index : 0; }
 
-	static void packBlockSegment(const BlockSegment& segment,
+	static void packBlockSegment(const BlockSegment& segment, uint8_t focusedStage,
+			uint32_t focusSequence,
 			uint32_t (&fields)[MetaModuleStageBankBus::kFieldCount]) {
 		for (int i = 0; i < kStagesPerBlock; i++) {
 			fields[i * 3 + 0] = floatToBits(segment.voltage[i]);
 			fields[i * 3 + 1] = floatToBits(segment.time[i]);
 			fields[i * 3 + 2] = segment.program[i].bits;
 		}
+		fields[kStagesPerBlock * 3] = focusedStage;
+		fields[kStagesPerBlock * 3 + 1] = focusSequence;
 	}
 
 	static void unpackBlockSegment(const uint32_t (&fields)[MetaModuleStageBankBus::kFieldCount],
-			BlockSegment& segment) {
+			BlockSegment& segment, uint8_t* focusedStage, uint32_t* focusSequence) {
 		for (int i = 0; i < kStagesPerBlock; i++) {
 			segment.voltage[i] = bitsToFloat(fields[i * 3 + 0]);
 			segment.time[i] = bitsToFloat(fields[i * 3 + 1]);
 			segment.program[i] = ProgramWord(fields[i * 3 + 2]);
 		}
+		if (focusedStage)
+			*focusedStage = (uint8_t)fields[kStagesPerBlock * 3];
+		if (focusSequence)
+			*focusSequence = fields[kStagesPerBlock * 3 + 1];
 	}
 
 	static bool claim(std::atomic<uint32_t>& owner, uint32_t token) {

@@ -1,4 +1,5 @@
 #include "plugin.hpp"
+#include "paneltheme.hpp"
 
 #include "MMBus.hpp"
 #include "HeadRemoteController.hpp"
@@ -14,19 +15,19 @@ extern Plugin* pluginInstance;
 // All positions in mm; MUST match artwork/Head.svg.
 namespace LayoutHR {
 constexpr float IH_LABEL_Y = 46.0f, IH_KNOB_Y = 52.2f;
-constexpr float IH_X0 = 20.f, IH_X1 = 61.f;
+constexpr float IH_X0 = 23.f, IH_X1 = 68.44f;
 constexpr float DIV2_Y = 58.2f;
 constexpr float TR_LABEL_Y = 62.0f, TR_BTN_Y = 68.2f;
-constexpr float TR_X0 = 11.f, TR_PITCH = 20.f;
+constexpr float TR_X0 = 13.f, TR_PITCH = 22.f;
 constexpr float DIV3_Y = 74.2f;
-constexpr float CFG_LABEL_Y = 78.0f, CFG_CTRL_Y = 84.2f;
-constexpr float CFG_X0 = 4.5f, CFG_PITCH = 10.4f;
+constexpr float CFG_LABEL_Y = 78.0f, CFG_CTRL_Y = 83.8f;
+constexpr float CFG_X0 = 6.5f, CFG_PITCH = 11.2f;
 constexpr float DIV4_Y = 90.2f;
 constexpr float IN_HDR_Y = 94.4f, IN_LABEL_Y = 97.1f, IN_JACK_Y = 102.2f;
-constexpr float IN_X0 = 4.5f, IN_PITCH = 10.4f;
+constexpr float IN_X0 = 6.5f, IN_PITCH = 11.2f;
 constexpr float DIV5_Y = 108.2f;
 constexpr float OUT_HDR_Y = 112.4f, OUT_LABEL_Y = 115.1f, OUT_JACK_Y = 120.2f;
-constexpr float OUT_X0 = 6.f, OUT_PITCH = 11.7f;
+constexpr float OUT_X0 = 7.f, OUT_PITCH = 12.9f;
 } // namespace LayoutHR
 
 namespace {
@@ -457,7 +458,66 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 	SpaceTimeHeadWidget(SpaceTimeHead* module) {
 		using namespace LayoutHR;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/MMHead.svg")));
+		setPanel(spacetime::createThemedPanel(
+			asset::plugin(pluginInstance, "res/MMHead-light.svg"),
+			asset::plugin(pluginInstance, "res/MMHead.svg")));
+
+		spacetime::addHeaderMark(this, 91.44f, 17.74f);
+		spacetime::addHeaderLockup(this, 91.44f, "Head", 17.74f);
+		spacetime::addSubtitle(this, 45.72f, 10.2f, "FUNCTION GENERATOR");
+		spacetime::addMMStatusReadout(this, Vec(4.f, 14.2f), Vec(83.44f, 27.f),
+			"ID A HEAD 1\nWAIT STOP S01\nCLK INT x1\nDIR FWD LOOP FULL",
+			[module]() {
+				if (!module)
+					return std::string();
+				const char* linkName = module->coreLink == SpaceTimeHead::CoreLink::Linked ? "LINK" :
+					(module->coreLink == SpaceTimeHead::CoreLink::Duplicate ? "DUP" : "WAIT");
+				const char* runName = module->out.runState == spacetime::RUN_STOPPED ? "STOP" :
+					(module->out.runState == spacetime::RUN_HOLDING ? "HOLD" : "RUN");
+				const char* sourceNames[] = {"INT", "EXT CV", "MIDI", "VIRTUAL"};
+				const char* divisionNames[] = {"/16", "/8", "/4", "/2", "x1", "x2", "x4", "x8", "x16"};
+				const char* directionNames[] = {"FWD", "REV", "PEND", "RAND", "BROWN"};
+				const char* loopNames[] = {"1-SHOT", "F-L", "FULL"};
+				const spacetime::HeadConfig& cfg = module->controller.config();
+				char text[160];
+				std::snprintf(text, sizeof(text),
+					"ID %c HEAD %d%s\n%s %s S%02d\nCLK %s %s\nDIR %s LOOP %s",
+					(char)('A' + module->instrumentId), module->headIndex + 1,
+					module->headConflict ? "!" : "", linkName, runName,
+					(int)module->out.currentStage + 1,
+					sourceNames[clamp(module->controller.clockSource(), 0, 3)],
+					divisionNames[clamp((int)cfg.clkDivIndex, 0, 8)],
+					directionNames[clamp((int)cfg.direction, 0, 4)],
+					loopNames[clamp((int)cfg.loopMode, 0, 2)]);
+				return std::string(text);
+			});
+		static const float identityX[2] = {IH_X0, IH_X1};
+		static const char* identityNames[2] = {"INSTRUMENT ID", "HEAD INDEX"};
+		for (int i = 0; i < 2; i++)
+			spacetime::addKnobLabel(this, identityX[i], IH_LABEL_Y, identityNames[i]);
+		static const char* transportNames[4] = {"START", "STOP", "ADV", "RST"};
+		for (int i = 0; i < 4; i++)
+			spacetime::addKnobLabel(this, TR_X0 + i * TR_PITCH, TR_LABEL_Y, transportNames[i]);
+		static const float statusX[4] = {60.f, 68.f, 76.f, 84.f};
+		static const char* statusNames[4] = {"RUN", "HLD", "STP", "LNK"};
+		for (int i = 0; i < 4; i++)
+			spacetime::addLabel(this, statusX[i], 34.4f, statusNames[i],
+				spacetime::fontLabelSemiBold(), 5.5f, spacetime::colorLabelIO(),
+				0.4f, spacetime::colorLabelIO());
+
+		static const char* configNames[8] = {
+			"ADDR", "SRC", "MODE", "DIR", "CLK", "DIV", "TIME", "LOOP"};
+		for (int i = 0; i < 8; i++)
+			spacetime::addKnobLabel(this, CFG_X0 + i * CFG_PITCH, CFG_LABEL_Y, configNames[i]);
+		spacetime::addSectionHeading(this, 45.72f, IN_HDR_Y, "INPUTS");
+		static const char* inputNames[8] = {
+			"START", "STOP", "ADV", "STRB", "ADDR", "CLK", "TIME", "RST"};
+		for (int i = 0; i < 8; i++)
+			spacetime::addIoLabel(this, IN_X0 + i * IN_PITCH, IN_LABEL_Y, inputNames[i]);
+		spacetime::addSectionHeading(this, 45.72f, OUT_HDR_Y, "OUTPUTS");
+		static const char* outputNames[7] = {"CV", "TIME", "REF", "ALL", "P1", "P2", "EOC"};
+		for (int i = 0; i < 7; i++)
+			spacetime::addIoLabel(this, OUT_X0 + i * OUT_PITCH, OUT_LABEL_Y, outputNames[i]);
 
 		#if 0
 		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 14.2f)));
@@ -500,14 +560,16 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(OUT_X0 + i * OUT_PITCH, OUT_JACK_Y)), module,
 				SpaceTimeHead::CV_OUTPUT + i));
 
-		// Status belongs to the first functional row; keep the identity band clear.
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(50.f, 46.8f)), module, SpaceTimeHead::RUN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(58.f, 46.8f)), module, SpaceTimeHead::HOLD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(66.f, 46.8f)), module, SpaceTimeHead::STOPPED_LIGHT));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(74.f, 46.8f)), module, SpaceTimeHead::LINK_LIGHT));
+		// Keep status in the display footer so it cannot collide with identity controls.
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(60.f, 38.2f)), module, SpaceTimeHead::RUN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(68.f, 38.2f)), module, SpaceTimeHead::HOLD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(76.f, 38.2f)), module, SpaceTimeHead::STOPPED_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(84.f, 38.2f)), module, SpaceTimeHead::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {
+		menu->addChild(new MenuSeparator);
+		spacetime::appendPanelThemeMenu(menu);
 		SpaceTimeHead* module = getModule<SpaceTimeHead>();
 		if (!module)
 			return;

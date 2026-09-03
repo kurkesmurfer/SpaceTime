@@ -10,6 +10,8 @@
 
 #pragma once
 #include <rack.hpp>
+#include <functional>
+#include <sstream>
 #include "plugin.hpp"
 
 using namespace rack;
@@ -89,6 +91,51 @@ inline ThemedPanel* createThemedPanel(const std::string& lightPath,
 	return panel;
 }
 
+// Rack counterpart of MetaModule's VCVTextDisplay for the portable modules.
+struct MMStatusReadout : Widget {
+	std::function<std::string()> textProvider;
+	std::string previewText;
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1) {
+			std::shared_ptr<window::Font> font = APP->window->loadFont(
+				asset::system("res/fonts/ShareTechMono-Regular.ttf"));
+			if (font) {
+				std::string text = textProvider ? textProvider() : std::string();
+				if (text.empty())
+					text = previewText;
+				nvgSave(args.vg);
+				nvgScissor(args.vg, 0.f, 0.f, box.size.x, box.size.y);
+				nvgFontFaceId(args.vg, font->handle);
+				nvgFontSize(args.vg, 11.f);
+				nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+				nvgFillColor(args.vg, nvgRGB(0xc6, 0xe1, 0xcf));
+				std::istringstream lines(text);
+				std::string line;
+				float y = 5.f;
+				while (std::getline(lines, line) && y < box.size.y - 3.f) {
+					nvgText(args.vg, 6.f, y, line.c_str(), nullptr);
+					y += 14.f;
+				}
+				nvgRestore(args.vg);
+			}
+		}
+		Widget::drawLayer(args, layer);
+	}
+};
+
+inline MMStatusReadout* addMMStatusReadout(ModuleWidget* w, Vec posMm,
+		Vec sizeMm, const std::string& preview,
+		std::function<std::string()> textProvider) {
+	auto* display = new MMStatusReadout;
+	display->box.pos = mm2px(posMm);
+	display->box.size = mm2px(sizeMm);
+	display->previewText = preview;
+	display->textProvider = textProvider;
+	w->addChild(display);
+	return display;
+}
+
 inline void appendPanelThemeMenu(Menu* menu) {
 	static const std::vector<std::string> labels = {"Follow Rack", "Light", "Dark"};
 	menu->addChild(createIndexSubmenuItem("Panel theme", labels,
@@ -137,6 +184,19 @@ inline void addIoLabel(ModuleWidget* w, float xmm, float ymm, const std::string&
 // helpers (note names under the preset row, LED state letters).
 inline void addMicroLabel(ModuleWidget* w, float xmm, float ymm, const std::string& text) {
 	addLabel(w, xmm, ymm, text, fontLabelSemiBold(), 5.5f, colorLabelCV(), 0.4f, colorLabelCVLight());
+}
+
+inline void addHeaderMark(ModuleWidget* w, float panelWidthMm, float titleWidthMm) {
+	constexpr float markHeightMm = 5.2f;
+	constexpr float markWidthMm = markHeightMm * (5.41f / 10.94f);
+	constexpr float gapMm = 1.2f;
+	float leftMm = (panelWidthMm - markWidthMm - gapMm - titleWidthMm) * 0.5f;
+	auto* mark = new SvgWidget;
+	mark->box.pos = mm2px(Vec(leftMm, 3.2f));
+	mark->box.size = mm2px(Vec(markWidthMm, markHeightMm));
+	mark->setSvg(APP->window->loadSvg(asset::plugin(pluginInstance,
+		"res/kurkesmurfer-header-logo.svg")));
+	w->addChild(mark);
 }
 
 inline void addHeaderLockup(ModuleWidget* w, float panelWidthMm,

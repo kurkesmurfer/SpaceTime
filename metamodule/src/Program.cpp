@@ -58,6 +58,8 @@ struct SpaceTimeProgram : Module {
 		ENUMS(TRANGE_PARAMS, 4),
 		STAGE_BANKS_PARAM,
 		INSTRUMENT_PARAM,
+		LTD_SELECTOR_PARAM,
+		TRANGE_SELECTOR_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -86,6 +88,23 @@ struct SpaceTimeProgram : Module {
 		MIDI_CLOCK_LIGHT,
 		MIDI_OUT_LIGHT,
 		STATUS_DISPLAY,
+		ENUMS(LTD_LIGHTS, 5),
+		ENUMS(TRANGE_LIGHTS, 4),
+		QUANTIZE_LIGHT,
+		SLEW1_LIGHT,
+		SLEW2_LIGHT,
+		RANGE_FULL_LIGHT,
+		RANGE_HALF_LIGHT,
+		RANGE_LTD_LIGHT,
+		VSOURCE_LIGHT,
+		STOP_LIGHT,
+		SUSTAIN_LIGHT,
+		ENABLE_LIGHT,
+		FIRST_LIGHT,
+		LAST_LIGHT,
+		TSOURCE_LIGHT,
+		PULSE1_LIGHT,
+		PULSE2_LIGHT,
 		LIGHTS_LEN
 	};
 
@@ -152,6 +171,13 @@ struct SpaceTimeProgram : Module {
 	float bankShadowVoltage[16][4] = {};
 	float bankShadowTime[16][4] = {};
 	bool bankWasValid[16] = {};
+	uint32_t bankFocusSequence[16] = {};
+	bool rangeSelectorsReady = false;
+	int selectorStage = -1;
+	int lastLtdParam = 2;
+	int lastTrangeParam = spacetime::kDefaultTimeRange;
+	int lastLtdValue = 2;
+	int lastTrangeValue = spacetime::kDefaultTimeRange;
 
 	struct RackMidiSink : spacetime::MidiOutputSink {
 		SpaceTimeProgram* owner;
@@ -203,12 +229,35 @@ struct SpaceTimeProgram : Module {
 		configParam(STAGE_BANKS_PARAM, 1.f, 16.f, 16.f, "Number of stages",
 			" stages", 0.f, 4.f)->snapEnabled = true;
 		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configSwitch(LTD_SELECTOR_PARAM, 0.f, 4.f, 2.f, "Limited octave",
+			{"-2", "-1", "0", "+1", "+2"});
+		configSwitch(TRANGE_SELECTOR_PARAM, 0.f, 3.f, (float)spacetime::kDefaultTimeRange,
+			"Time range", {"0.002-0.03 s", "0.02-0.3 s", "0.2-3 s", "2-30 s"});
 		configOutput(SELECTED_V_OUTPUT, "Selected stage voltage");
 		configOutput(SELECTED_TIME_OUTPUT, "Selected stage time slider");
 		configOutput(POLY_OUTPUT, "Heads CV (polyphonic, heads 1-4)");
 		configLight(MIDI_IN_LIGHT, "MIDI input activity");
 		configLight(MIDI_CLOCK_LIGHT, "MIDI clock activity");
 		configLight(MIDI_OUT_LIGHT, "MIDI output activity");
+		for (int i = 0; i < 5; i++)
+			configLight(LTD_LIGHTS + i, string::f("Limited octave %d selected", i - 2));
+		for (int i = 0; i < 4; i++)
+			configLight(TRANGE_LIGHTS + i, string::f("Time range %d selected", i + 1));
+		configLight(QUANTIZE_LIGHT, "Selected stage quantized");
+		configLight(SLEW1_LIGHT, "Selected stage slew level 1");
+		configLight(SLEW2_LIGHT, "Selected stage slew level 2");
+		configLight(RANGE_FULL_LIGHT, "Selected stage full voltage range");
+		configLight(RANGE_HALF_LIGHT, "Selected stage half voltage range");
+		configLight(RANGE_LTD_LIGHT, "Selected stage limited voltage range");
+		configLight(VSOURCE_LIGHT, "Selected stage external voltage source");
+		configLight(STOP_LIGHT, "Selected stage stop");
+		configLight(SUSTAIN_LIGHT, "Selected stage sustain");
+		configLight(ENABLE_LIGHT, "Selected stage enable");
+		configLight(FIRST_LIGHT, "Selected stage cycle first");
+		configLight(LAST_LIGHT, "Selected stage cycle last");
+		configLight(TSOURCE_LIGHT, "Selected stage external time source");
+		configLight(PULSE1_LIGHT, "Selected stage pulse 1");
+		configLight(PULSE2_LIGHT, "Selected stage pulse 2");
 		midiInput.channel = -1;
 		midiOutput.channel = -1;
 		controlDivider.setDivision(16);
@@ -293,6 +342,7 @@ struct SpaceTimeProgram : Module {
 			for (int i = 0; i < 4; i++)
 				if (trangeTrigger[i].process(params[TRANGE_PARAMS + i].getValue()))
 					applyOps(engine.program().emitTimeRange(i, engine.table(), opsBuffer, kOpsBufferLen));
+			syncRangeSelectors();
 			syncStageBanks();
 			engine.processControl(args.sampleTime * controlDivider.getDivision());
 		}
@@ -309,12 +359,34 @@ struct SpaceTimeProgram : Module {
 		engine.processHeads(args.sampleTime, externalHeadMask);
 		if (controlTick)
 			publishTiming();
+
+		int selected = clamp(engine.program().selectedStage(), 0, engine.stageCount() - 1);
+		const spacetime::ProgramWord& selectedWord = engine.table().program[selected];
+		for (int i = 0; i < 5; i++)
+			lights[LTD_LIGHTS + i].setBrightness(i == selectedWord.limitedOctave() ? 1.f : 0.f);
+		for (int i = 0; i < 4; i++)
+			lights[TRANGE_LIGHTS + i].setBrightness(i == selectedWord.timeRange() ? 1.f : 0.f);
+		lights[QUANTIZE_LIGHT].setBrightness(selectedWord.quantize());
+		lights[SLEW1_LIGHT].setBrightness(selectedWord.slew() == spacetime::SLEW_1);
+		lights[SLEW2_LIGHT].setBrightness(selectedWord.slew() == spacetime::SLEW_2);
+		lights[RANGE_FULL_LIGHT].setBrightness(selectedWord.range() == spacetime::RANGE_FULL);
+		lights[RANGE_HALF_LIGHT].setBrightness(selectedWord.range() == spacetime::RANGE_HALF);
+		lights[RANGE_LTD_LIGHT].setBrightness(selectedWord.range() == spacetime::RANGE_LIMITED);
+		lights[VSOURCE_LIGHT].setBrightness(selectedWord.voltageSource());
+		lights[STOP_LIGHT].setBrightness(selectedWord.stop());
+		lights[SUSTAIN_LIGHT].setBrightness(selectedWord.sustain());
+		lights[ENABLE_LIGHT].setBrightness(selectedWord.enable());
+		lights[FIRST_LIGHT].setBrightness(selectedWord.first());
+		lights[LAST_LIGHT].setBrightness(selectedWord.last());
+		lights[TSOURCE_LIGHT].setBrightness(selectedWord.timeSource());
+		lights[PULSE1_LIGHT].setBrightness(selectedWord.pulse1());
+		lights[PULSE2_LIGHT].setBrightness(selectedWord.pulse2());
 		RackMidiSink sink(this);
 		engine.processMidiOutput(args.sampleTime, sink);
 
-		int selected = clamp(engine.program().selectedStage(), 0, spacetime::kMaxStages - 1);
-		outputs[SELECTED_V_OUTPUT].setVoltage(engine.table().voltage[selected]);
-		outputs[SELECTED_TIME_OUTPUT].setVoltage(engine.table().time[selected] * 10.f);
+		int outputStage = clamp(engine.program().selectedStage(), 0, spacetime::kMaxStages - 1);
+		outputs[SELECTED_V_OUTPUT].setVoltage(engine.table().voltage[outputStage]);
+		outputs[SELECTED_TIME_OUTPUT].setVoltage(engine.table().time[outputStage] * 10.f);
 
 		// Heads CV, polyphonic, heads 1-4 only (Peet, 2026-08-09) -- see the
 		// OutputId comment for why this doesn't cover heads 5-8.
@@ -327,6 +399,38 @@ struct SpaceTimeProgram : Module {
 		lights[MIDI_IN_LIGHT].setBrightnessSmooth(midiLight, args.sampleTime);
 		lights[MIDI_CLOCK_LIGHT].setBrightnessSmooth(clockLight, args.sampleTime);
 		lights[MIDI_OUT_LIGHT].setBrightnessSmooth(outLight, args.sampleTime);
+	}
+
+	void syncRangeSelectors() {
+		int selected = clamp(engine.program().selectedStage(), 0, engine.stageCount() - 1);
+		const spacetime::ProgramWord& word = engine.table().program[selected];
+		int ltdValue = word.limitedOctave();
+		int trangeValue = word.timeRange();
+		int ltdParam = clamp((int)std::round(params[LTD_SELECTOR_PARAM].getValue()), 0, 4);
+		int trangeParam = clamp((int)std::round(params[TRANGE_SELECTOR_PARAM].getValue()), 0, 3);
+		bool selectedChanged = !rangeSelectorsReady || selected != selectorStage;
+		if (selectedChanged) {
+			params[LTD_SELECTOR_PARAM].setValue((float)ltdValue);
+			params[TRANGE_SELECTOR_PARAM].setValue((float)trangeValue);
+			ltdParam = ltdValue;
+			trangeParam = trangeValue;
+		} else {
+			if (ltdParam != lastLtdParam)
+				applyOps(engine.program().emitLimited(ltdParam, engine.table(), opsBuffer, kOpsBufferLen));
+			else if (ltdValue != lastLtdValue)
+				params[LTD_SELECTOR_PARAM].setValue((float)ltdValue);
+			if (trangeParam != lastTrangeParam)
+				applyOps(engine.program().emitTimeRange(trangeParam, engine.table(), opsBuffer, kOpsBufferLen));
+			else if (trangeValue != lastTrangeValue)
+				params[TRANGE_SELECTOR_PARAM].setValue((float)trangeValue);
+		}
+		const spacetime::ProgramWord& updated = engine.table().program[selected];
+		selectorStage = selected;
+		lastLtdParam = clamp((int)std::round(params[LTD_SELECTOR_PARAM].getValue()), 0, 4);
+		lastTrangeParam = clamp((int)std::round(params[TRANGE_SELECTOR_PARAM].getValue()), 0, 3);
+		lastLtdValue = updated.limitedOctave();
+		lastTrangeValue = updated.timeRange();
+		rangeSelectorsReady = true;
 	}
 
 	// Shared scratch buffer for the panel-driven emit*() calls above -- sized
@@ -357,7 +461,10 @@ struct SpaceTimeProgram : Module {
 				continue;
 			}
 			spacetime::BlockSegment seg;
-			bool valid = stageBankRegistry.readBank(instrumentId, b, seg);
+			uint8_t requestedFocus = 0;
+			uint32_t focusSequence = 0;
+			bool valid = stageBankRegistry.readBank(instrumentId, b, seg,
+				&requestedFocus, &focusSequence);
 			if (!valid) {
 				bankWasValid[b] = false;
 				continue;
@@ -374,7 +481,14 @@ struct SpaceTimeProgram : Module {
 					bankShadowTime[b][i] = seg.time[i];
 				}
 				bankWasValid[b] = true;
+				bankFocusSequence[b] = focusSequence;
 				continue;
+			}
+			if (focusSequence != bankFocusSequence[b]) {
+				int selected = clamp((int)requestedFocus, 0, engine.stageCount() - 1);
+				engine.program().setSelected(selected);
+				params[STAGE_PARAM].setValue((float)selected);
+				bankFocusSequence[b] = focusSequence;
 			}
 			for (int i = 0; i < 4; i++) {
 				int stage = b * spacetime::kStagesPerBlock + i;
@@ -433,8 +547,9 @@ struct SpaceTimeProgram : Module {
 				(((engine.midi().lastStatus >> 4) & 0xf) == 0xc ? "PC " : "CC "));
 		char buffer[128];
 		int length = std::snprintf(buffer, sizeof(buffer),
-			"STAGE %02d V %.2f T %.3f%s\nID %c P%02d S%02d K%02d SC%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
+			"STAGE %02d V %.2f T %.3f R%d%s\nID %c P%02d S%02d K%02d SC%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
 			selected + 1, engine.table().voltage[selected], engine.table().time[selected],
+			engine.table().program[selected].timeRange() + 1,
 			coreConflict() ? "!" : "",
 			(char)('A' + instrumentId),
 			engine.midi().controlChannel + 1, engine.midi().sliderChannel + 1,
@@ -653,7 +768,7 @@ struct SpaceTimeProgram : Module {
 		// is precisely what the early-return above already guarantees.
 		stageTableRegistry.publishTable(instrumentId, engine.table());
 		stageTableRegistry.publishContext(instrumentId, engine.ext(), engine.globals(),
-			engine.program().scaleKey());
+			engine.program().scaleKey(), (uint8_t)engine.program().selectedStage());
 
 		spacetime::MetaModuleHeadMidiSnapshot midiSnapshot;
 		midiSnapshot.midiClockSeq = engine.midi().midiClockSeq;
@@ -712,22 +827,22 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 
 		static const float extX[4] = {9.f, 23.f, 37.f, 51.f};
 		for (int i = 0; i < 4; i++)
-			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(extX[i], 52.f)), module, SpaceTimeProgram::EXT_INPUTS + i));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(68.f, 52.f)), module, SpaceTimeProgram::SELECTED_V_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(82.f, 52.f)), module, SpaceTimeProgram::SELECTED_TIME_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(96.f, 52.f)), module, SpaceTimeProgram::POLY_OUTPUT));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(116.f, 52.f)), module, SpaceTimeProgram::KEY_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(137.f, 52.f)), module, SpaceTimeProgram::SCALE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(156.f, 52.f)), module, SpaceTimeProgram::BULK_PARAM));
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(extX[i], 56.f)), module, SpaceTimeProgram::EXT_INPUTS + i));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(68.f, 56.f)), module, SpaceTimeProgram::SELECTED_V_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(82.f, 56.f)), module, SpaceTimeProgram::SELECTED_TIME_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(96.f, 56.f)), module, SpaceTimeProgram::POLY_OUTPUT));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(116.f, 56.f)), module, SpaceTimeProgram::KEY_PARAM));
+		addParam(createParamCentered<CKSSThree>(mm2px(Vec(137.f, 56.f)), module, SpaceTimeProgram::SCALE_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(156.f, 56.f)), module, SpaceTimeProgram::BULK_PARAM));
 
-		// MIDI activity sits between the display and I/O row, outside the header.
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(69.f, 45.5f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(75.f, 45.5f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(81.f, 45.5f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
+		static const float midiX[3] = {140.f, 147.f, 154.f};
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(midiX[0], 36.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(midiX[1], 36.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(midiX[2], 36.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
 
 		// Four modifier fields per row: Down/Up pairs across eight columns.
 		static const float gestureX[8] = {11.f, 31.f, 51.f, 71.f, 91.f, 111.f, 131.f, 151.f};
-		static const float gestureY[3] = {76.f, 93.f, 110.f};
+		static const float gestureY[3] = {79.f, 95.f, 111.f};
 		for (int row = 0; row < 3; row++) {
 			for (int pair = 0; pair < 4; pair++) {
 				int field = row * 4 + pair;
@@ -735,13 +850,29 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 				addParam(createParamCentered<LEDButton>(mm2px(Vec(gestureX[pair * 2 + 1], gestureY[row])), module, SpaceTimeProgram::GESTURE_UP_PARAMS + field));
 			}
 		}
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(21.f, 75.f)), module, SpaceTimeProgram::QUANTIZE_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(59.f, 75.f)), module, SpaceTimeProgram::SLEW1_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(63.f, 75.f)), module, SpaceTimeProgram::SLEW2_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(97.f, 75.f)), module, SpaceTimeProgram::RANGE_FULL_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(101.f, 75.f)), module, SpaceTimeProgram::RANGE_HALF_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(105.f, 75.f)), module, SpaceTimeProgram::RANGE_LTD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(141.f, 75.f)), module, SpaceTimeProgram::VSOURCE_LIGHT));
+		static const int booleanLights[8] = {
+			SpaceTimeProgram::STOP_LIGHT, SpaceTimeProgram::SUSTAIN_LIGHT,
+			SpaceTimeProgram::ENABLE_LIGHT, SpaceTimeProgram::FIRST_LIGHT,
+			SpaceTimeProgram::LAST_LIGHT, SpaceTimeProgram::TSOURCE_LIGHT,
+			SpaceTimeProgram::PULSE1_LIGHT, SpaceTimeProgram::PULSE2_LIGHT};
+		for (int i = 0; i < 8; i++)
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(21.f + 40.f * (i % 4), i < 4 ? 91.f : 107.f)), module, booleanLights[i]));
 
-		static const float ltdX[5] = {8.f, 22.f, 36.f, 50.f, 64.f};
+		static const float ltdLightX[5] = {9.f, 20.f, 31.f, 42.f, 53.f};
 		for (int i = 0; i < 5; i++)
-			addParam(createParamCentered<LEDButton>(mm2px(Vec(ltdX[i], 123.f)), module, SpaceTimeProgram::LTD_PARAMS + i));
-		static const float trangeX[4] = {96.f, 115.f, 134.f, 153.f};
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(ltdLightX[i], 124.3f)), module, SpaceTimeProgram::LTD_LIGHTS + i));
+		static const float trangeLightX[4] = {91.f, 105.f, 119.f, 133.f};
 		for (int i = 0; i < 4; i++)
-			addParam(createParamCentered<LEDButton>(mm2px(Vec(trangeX[i], 123.f)), module, SpaceTimeProgram::TRANGE_PARAMS + i));
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(trangeLightX[i], 124.3f)), module, SpaceTimeProgram::TRANGE_LIGHTS + i));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(69.f, 124.f)), module, SpaceTimeProgram::LTD_SELECTOR_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(151.f, 124.f)), module, SpaceTimeProgram::TRANGE_SELECTOR_PARAM));
 	}
 
 	void appendContextMenu(Menu* menu) override {

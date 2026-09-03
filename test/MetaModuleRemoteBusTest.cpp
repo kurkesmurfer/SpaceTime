@@ -18,10 +18,14 @@ TEST_CASE("Stage bank publish/read round-trips through the flat field array") {
 		segment.program[i].setQuantize(true);
 		segment.program[i].setPulse1(i % 2 == 0);
 	}
-	registry.publishBank(0, 3, segment);
+	registry.publishBank(0, 3, segment, 14, 7);
 
 	BlockSegment read;
-	CHECK(registry.readBank(0, 3, read));
+	uint8_t focus = 0;
+	uint32_t focusSequence = 0;
+	CHECK(registry.readBank(0, 3, read, &focus, &focusSequence));
+	CHECK(focus == 14);
+	CHECK(focusSequence == 7);
 	for (int i = 0; i < kStagesPerBlock; i++) {
 		CHECK(read.voltage[i] == doctest::Approx(segment.voltage[i]));
 		CHECK(read.time[i] == doctest::Approx(segment.time[i]));
@@ -349,7 +353,7 @@ TEST_CASE("Stage table read fails on zero heartbeat even when core is valid") {
 	CHECK_FALSE(registry.readTable(1, /*coreValid=*/true, read));
 }
 
-TEST_CASE("Core broadcast context (ExtInputs/Globals/ScaleKey) round-trips independently of the table") {
+TEST_CASE("Core broadcast context and selected stage round-trip independently of the table") {
 	MetaModuleStageTableRegistry registry;
 	ExtInputs ext;
 	ext.v[2] = 3.3f;
@@ -361,12 +365,14 @@ TEST_CASE("Core broadcast context (ExtInputs/Globals/ScaleKey) round-trips indep
 	ScaleKey scaleKey;
 	scaleKey.key = 7;
 	scaleKey.scale = 1;
-	registry.publishContext(0, ext, globals, scaleKey);
+	registry.publishContext(0, ext, globals, scaleKey, 37);
 
 	ExtInputs readExt;
 	Globals readGlobals;
 	ScaleKey readScaleKey;
-	CHECK(registry.readContext(0, /*coreValid=*/true, readExt, readGlobals, readScaleKey));
+	uint8_t selectedStage = 0;
+	CHECK(registry.readContext(0, /*coreValid=*/true, readExt, readGlobals, readScaleKey,
+		&selectedStage));
 	CHECK(readExt.v[2] == doctest::Approx(3.3f));
 	CHECK(readExt.connected[2]);
 	CHECK_FALSE(readExt.connected[0]);
@@ -375,6 +381,7 @@ TEST_CASE("Core broadcast context (ExtInputs/Globals/ScaleKey) round-trips indep
 	CHECK_FALSE(readGlobals.pulseRetrig);
 	CHECK(readScaleKey.key == 7);
 	CHECK(readScaleKey.scale == 1);
+	CHECK(selectedStage == 37);
 
 	// The table channel is untouched -- these are genuinely independent
 	// snapshots on the same registry, not one payload split in two calls.
@@ -390,7 +397,7 @@ TEST_CASE("Core broadcast context read is gated on core validity and heartbeat, 
 	ScaleKey scaleKey;
 	CHECK_FALSE(registry.readContext(4, /*coreValid=*/true, ext, globals, scaleKey));  // never published
 
-	registry.publishContext(4, ext, globals, scaleKey);
+	registry.publishContext(4, ext, globals, scaleKey, 0);
 	CHECK_FALSE(registry.readContext(4, /*coreValid=*/false, ext, globals, scaleKey));
 	CHECK(registry.readContext(4, /*coreValid=*/true, ext, globals, scaleKey));
 	CHECK(registry.contextHeartbeat(4) == 1);
