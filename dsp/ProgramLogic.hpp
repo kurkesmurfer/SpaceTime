@@ -178,6 +178,37 @@ public:
 		return n;
 	}
 
+	// MMProgram momentary step buttons: every press = advance this field one
+	// step, wrapping at the top. Booleans toggle (on->off), 2-state fields
+	// flip, Slew cycles 0->1->2->0, Range flips FULL<->HALF. Mirror of
+	// emitModifier's +1 path but direction-agnostic: the button is stateless
+	// and the stage table holds all state (the modifier LEDs read it).
+	int emitStep(Field f, const StageTable& t, EditOp* out, int maxOps) {
+		int n = 0;
+		forEachTarget(t, [&](int s) {
+			const ProgramWord& w = t.program[s];
+			uint32_t cur, next;
+			switch (f) {
+				case Field::Slew:          cur = w.slew();          next = (cur + 1) % 3; break;
+				case Field::Range:         cur = w.range();         next = cur == RANGE_FULL ? RANGE_HALF : RANGE_FULL; break;
+				case Field::Quantize:      cur = w.quantize();      next = cur ^ 1; break;
+				case Field::VoltageSource: cur = w.voltageSource(); next = cur ^ 1; break;
+				case Field::Stop:          cur = w.stop();          next = cur ^ 1; break;
+				case Field::Sustain:       cur = w.sustain();       next = cur ^ 1; break;
+				case Field::Enable:        cur = w.enable();        next = cur ^ 1; break;
+				case Field::First:         cur = w.first();         next = cur ^ 1; break;
+				case Field::Last:          cur = w.last();          next = cur ^ 1; break;
+				case Field::Pulse1:        cur = w.pulse1();        next = cur ^ 1; break;
+				case Field::Pulse2:        cur = w.pulse2();        next = cur ^ 1; break;
+				case Field::TimeSource:    cur = w.timeSource();    next = cur ^ 1; break;
+				default:                   return;  // not a step field
+			}
+			if (next != cur && n < maxOps)
+				out[n++] = EditOp((uint8_t)s, f, (float)next);
+		});
+		return n;
+	}
+
 	// Limited-range bank: press octave button i (0..4) -> Range = Limited +
 	// octave offset, radio behaviour.
 	int emitLimited(int octaveIdx, const StageTable& t, EditOp* out, int maxOps) {

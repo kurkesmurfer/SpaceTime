@@ -29,9 +29,17 @@ inline int stageBanksFromCount(int stages) {
 struct MMProgramContract {
 	static constexpr const char* slug = "MMProgram";
 
+	// Contract history (2026-09-04, option A): the original 3-position
+	// STAGE_STEP lever became two momentary stage buttons. STAGE_STEP_UP_PARAM
+	// is *appended at the end* so every existing index (PRESET_PARAM..
+	// TRANGE_SELECTOR_PARAM) and every DROID/MIDI binding that reads them
+	// stays byte-for-byte identical across the plugin update.
 	enum ParamId {
 		STAGE_PARAM,
-		STAGE_STEP_PARAM,
+		// 0:0 down button (was STAGE_STEP_PARAM at index 1 before this edit;
+		// the paramId slot is unchanged, only the semantic narrowed to
+		// "previous stage" from "3-way lever").
+		STAGE_STEP_DOWN_PARAM,
 		PRESET_PARAM,
 		CONTROL_CHANNEL_PARAM,
 		SLIDER_CHANNEL_PARAM,
@@ -42,6 +50,7 @@ struct MMProgramContract {
 		KEY_PARAM,
 		SCALE_PARAM,
 		BULK_PARAM,
+		// 12 modifier momentary step-buttons (see emitStep for wrap semantics).
 		MODIFIER_PARAMS,
 		LTD_PARAMS = MODIFIER_PARAMS + 12,
 		TRANGE_PARAMS = LTD_PARAMS + 5,
@@ -49,6 +58,8 @@ struct MMProgramContract {
 		INSTRUMENT_PARAM,
 		LTD_SELECTOR_PARAM,
 		TRANGE_SELECTOR_PARAM,
+		// 1:1 up button (new, appended).
+		STAGE_STEP_UP_PARAM,
 		PARAMS_LEN
 	};
 

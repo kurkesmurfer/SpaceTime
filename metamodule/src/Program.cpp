@@ -4,7 +4,6 @@
 #include "MMModuleContracts.hpp"
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
-#include "MmLevers.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -43,7 +42,7 @@ namespace {
 struct SpaceTimeProgram : Module {
 	enum ParamId {
 		STAGE_PARAM,
-		STAGE_STEP_PARAM,
+		STAGE_STEP_DOWN_PARAM,
 		PRESET_PARAM,
 		CONTROL_CHANNEL_PARAM,
 		SLIDER_CHANNEL_PARAM,
@@ -61,6 +60,8 @@ struct SpaceTimeProgram : Module {
 		INSTRUMENT_PARAM,
 		LTD_SELECTOR_PARAM,
 		TRANGE_SELECTOR_PARAM,
+		// Appended last (option A): index stable across the update.
+		STAGE_STEP_UP_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -79,7 +80,8 @@ struct SpaceTimeProgram : Module {
 		OUTPUTS_LEN
 	};
 	static_assert((int)STAGE_PARAM == (int)spacetime::MMProgramContract::STAGE_PARAM, "MMProgram ParamId drift");
-	static_assert((int)STAGE_STEP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_PARAM, "MMProgram stage-step ParamId drift");
+	static_assert((int)STAGE_STEP_DOWN_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_DOWN_PARAM, "MMProgram stage-step ParamId drift");
+	static_assert((int)STAGE_STEP_UP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_UP_PARAM, "MMProgram stage-step UP ParamId drift");
 	static_assert((int)MODIFIER_PARAMS == (int)spacetime::MMProgramContract::MODIFIER_PARAMS, "MMProgram modifier ParamId drift");
 	static_assert((int)STAGE_BANKS_PARAM == (int)spacetime::MMProgramContract::STAGE_BANKS_PARAM, "MMProgram stage-count ParamId drift");
 	static_assert((int)PARAMS_LEN == (int)spacetime::MMProgramContract::PARAMS_LEN, "MMProgram ParamId count drift");
@@ -145,8 +147,9 @@ struct SpaceTimeProgram : Module {
 	dsp::SchmittTrigger loadTrigger;
 	dsp::SchmittTrigger clearTrigger;
 	dsp::SchmittTrigger bulkTrigger;
-	int stageStepLastPos = 1;  // last stage-step lever position (0=prev,1=off,2=next)
-	int modLastPos[kModFieldCount] = {};  // last lever position (0=down,1=off,2=up)
+	dsp::SchmittTrigger stageStepDownTrigger;  // momentary button, press = previous stage
+	dsp::SchmittTrigger stageStepUpTrigger;    // momentary button, press = next stage
+	dsp::SchmittTrigger modTrigger[kModFieldCount];  // momentary step buttons
 	dsp::SchmittTrigger ltdTrigger[5];
 	dsp::SchmittTrigger trangeTrigger[4];
 	dsp::ClockDivider controlDivider;
@@ -200,12 +203,11 @@ struct SpaceTimeProgram : Module {
 	SpaceTimeProgram() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(STAGE_PARAM, 0.f, 63.f, 0.f, "Selected stage", "", 0.f, 1.f, 1.f)->snapEnabled = true;
-		// Step up / step down in one control (mirrors VCV Program's STAGE_SCROLL
-		// spring3: up=next stage, down=previous, centre=no change). VCV renders
-		// it as a momentary spring; MetaModule renders it as a 3-way latched
-		// lever but a single throw still steps one stage.
-		configSwitch(STAGE_STEP_PARAM, 0.f, 2.f, 1.f, "Stage step",
-			{"Previous stage", "-", "Next stage"});
+		// Two momentary stage-step buttons (option A, 2026-09-04): every
+		// press = one stage in that direction, wrapping at both ends. Both
+		// sides of the module use SchmittTrigger + applyOps.
+		configButton(STAGE_STEP_DOWN_PARAM, "Previous stage (wrap)");
+		configButton(STAGE_STEP_UP_PARAM, "Next stage (wrap)");
 		configParam(PRESET_PARAM, 0.f, 11.f, 0.f, "Preset slot", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(CONTROL_CHANNEL_PARAM, 0.f, 15.f, 15.f, "Program MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(SLIDER_CHANNEL_PARAM, 0.f, 15.f, 14.f, "Stage slider MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
@@ -219,12 +221,13 @@ struct SpaceTimeProgram : Module {
 		configButton(BULK_PARAM, "Arm bulk edit (next modifier applies to all stages)");
 		configLight(BULK_LIGHT, "Bulk edit armed");
 		for (int i = 0; i < kModFieldCount; i++) {
-			// 3-way modifier lever: 0 = remove/disable, 1 = off (no edit),
-			// 2 = add/enable. Same meaning as VCV Program.cpp's spring3
-			// press-down / press-up pairs (kModDownLabels/kModUpLabels above
-			// are the tooltip for this exact param). SwitchQuality gives
-			// snap=true/smooth=false, which the position-based edge detection
-			// in process() relies on.
+			// 3-way param (0 = remove/disable, 1 = off, 2 = add/enable) that the
+			// module treats as a *momentary step button* via SchmittTrigger:
+			// every press = increment-with-wrap one step (see emitStep).
+			// Position is a no-op on the module side; the modifier-state LED
+			// reads the stage table. The 0..2 range is preserved so the
+			// VCV twin can show a small "add/neutral/remove" glyph when the
+			// widget is still a three-position SvgSwitch in a future pass.
 			configParam<SwitchQuantity>(MODIFIER_PARAMS + i, 0.f, 2.f, 1.f,
 				string::f("%s (down: %s / up: %s)",
 					kModFieldNames[i], kModDownLabels[i], kModUpLabels[i]),
@@ -346,41 +349,31 @@ struct SpaceTimeProgram : Module {
 					opsBuffer, kOpsBufferLen));
 			if (bulkTrigger.process(params[BULK_PARAM].getValue()))
 				engine.program().armBulkOnce();
-			// Stage-step lever: 0 = previous stage, 2 = next stage, 1 = no
-			// change. Position-based so a single throw steps one stage on both
-			// the VCV spring (transient, re-armed on release) and the MM latched
-			// lever (one step per detent change). Wraps at both ends.
-			{
-				float v = params[STAGE_STEP_PARAM].getValue();
-				int pos = v > 1.5f ? 2 : (v < 0.5f ? 0 : 1);
-				if (pos != stageStepLastPos) {
-					if (pos != 1) {
-						int n = engine.stageCount();
-						int cur = engine.program().selectedStage();
-						engine.program().setSelected(pos == 2 ?
-							(cur + 1) % n : (cur - 1 + n) % n);
-						params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
-					}
-					stageStepLastPos = pos;
-				}
+			// Stage-step buttons (option A): press = one stage in that direction,
+			// wrapping at both ends. Every press advances one stage regardless of
+			// current pos; SchmittTrigger catches the leading edge so holding the
+			// button does not re-step.
+			if (stageStepDownTrigger.process(params[STAGE_STEP_DOWN_PARAM].getValue())) {
+				int n = engine.stageCount();
+				int cur = engine.program().selectedStage();
+				engine.program().setSelected((cur - 1 + n) % n);
+				params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
 			}
-			// Modifier levers: a 3-way param (0 = remove/disable, 1 = off,
-			// 2 = add/enable). Position-based, so the SAME code serves the VCV
-			// momentary spring (value transients 1->2 or 1->0 then springs back
-			// to 1, re-arming for the next press) and the MetaModule latched
-			// flip switch (value stays at 0/1/2, one edge per detent). The
-			// centre detent is a no-op, matching VCV's spring-return.
-			for (int i = 0; i < kModFieldCount; i++) {
-				float v = params[MODIFIER_PARAMS + i].getValue();
-				int pos = v > 1.5f ? 2 : (v < 0.5f ? 0 : 1);
-				if (pos != modLastPos[i]) {
-					if (pos != 1)
-						applyOps(engine.program().emitModifier(
-							kModFields[i], pos == 2 ? 1 : -1,
-							engine.table(), opsBuffer, kOpsBufferLen));
-					modLastPos[i] = pos;
-				}
+			if (stageStepUpTrigger.process(params[STAGE_STEP_UP_PARAM].getValue())) {
+				int n = engine.stageCount();
+				int cur = engine.program().selectedStage();
+				engine.program().setSelected((cur + 1) % n);
+				params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
 			}
+			// Modifier step buttons: every press = increment-with-wrap one step
+			// in the stage table. The param's position is ignored; the modifier-
+			// state LEDs read the table, so the buttons are stateless and the
+			// same C++ serves a VCV momentary spring and an MM momentary
+			// push-button.
+			for (int i = 0; i < kModFieldCount; i++)
+				if (modTrigger[i].process(params[MODIFIER_PARAMS + i].getValue()))
+					applyOps(engine.program().emitStep(
+						kModFields[i], engine.table(), opsBuffer, kOpsBufferLen));
 			for (int i = 0; i < 5; i++)
 				if (ltdTrigger[i].process(params[LTD_PARAMS + i].getValue()))
 					applyOps(engine.program().emitLimited(i, engine.table(), opsBuffer, kOpsBufferLen));
@@ -861,15 +854,22 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		display->color = Colors565::White;
 		addChild(display);
 
-		// Stage-step lever (up = next stage, down = previous, centre = hold).
-		addParam(createParamCentered<MmLeverControl>(mm2px(Vec(12.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_PARAM));
+		// Two momentary stage-step buttons (option A): press = one stage in
+		// that direction, wraps at both ends. LEDButton is mapped to a
+		// MomentaryButton{} on MetaModule, so the param simply pulses on
+		// each press and SchmittTrigger in process() advances one step.
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(12.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_DOWN_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(26.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_UP_PARAM));
 
-		// 12 modifier levers: 6 columns x 2 rows (down = remove, up = add).
+		// 12 modifier momentary step buttons: 6 columns x 2 rows.
+		// Every press = increment-with-wrap one step (see emitStep). The
+		// param's position is never read; only the modifier-state LEDs
+		// (which read the stage table) expose the current state.
 		static const float leverX[6] = {12.f, 30.f, 48.f, 66.f, 84.f, 102.f};
 		static const float leverY[2] = {72.f, 100.f};
 		for (int r = 0; r < 2; r++)
 			for (int c = 0; c < 6; c++)
-				addParam(createParamCentered<MmLeverControl>(mm2px(Vec(leverX[c], leverY[r])),
+				addParam(createParamCentered<LEDButton>(mm2px(Vec(leverX[c], leverY[r])),
 					module, SpaceTimeProgram::MODIFIER_PARAMS + r * 6 + c));
 
 		// 16 modifier-state LEDs hugging their lever column. The 16 lights group
@@ -895,14 +895,14 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(leverX[i], 89.f)), module, row2Lights[i]));
 
 		// Action row: BULK (with indicator), CLEAR, SAVE, LOAD, PRESET, KEY, SCALE.
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(28.f, 48.f)), module, SpaceTimeProgram::BULK_PARAM));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(28.f, 41.f)), module, SpaceTimeProgram::BULK_LIGHT));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(42.f, 48.f)), module, SpaceTimeProgram::CLEAR_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(56.f, 48.f)), module, SpaceTimeProgram::SAVE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(70.f, 48.f)), module, SpaceTimeProgram::LOAD_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(86.f, 46.f)), module, SpaceTimeProgram::PRESET_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(100.f, 46.f)), module, SpaceTimeProgram::KEY_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(114.f, 46.f)), module, SpaceTimeProgram::SCALE_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(40.f, 48.f)), module, SpaceTimeProgram::BULK_PARAM));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(34.f, 41.f)), module, SpaceTimeProgram::BULK_LIGHT));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(54.f, 48.f)), module, SpaceTimeProgram::CLEAR_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(68.f, 48.f)), module, SpaceTimeProgram::SAVE_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(82.f, 48.f)), module, SpaceTimeProgram::LOAD_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(96.f, 46.f)), module, SpaceTimeProgram::PRESET_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(110.f, 46.f)), module, SpaceTimeProgram::KEY_PARAM));
+		addParam(createParamCentered<CKSSThree>(mm2px(Vec(122.f, 46.f)), module, SpaceTimeProgram::SCALE_PARAM));
 
 		// Setup cluster (top-right): STAGE count, INSTRUMENT ID, MIDI channels, pulse retrigger.
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(74.f, 15.f)), module, SpaceTimeProgram::STAGE_BANKS_PARAM));

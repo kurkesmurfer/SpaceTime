@@ -64,17 +64,20 @@
     <text x="117.0" y="38" fill="#a33">OUT</text>
   </g>
 
-  <!-- Zone C: levers + buttons labels -->
+  <!-- Zone C: labels. Stage buttons ST-/ST+ at 12/26; action row BULK/CLEAR/
+       SAVE/LOAD at 40/54/68/82; knobs PRESET/KEY/SCALE at 96/110/122. -->
   <g fill="#c9bda9" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
-    <text x="28" y="45">BULK</text>
-    <text x="42" y="45">CLEAR</text>
-    <text x="56" y="45">SAVE</text>
-    <text x="70" y="45">LOAD</text>
+    <text x="12" y="45">ST−</text>
+    <text x="26" y="45">ST+</text>
+    <text x="40" y="45">BULK</text>
+    <text x="54" y="45">CLEAR</text>
+    <text x="68" y="45">SAVE</text>
+    <text x="82" y="45">LOAD</text>
   </g>
   <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
-    <text x="86" y="42">PRESET</text>
-    <text x="100" y="42">KEY</text>
-    <text x="114" y="42">SCALE</text>
+    <text x="96" y="42">PRESET</text>
+    <text x="110" y="42">KEY</text>
+    <text x="122" y="42">SCALE</text>
   </g>
 
   <!-- Zone D headers + modifier names -->
