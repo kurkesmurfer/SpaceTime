@@ -8,7 +8,12 @@ import io
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import cairosvg
+try:
+    import cairosvg
+    _HAS_CAIROSVG = True
+except OSError:
+    cairosvg = None
+    _HAS_CAIROSVG = False
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
@@ -16,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FONT_DIR = ROOT.parent / "vcv" / "res" / "fonts"
 SUPERSAMPLE = 8
 PANELS = {
-    "Program": (304, 240),
+    "Program": (285, 240),
     "TimingMonitor": (114, 240),
     "Head": (171, 240),
     "Stage4": (114, 240),
@@ -104,9 +109,32 @@ def render(name: str, target_size: tuple[int, int]) -> None:
 
     large = (target_size[0] * SUPERSAMPLE, target_size[1] * SUPERSAMPLE)
     background = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-    raw = cairosvg.svg2png(bytestring=background, url=str(source),
-                          output_width=large[0], output_height=large[1])
-    image = Image.open(io.BytesIO(raw)).convert("RGBA")
+    if _HAS_CAIROSVG:
+        raw = cairosvg.svg2png(bytestring=background, url=str(source),
+                              output_width=large[0], output_height=large[1])
+        image = Image.open(io.BytesIO(raw)).convert("RGBA")
+    else:
+        # No cairo in the environment; rasterize the XML background with
+        # ImageMagick. The text overlay below is applied by PIL regardless.
+        import subprocess, tempfile
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            f.write(background)
+            bg_path = f.name
+        try:
+            out_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            subprocess.run(
+                ["magick", "-define", "svg:render:msvg=1",
+                 f"-background", "none", bg_path,
+                 f"-resize", f"{large[0]}x{large[1]}!", out_path],
+                check=False, capture_output=True)
+            image = Image.open(out_path).convert("RGBA")
+            image = image.resize(large, Image.Resampling.LANCZOS)
+        finally:
+            for pth in (bg_path, out_path):
+                try:
+                    Path(pth).unlink()
+                except OSError:
+                    pass
     draw = ImageDraw.Draw(image)
     px_per_mm_x, px_per_mm_y = large[0] / mm_width, large[1] / mm_height
 

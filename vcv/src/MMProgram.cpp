@@ -3,6 +3,7 @@
 #include "SpaceTimeEngine.hpp"
 #include "MMModuleContracts.hpp"
 #include "MMBus.hpp"
+#include "../../metamodule/src/MmLevers.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -41,6 +42,7 @@ namespace {
 struct SpaceTimeProgram : Module {
 	enum ParamId {
 		STAGE_PARAM,
+		STAGE_STEP_PARAM,
 		PRESET_PARAM,
 		CONTROL_CHANNEL_PARAM,
 		SLIDER_CHANNEL_PARAM,
@@ -51,8 +53,7 @@ struct SpaceTimeProgram : Module {
 		KEY_PARAM,
 		SCALE_PARAM,
 		BULK_PARAM,
-		ENUMS(GESTURE_UP_PARAMS, 12),
-		ENUMS(GESTURE_DOWN_PARAMS, 12),
+		ENUMS(MODIFIER_PARAMS, 12),
 		ENUMS(LTD_PARAMS, 5),
 		ENUMS(TRANGE_PARAMS, 4),
 		STAGE_BANKS_PARAM,
@@ -77,7 +78,8 @@ struct SpaceTimeProgram : Module {
 		OUTPUTS_LEN
 	};
 	static_assert((int)STAGE_PARAM == (int)spacetime::MMProgramContract::STAGE_PARAM, "MMProgram ParamId drift");
-	static_assert((int)GESTURE_UP_PARAMS == (int)spacetime::MMProgramContract::GESTURE_UP_PARAMS, "MMProgram gesture ParamId drift");
+	static_assert((int)STAGE_STEP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_PARAM, "MMProgram stage-step ParamId drift");
+	static_assert((int)MODIFIER_PARAMS == (int)spacetime::MMProgramContract::MODIFIER_PARAMS, "MMProgram modifier ParamId drift");
 	static_assert((int)STAGE_BANKS_PARAM == (int)spacetime::MMProgramContract::STAGE_BANKS_PARAM, "MMProgram stage-count ParamId drift");
 	static_assert((int)PARAMS_LEN == (int)spacetime::MMProgramContract::PARAMS_LEN, "MMProgram ParamId count drift");
 	static_assert((int)EXT_INPUTS == (int)spacetime::MMProgramContract::EXT_INPUTS && (int)INPUTS_LEN == (int)spacetime::MMProgramContract::INPUTS_LEN, "MMProgram InputId drift");
@@ -104,6 +106,7 @@ struct SpaceTimeProgram : Module {
 		TSOURCE_LIGHT,
 		PULSE1_LIGHT,
 		PULSE2_LIGHT,
+		BULK_LIGHT,
 		LIGHTS_LEN
 	};
 
@@ -141,8 +144,8 @@ struct SpaceTimeProgram : Module {
 	dsp::SchmittTrigger loadTrigger;
 	dsp::SchmittTrigger clearTrigger;
 	dsp::SchmittTrigger bulkTrigger;
-	dsp::SchmittTrigger gestureUpTrigger[kModFieldCount];
-	dsp::SchmittTrigger gestureDownTrigger[kModFieldCount];
+	int stageStepLastPos = 1;  // last stage-step lever position (0=prev,1=off,2=next)
+	int modLastPos[kModFieldCount] = {};  // lever position (0=down,1=off,2=up)
 	dsp::SchmittTrigger ltdTrigger[5];
 	dsp::SchmittTrigger trangeTrigger[4];
 	dsp::ClockDivider controlDivider;
@@ -196,6 +199,11 @@ struct SpaceTimeProgram : Module {
 	SpaceTimeProgram() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(STAGE_PARAM, 0.f, 63.f, 0.f, "Selected stage", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		// Stage-step lever (up = next, down = previous, centre = hold). VCV
+		// renders it as a momentary spring; the module is position-based, so a
+		// single throw steps one stage on both hosts.
+		configSwitch(STAGE_STEP_PARAM, 0.f, 2.f, 1.f, "Stage step",
+			{"Previous stage", "-", "Next stage"});
 		configParam(PRESET_PARAM, 0.f, 11.f, 0.f, "Preset slot", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(CONTROL_CHANNEL_PARAM, 0.f, 15.f, 15.f, "Program MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(SLIDER_CHANNEL_PARAM, 0.f, 15.f, 14.f, "Stage slider MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
@@ -206,10 +214,17 @@ struct SpaceTimeProgram : Module {
 			{"Continuous", "Hardware-compatible notch"});
 		configParam(KEY_PARAM, 0.f, 11.f, 0.f, "Key", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configSwitch(SCALE_PARAM, 0.f, 2.f, 0.f, "Scale", {"Major", "Minor", "Chromatic"});
-		configButton(BULK_PARAM, "Arm bulk edit (next gesture applies to all stages)");
+		configButton(BULK_PARAM, "Arm bulk edit (next modifier applies to all stages)");
+		configLight(BULK_LIGHT, "Bulk edit armed");
 		for (int i = 0; i < kModFieldCount; i++) {
-			configButton(GESTURE_DOWN_PARAMS + i, string::f("%s: %s", kModFieldNames[i], kModDownLabels[i]));
-			configButton(GESTURE_UP_PARAMS + i, string::f("%s: %s", kModFieldNames[i], kModUpLabels[i]));
+			// 3-way modifier lever: 0 = remove, 1 = off, 2 = add. Same param
+			// shape as the MetaModule module; the widget (MmLeverControl) is a
+			// momentary spring in VCV and a latched switch on MM. The position
+			// compare in process() re-arms per press on both hosts.
+			configParam<SwitchQuantity>(MODIFIER_PARAMS + i, 0.f, 2.f, 1.f,
+				string::f("%s (down: %s / up: %s)",
+					kModFieldNames[i], kModDownLabels[i], kModUpLabels[i]),
+				"off", 0.f, 1.f, 2.f);
 		}
 		{
 			static const char* ltdNames[5] = {"-2", "-1", "0", "+1", "+2"};
@@ -327,13 +342,36 @@ struct SpaceTimeProgram : Module {
 					opsBuffer, kOpsBufferLen));
 			if (bulkTrigger.process(params[BULK_PARAM].getValue()))
 				engine.program().armBulkOnce();
+			// Stage-step lever: 0 = previous, 2 = next, 1 = hold. Position-based
+			// so a single throw steps one stage (VCV spring re-arms on release;
+			// MM latched lever steps per detent). Wraps at both ends.
+			{
+				float v = params[STAGE_STEP_PARAM].getValue();
+				int pos = v > 1.5f ? 2 : (v < 0.5f ? 0 : 1);
+				if (pos != stageStepLastPos) {
+					if (pos != 1) {
+						int n = engine.stageCount();
+						int cur = engine.program().selectedStage();
+						engine.program().setSelected(pos == 2 ?
+							(cur + 1) % n : (cur - 1 + n) % n);
+						params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
+					}
+					stageStepLastPos = pos;
+				}
+			}
+			// Modifier levers (0=remove, 1=off, 2=add). One edge per lever serves
+			// both the VCV momentary spring and the MM latched switch; centre is
+			// a no-op, matching VCV's spring-return.
 			for (int i = 0; i < kModFieldCount; i++) {
-				if (gestureUpTrigger[i].process(params[GESTURE_UP_PARAMS + i].getValue()))
-					applyOps(engine.program().emitModifier(kModFields[i], 1, engine.table(),
-						opsBuffer, kOpsBufferLen));
-				if (gestureDownTrigger[i].process(params[GESTURE_DOWN_PARAMS + i].getValue()))
-					applyOps(engine.program().emitModifier(kModFields[i], -1, engine.table(),
-						opsBuffer, kOpsBufferLen));
+				float v = params[MODIFIER_PARAMS + i].getValue();
+				int pos = v > 1.5f ? 2 : (v < 0.5f ? 0 : 1);
+				if (pos != modLastPos[i]) {
+					if (pos != 1)
+						applyOps(engine.program().emitModifier(
+							kModFields[i], pos == 2 ? 1 : -1,
+							engine.table(), opsBuffer, kOpsBufferLen));
+					modLastPos[i] = pos;
+				}
 			}
 			for (int i = 0; i < 5; i++)
 				if (ltdTrigger[i].process(params[LTD_PARAMS + i].getValue()))
@@ -380,6 +418,7 @@ struct SpaceTimeProgram : Module {
 		lights[TSOURCE_LIGHT].setBrightness(selectedWord.timeSource());
 		lights[PULSE1_LIGHT].setBrightness(selectedWord.pulse1());
 		lights[PULSE2_LIGHT].setBrightness(selectedWord.pulse2());
+		lights[BULK_LIGHT].setBrightness(engine.program().bulkArmed() ? 1.f : 0.f);
 		RackMidiSink sink(this);
 		engine.processMidiOutput(args.sampleTime, sink);
 
@@ -805,11 +844,14 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 			asset::plugin(pluginInstance, "res/MMProgram-light.svg"),
 			asset::plugin(pluginInstance, "res/MMProgram.svg")));
 
-		spacetime::addHeaderMark(this, 162.56f, 25.39f);
-		spacetime::addHeaderLockup(this, 162.56f, "Program", 25.39f);
-		spacetime::addSubtitle(this, 81.28f, 10.2f, "SEQUENCER CORE");
-		spacetime::addMMStatusReadout(this, Vec(4.f, 12.f), Vec(73.f, 27.f),
-			"ID A CORE OK  STAGES 16\nSTAGE 01 V 0.00 T 0.100\nRUN 1-8 --------\nMIDI CH00 ---",
+		// 28 HP (152.4 mm) panel. Silkscreen labels, lever wells, knob
+		// recesses and the status-display bezel are baked into the two twin
+		// faceplate SVGs (runtime NanoVG text is not needed here because
+		// Rack renders it natively). Widget coordinates below mirror
+		// metamodule/src/Program.cpp so the authoring twin and the
+		// MM module share one layout.
+		spacetime::addMMStatusReadout(this, Vec(4.f, 9.f), Vec(58.f, 25.f),
+			"STAGE 01 V 0.00 T 0.100 R1\nID A P16 S16 K00 SC0\nRUN 1-8 --------\nMIDI CH01 ---",
 			[module]() {
 				if (!module)
 					return std::string();
@@ -825,144 +867,104 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 						(((module->engine.midi().lastStatus >> 4) & 0xf) == 0xc ? "PC " : "CC "));
 				char text[192];
 				std::snprintf(text, sizeof(text),
-					"ID %c CORE %s  STAGES %02d\nSTAGE %02d V %.2f T %.3f R%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
-					(char)('A' + module->instrumentId), module->coreConflict() ? "DUP" : "OK",
-					module->engine.stageCount(), selected + 1,
-					module->engine.table().voltage[selected], module->engine.table().time[selected],
+					"STAGE %02d V %.2f T %.3f R%d%s\nID %c P%02d S%02d K%02d SC%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
+					selected + 1, module->engine.table().voltage[selected],
+					module->engine.table().time[selected],
 					module->engine.table().program[selected].timeRange() + 1,
-					runStates, module->engine.midi().lastChannel < 0 ? 0 : module->engine.midi().lastChannel + 1,
-					midiKind, module->engine.midi().lastNumber < 0 ? 0 : module->engine.midi().lastNumber,
+					module->coreConflict() ? "!" : "",
+					(char)('A' + module->instrumentId),
+					module->engine.midi().controlChannel + 1,
+					module->engine.midi().sliderChannel + 1,
+					module->engine.program().scaleKey().key,
+					module->engine.program().scaleKey().scale, runStates,
+					module->engine.midi().lastChannel < 0 ? 0 : module->engine.midi().lastChannel + 1,
+					midiKind,
+					module->engine.midi().lastNumber < 0 ? 0 : module->engine.midi().lastNumber,
 					module->engine.midi().lastValue < 0 ? 0 : module->engine.midi().lastValue,
 					spacetime::MidiCore::routeName(module->engine.midi().lastRoute));
 				return std::string(text);
 			});
 
-		static const float topX[6] = {84.f, 98.f, 112.f, 126.f, 140.f, 154.f};
-		static const char* topNames[6] = {
-			"SELECT", "PRESET", "PROGRAM CH", "SLIDER CH", "STAGES", "ID"};
-		for (int i = 0; i < 6; i++)
-			spacetime::addKnobLabel(this, topX[i], 12.8f, topNames[i]);
-		static const char* actionNames[4] = {"SAVE", "LOAD", "CLEAR", "RETRIGGER"};
-		for (int i = 0; i < 4; i++)
-			spacetime::addKnobLabel(this, topX[i], 30.2f, actionNames[i]);
-		static const float midiX[3] = {140.f, 147.f, 154.f};
-		static const char* midiNames[3] = {"IN", "CLK", "OUT"};
-		for (int i = 0; i < 3; i++)
-			spacetime::addKnobLabel(this, midiX[i], 30.2f, midiNames[i]);
+		// Zone C: stage-step lever + BULK (with indicator) + CLEAR / SAVE /
+		// LOAD + PRESET / KEY / SCALE.
+		addParam(createParamCentered<MmLeverControl>(mm2px(Vec(12.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(28.f, 48.f)), module, SpaceTimeProgram::BULK_PARAM));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(28.f, 41.f)), module, SpaceTimeProgram::BULK_LIGHT));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(42.f, 48.f)), module, SpaceTimeProgram::CLEAR_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(56.f, 48.f)), module, SpaceTimeProgram::SAVE_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(70.f, 48.f)), module, SpaceTimeProgram::LOAD_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(86.f, 46.f)), module, SpaceTimeProgram::PRESET_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(100.f, 46.f)), module, SpaceTimeProgram::KEY_PARAM));
+		addParam(createParamCentered<CKSSThree>(mm2px(Vec(114.f, 46.f)), module, SpaceTimeProgram::SCALE_PARAM));
 
-		spacetime::addSectionHeading(this, 30.f, 45.8f, "EXTERNAL CV");
-		spacetime::addSectionHeading(this, 82.f, 45.8f, "OUTPUTS");
-		spacetime::addSectionHeading(this, 137.f, 45.8f, "PROGRAM");
-		static const float extX[4] = {9.f, 23.f, 37.f, 51.f};
-		for (int i = 0; i < 4; i++)
-			spacetime::addIoLabel(this, extX[i], 49.2f, std::string(1, char('A' + i)));
-		static const float outputX[3] = {68.f, 82.f, 96.f};
-		static const char* outputNames[3] = {"STAGE V", "STAGE T", "POLY"};
-		for (int i = 0; i < 3; i++)
-			spacetime::addIoLabel(this, outputX[i], 49.2f, outputNames[i]);
-		static const float programX[3] = {116.f, 137.f, 156.f};
-		static const char* programNames[3] = {"KEY", "SCALE", "ALL STAGES"};
-		for (int i = 0; i < 3; i++)
-			spacetime::addKnobLabel(this, programX[i], 49.2f, programNames[i]);
-
-		spacetime::addSectionHeading(this, 81.28f, 67.5f, "STAGE MODIFIERS");
-		static const float modifierX[4] = {21.f, 61.f, 101.f, 141.f};
-		static const char* modifierNames[12] = {
-			"QUANTIZE", "SLEW", "RANGE", "V SOURCE",
-			"STOP", "SUSTAIN", "ENABLE", "FIRST",
-			"LAST", "T SOURCE", "PULSE 1", "PULSE 2"};
-		for (int row = 0; row < 3; row++) {
-			float labelY = 72.f + 16.f * row;
-			float signY = 75.f + 16.f * row;
-			for (int col = 0; col < 4; col++) {
-				spacetime::addKnobLabel(this, modifierX[col], labelY,
-					modifierNames[row * 4 + col]);
-				spacetime::addCvLabel(this, modifierX[col] - 10.f, signY, "-");
-				spacetime::addCvLabel(this, modifierX[col] + 10.f, signY, "+");
-			}
+		// Zone D: 12 modifier levers (6 columns x 2 rows) + the 16 modifier-
+		// state LEDs above and below them. Row 1 (QUANT/SLEW/RANGE/VSRC/STOP/
+		// SUSTAIN) fans out through 9 LEDs: 1+2+3+1+1+1. Row 2 (ENABLE/FIRST/
+		// LAST/TSRC/PUL1/PUL2) has one LED per lever.
+		static const float leverX[6] = {12.f, 30.f, 48.f, 66.f, 84.f, 102.f};
+		static const float leverY[2] = {72.f, 100.f};
+		for (int r = 0; r < 2; r++)
+			for (int c = 0; c < 6; c++)
+				addParam(createParamCentered<MmLeverControl>(mm2px(Vec(leverX[c], leverY[r])),
+					module, SpaceTimeProgram::MODIFIER_PARAMS + r * 6 + c));
+		static const int row1Lights[9] = {
+			SpaceTimeProgram::QUANTIZE_LIGHT,
+			SpaceTimeProgram::SLEW1_LIGHT, SpaceTimeProgram::SLEW2_LIGHT,
+			SpaceTimeProgram::RANGE_FULL_LIGHT, SpaceTimeProgram::RANGE_HALF_LIGHT,
+			SpaceTimeProgram::RANGE_LTD_LIGHT,
+			SpaceTimeProgram::VSOURCE_LIGHT, SpaceTimeProgram::STOP_LIGHT, SpaceTimeProgram::SUSTAIN_LIGHT};
+		static const int row1Count[6] = {1, 2, 3, 1, 1, 1};
+		{
+			int li = 0;
+			for (int c = 0; c < 6; c++)
+				for (int k = 0; k < row1Count[c]; k++)
+					addChild(createLightCentered<SmallLight<RedLight>>(
+						mm2px(Vec(leverX[c] - 4.f + k * 4.f, 61.f)), module, row1Lights[li++]));
 		}
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(21.f, 75.f)), module, SpaceTimeProgram::QUANTIZE_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(59.f, 75.f)), module, SpaceTimeProgram::SLEW1_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(63.f, 75.f)), module, SpaceTimeProgram::SLEW2_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(97.f, 75.f)), module, SpaceTimeProgram::RANGE_FULL_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(101.f, 75.f)), module, SpaceTimeProgram::RANGE_HALF_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(105.f, 75.f)), module, SpaceTimeProgram::RANGE_LTD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(141.f, 75.f)), module, SpaceTimeProgram::VSOURCE_LIGHT));
-		static const int booleanLights[8] = {
-			SpaceTimeProgram::STOP_LIGHT, SpaceTimeProgram::SUSTAIN_LIGHT,
+		static const int row2Lights[6] = {
 			SpaceTimeProgram::ENABLE_LIGHT, SpaceTimeProgram::FIRST_LIGHT,
 			SpaceTimeProgram::LAST_LIGHT, SpaceTimeProgram::TSOURCE_LIGHT,
 			SpaceTimeProgram::PULSE1_LIGHT, SpaceTimeProgram::PULSE2_LIGHT};
-		for (int i = 0; i < 8; i++)
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(modifierX[i % 4], i < 4 ? 91.f : 107.f)), module, booleanLights[i]));
-
-		spacetime::addSectionHeading(this, 38.f, 118.2f, "LIMITED OCTAVE");
-		spacetime::addSectionHeading(this, 124.f, 118.2f, "TIME RANGE");
-		static const float ltdLabelX[5] = {9.f, 20.f, 31.f, 42.f, 53.f};
-		static const char* ltdNames[5] = {"-2", "-1", "0", "+1", "+2"};
-		for (int i = 0; i < 5; i++)
-			spacetime::addCvLabel(this, ltdLabelX[i], 121.f, ltdNames[i]);
-		static const float rangeLabelX[4] = {91.f, 105.f, 119.f, 133.f};
-		static const char* rangeNames[4] = {".002-.03", ".02-.3", ".2-3", "2-30"};
-		for (int i = 0; i < 4; i++)
-			spacetime::addCvLabel(this, rangeLabelX[i], 121.f, rangeNames[i]);
-		spacetime::addKnobLabel(this, 69.f, 118.8f, "SELECT");
-		spacetime::addKnobLabel(this, 151.f, 118.8f, "SELECT");
-		#if 0
-		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 12.f)));
-		display->box.size = mm2px(Vec(73.f, 27.f));
-		display->firstLightId = SpaceTimeProgram::STATUS_DISPLAY;
-		display->font = "Default_10";
-		display->color = Colors565::White;
-		addChild(display);
-		#endif
-
-		// Standard-height, full-display-width layout. The previous 16 HP panel
-		// was stretched to 305 mm to stack these controls vertically, which is
-		// not a valid Eurorack/MetaModule panel. At 32 HP the same complete
-		// control set fits at 128.5 mm without overlap or hidden rows.
-		static const int topParams[6] = {
-			SpaceTimeProgram::STAGE_PARAM, SpaceTimeProgram::PRESET_PARAM,
-			SpaceTimeProgram::CONTROL_CHANNEL_PARAM, SpaceTimeProgram::SLIDER_CHANNEL_PARAM,
-			SpaceTimeProgram::STAGE_BANKS_PARAM, SpaceTimeProgram::INSTRUMENT_PARAM};
 		for (int i = 0; i < 6; i++)
-			addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(topX[i], 20.f)), module, topParams[i]));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(topX[0], 36.f)), module, SpaceTimeProgram::SAVE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(topX[1], 36.f)), module, SpaceTimeProgram::LOAD_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(topX[2], 36.f)), module, SpaceTimeProgram::CLEAR_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(topX[3], 36.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(leverX[i], 89.f)), module, row2Lights[i]));
 
-		for (int i = 0; i < 4; i++)
-			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(extX[i], 56.f)), module, SpaceTimeProgram::EXT_INPUTS + i));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(68.f, 56.f)), module, SpaceTimeProgram::SELECTED_V_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(82.f, 56.f)), module, SpaceTimeProgram::SELECTED_TIME_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(96.f, 56.f)), module, SpaceTimeProgram::POLY_OUTPUT));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(116.f, 56.f)), module, SpaceTimeProgram::KEY_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(137.f, 56.f)), module, SpaceTimeProgram::SCALE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(156.f, 56.f)), module, SpaceTimeProgram::BULK_PARAM));
+		// Zone B: setup cluster (top-right). Channel / ID knobs stay on
+		// the panel; MM has no context menu.
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(74.f, 15.f)), module, SpaceTimeProgram::STAGE_BANKS_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(74.f, 29.f)), module, SpaceTimeProgram::INSTRUMENT_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 15.f)), module, SpaceTimeProgram::CONTROL_CHANNEL_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 29.f)), module, SpaceTimeProgram::SLIDER_CHANNEL_PARAM));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(114.f, 20.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(110.f, 33.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(114.5f, 33.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(119.f, 33.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(midiX[0], 36.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(midiX[1], 36.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(midiX[2], 36.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
-
-		// Four modifier fields per row: Down/Up pairs across eight columns.
-		static const float gestureX[8] = {11.f, 31.f, 51.f, 71.f, 91.f, 111.f, 131.f, 151.f};
-		static const float gestureY[3] = {79.f, 95.f, 111.f};
-		for (int row = 0; row < 3; row++) {
-			for (int pair = 0; pair < 4; pair++) {
-				int field = row * 4 + pair;
-				addParam(createParamCentered<LEDButton>(mm2px(Vec(gestureX[pair * 2], gestureY[row])), module, SpaceTimeProgram::GESTURE_DOWN_PARAMS + field));
-				addParam(createParamCentered<LEDButton>(mm2px(Vec(gestureX[pair * 2 + 1], gestureY[row])), module, SpaceTimeProgram::GESTURE_UP_PARAMS + field));
-			}
+		// Zone E: bottom band — 5 LTD momentaries + selector, 4 TRANGE
+		// momentaries + selector.
+		static const float ltdBtnX[5] = {22.f, 28.f, 34.f, 40.f, 46.f};
+		for (int i = 0; i < 5; i++) {
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(ltdBtnX[i], 122.f)), module, SpaceTimeProgram::LTD_PARAMS + i));
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(ltdBtnX[i], 116.f)), module, SpaceTimeProgram::LTD_LIGHTS + i));
 		}
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(58.f, 122.f)), module, SpaceTimeProgram::LTD_SELECTOR_PARAM));
+		static const float trangeBtnX[4] = {72.f, 78.f, 84.f, 90.f};
+		for (int i = 0; i < 4; i++) {
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(trangeBtnX[i], 122.f)), module, SpaceTimeProgram::TRANGE_PARAMS + i));
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(trangeBtnX[i], 116.f)), module, SpaceTimeProgram::TRANGE_LIGHTS + i));
+		}
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(102.f, 122.f)), module, SpaceTimeProgram::TRANGE_SELECTOR_PARAM));
 
-		for (int i = 0; i < 5; i++)
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(ltdLabelX[i], 124.3f)), module, SpaceTimeProgram::LTD_LIGHTS + i));
+		// Zone G: right-hand jack column (labels baked in the SVG to the left
+		// of each jack, so the labels do not clip the panel edge).
+		static const float jackY[4] = {15.f, 29.f, 43.f, 57.f};
 		for (int i = 0; i < 4; i++)
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(rangeLabelX[i], 124.3f)), module, SpaceTimeProgram::TRANGE_LIGHTS + i));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(69.f, 124.f)), module, SpaceTimeProgram::LTD_SELECTOR_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(151.f, 124.f)), module, SpaceTimeProgram::TRANGE_SELECTOR_PARAM));
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(140.f, jackY[i])), module, SpaceTimeProgram::EXT_INPUTS + i));
+		static const float outY[3] = {72.f, 86.f, 100.f};
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[0])), module, SpaceTimeProgram::SELECTED_V_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[1])), module, SpaceTimeProgram::SELECTED_TIME_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[2])), module, SpaceTimeProgram::POLY_OUTPUT));
 	}
+
 
 	void appendContextMenu(Menu* menu) override {
 		menu->addChild(new MenuSeparator);

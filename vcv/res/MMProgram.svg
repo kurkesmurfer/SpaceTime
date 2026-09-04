@@ -1,75 +1,126 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="162.56mm" height="128.5mm" viewBox="0 0 162.56 128.5">
-  <rect width="162.56" height="128.5" fill="#1d1713"/>
-  <rect x="0.5" y="0.5" width="161.56" height="127.5" fill="none" stroke="#362c24" stroke-width="0.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="152.4mm" height="128.5mm" viewBox="0 0 152.4 128.5">
+  <rect width="152.4" height="128.5" fill="#1d1713"/>
+  <rect x="0.5" y="0.5" width="151.4" height="127.5" fill="none" stroke="#362c24" stroke-width="0.5"/>
   <g fill="#6e6150" stroke="#362c24" stroke-width="0.4">
     <circle cx="3.000" cy="3.500" r="1.5"/>
-    <circle cx="159.560" cy="3.500" r="1.5"/>
+    <circle cx="149.4" cy="3.500" r="1.5"/>
     <circle cx="3.000" cy="125.000" r="1.5"/>
-    <circle cx="159.560" cy="125.000" r="1.5"/>
+    <circle cx="149.4" cy="125.000" r="1.5"/>
   </g>
-
-  <text x="69" y="43.0" fill="#2e7d77" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">IN</text>
-  <text x="75" y="43.0" fill="#9a6b08" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">CLK</text>
-  <text x="81" y="43.0" fill="#c13c36" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">OUT</text>
 
   <!-- kurkesmurfer-style-v1 -->
-  <image href="../../vcv/res/kurkesmurfer-panel-logo.svg" x="66.699" y="3.2" width="2.5715" height="5.2"/>
-  <text x="83.165" y="5.8" text-anchor="middle" dominant-baseline="middle" fill="#d8ccb8" font-family="Fraunces" font-weight="600" font-size="5.4187" letter-spacing="0.1355">Program</text>
-  <path d="M 3 10.2 H 72.330" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
-  <text x="81.280" y="10.2" text-anchor="middle" dominant-baseline="middle" fill="#8a7e70" font-family="Barlow Condensed" font-weight="500" font-size="2.3707" letter-spacing="0.2032">SEQUENCER CORE</text>
-  <path d="M 90.230 10.2 H 159.560" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
-    <rect x="3.2" y="11.1" width="74.88" height="29" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
-  <rect x="80.0" y="11.1" width="79.36" height="29" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
-  <rect x="3.2" y="42.5" width="156.16" height="22.5" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
-  <rect x="3.2" y="66.0" width="156.16" height="50.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
-  <rect x="3.2" y="117.0" width="156.16" height="10.0" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
-  <rect x="3.2" y="11.1" width="74.88" height="29" rx="1.5" fill="#12100e" stroke="#362c24" stroke-width="0.35"/>
+  <image href="../../vcv/res/kurkesmurfer-panel-logo.svg" x="60.1" y="3.2" width="2.5715" height="5.2"/>
+  <text x="76.2" y="5.8" text-anchor="middle" dominant-baseline="middle" fill="#d8ccb8" font-family="Fraunces" font-weight="600" font-size="5.4187" letter-spacing="0.1355">Program</text>
+  <path d="M 3 10.2 H 61.0" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
+  <text x="76.2" y="9.5" text-anchor="middle" dominant-baseline="middle" fill="#8a7e70" font-family="Barlow Condensed" font-weight="500" font-size="2.3707" letter-spacing="0.2032">SEQUENCER CORE</text>
+  <path d="M 91 9.5 H 128" fill="none" stroke="#c13c36" stroke-width="0.27" opacity="0.7"/>
 
-  <g fill="#b7ac9d" font-family="Barlow Condensed" font-weight="600" font-size="2.45" text-anchor="middle">
-    <text x="84" y="12.8">SELECT</text>
-    <text x="98" y="12.8">PRESET</text>
-    <text x="112" y="12.8">PROGRAM CH</text>
-    <text x="126" y="12.8">SLIDER CH</text>
-    <text x="140" y="12.8">STAGES</text>
-    <text x="154" y="12.8">ID</text>
-    <text x="84" y="30.2">SAVE</text>
-    <text x="98" y="30.2">LOAD</text>
-    <text x="112" y="30.2">CLEAR</text>
-    <text x="126" y="30.2">RETRIGGER</text>
-    <text x="140" y="30.2">IN</text>
-    <text x="147" y="30.2">CLK</text>
-    <text x="154" y="30.2">OUT</text>
-  </g>
+  <!-- Zone A: status display bezel (LCD region) -->
+  <rect x="3.2" y="12.0" width="60.8" height="24.0" rx="1.5" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
+  <rect x="3.2" y="12.0" width="60.8" height="24.0" rx="1.2" fill="#12100e" stroke="#362c24" stroke-width="0.35"/>
 
-  <g fill="#7b6f62" font-family="Barlow Condensed" font-weight="600" font-size="2.65" text-anchor="middle">
-    <text x="30" y="45.8">EXTERNAL CV</text>
-    <text x="82" y="45.8">OUTPUTS</text>
-    <text x="137" y="45.8">PROGRAM</text>
-  </g>
-  <g fill="#b7ac9d" font-family="Barlow Condensed" font-weight="600" font-size="2.25" text-anchor="middle">
-    <text x="9" y="49.2">A</text><text x="23" y="49.2">B</text><text x="37" y="49.2">C</text><text x="51" y="49.2">D</text>
-    <text x="68" y="49.2">STAGE V</text><text x="82" y="49.2">STAGE T</text><text x="96" y="49.2">POLY</text>
-    <text x="116" y="49.2">KEY</text><text x="137" y="49.2">SCALE</text><text x="156" y="49.2">ALL STAGES</text>
+  <!-- Zone B: setup cluster (top-right; starts below the header line, above the RETRIG LED row) -->
+  <rect x="70.0" y="12.2" width="49.0" height="22.5" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
+
+  <!-- Zone C: step + bulk + action + preset/key/scale -->
+  <rect x="3.2" y="40.4" width="117.8" height="15.4" rx="1.8" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
+
+  <!-- Zone D: 12 modifier lever wells (2 rows x 6 cols) -->
+  <g fill="none" stroke="#362c24" stroke-width="0.35" opacity="0.9">
+    <rect x="9.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="27.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="45.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="63.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="81.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="99.6" y="66.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="9.6" y="94.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="27.6" y="94.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="45.6" y="94.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="63.6" y="94.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="81.6" y="94.5" width="4.8" height="12" rx="0.8"/>
+    <rect x="99.6" y="94.5" width="4.8" height="12" rx="0.8"/>
   </g>
 
-  <text x="81.28" y="67.5" fill="#7b6f62" font-family="Barlow Condensed" font-weight="600" font-size="3.1" text-anchor="middle">STAGE MODIFIERS</text>
-  <g fill="#b7ac9d" font-family="Barlow Condensed" font-weight="600" font-size="2.55" text-anchor="middle">
-    <text x="21" y="72">QUANTIZE</text><text x="61" y="72">SLEW</text><text x="101" y="72">RANGE</text><text x="141" y="72">V SOURCE</text>
-    <text x="21" y="88">STOP</text><text x="61" y="88">SUSTAIN</text><text x="101" y="88">ENABLE</text><text x="141" y="88">FIRST</text>
-    <text x="21" y="104">LAST</text><text x="61" y="104">T SOURCE</text><text x="101" y="104">PULSE 1</text><text x="141" y="104">PULSE 2</text>
-  </g>
-  <g fill="#8a7e70" font-family="Barlow Condensed" font-weight="600" font-size="2.15" text-anchor="middle">
-    <text x="11" y="75">−</text><text x="31" y="75">+</text><text x="51" y="75">−</text><text x="71" y="75">+</text><text x="91" y="75">−</text><text x="111" y="75">+</text><text x="131" y="75">−</text><text x="151" y="75">+</text>
-    <text x="11" y="91">−</text><text x="31" y="91">+</text><text x="51" y="91">−</text><text x="71" y="91">+</text><text x="91" y="91">−</text><text x="111" y="91">+</text><text x="131" y="91">−</text><text x="151" y="91">+</text>
-    <text x="11" y="107">−</text><text x="31" y="107">+</text><text x="51" y="107">−</text><text x="71" y="107">+</text><text x="91" y="107">−</text><text x="111" y="107">+</text><text x="131" y="107">−</text><text x="151" y="107">+</text>
+  <!-- Zone E: bottom LTD/TRANGE strip -->
+  <rect x="18.0" y="113.0" width="90.0" height="19.5" rx="1.5" fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.7"/>
+
+  <!-- Zone G: right jack column (jacks are engine-driven; wells only) -->
+  <g fill="none" stroke="#50463c" stroke-width="0.3" opacity="0.55">
+    <rect x="131.0" y="11.5" width="18.4" height="48.5" rx="1.5"/>
+    <rect x="131.0" y="68.5" width="18.4" height="34.5" rx="1.5"/>
   </g>
 
-  <g fill="#7b6f62" font-family="Barlow Condensed" font-weight="600" font-size="2.65" text-anchor="middle">
-    <text x="38" y="118.2">LIMITED OCTAVE</text>
-    <text x="124" y="118.2">TIME RANGE</text>
+  <!-- Zone A/B labels -->
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="start">
+    <text x="72"   y="13.4">STAGES</text>
+    <text x="72"   y="27.4">ID</text>
+    <text x="93.6" y="13.4">PROG CH</text>
+    <text x="93.6" y="27.4">SLIDER CH</text>
+    <text x="124.2" y="14.4" text-anchor="middle">RETRIG</text>
   </g>
-  <g fill="#b7ac9d" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="middle">
-    <text x="9" y="121">−2</text><text x="20" y="121">−1</text><text x="31" y="121">0</text><text x="42" y="121">+1</text><text x="53" y="121">+2</text><text x="69" y="118.8">SELECT</text>
-    <text x="91" y="121">.002-.03</text><text x="105" y="121">.02-.3</text><text x="119" y="121">.2-3</text><text x="133" y="121">2-30</text><text x="151" y="118.8">SELECT</text>
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.0">
+    <text x="108.2" y="38" >IN</text>
+    <text x="112.6" y="38" fill="#8a5a00">CLK</text>
+    <text x="117.0" y="38" fill="#a33">OUT</text>
+  </g>
+
+  <!-- Zone C: levers + buttons labels -->
+  <g fill="#c9bda9" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
+    <text x="28" y="45">BULK</text>
+    <text x="42" y="45">CLEAR</text>
+    <text x="56" y="45">SAVE</text>
+    <text x="70" y="45">LOAD</text>
+  </g>
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
+    <text x="86" y="42">PRESET</text>
+    <text x="100" y="42">KEY</text>
+    <text x="114" y="42">SCALE</text>
+  </g>
+
+  <!-- Zone D headers + modifier names -->
+  <text x="57.4" y="57.6" fill="#c9bda9" font-family="Barlow Condensed" font-weight="600" font-size="2.7" text-anchor="middle">STAGE MODIFIERS</text>
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
+    <text x="12"  y="66">QUANT</text>
+    <text x="30"  y="66">SLEW</text>
+    <text x="48"  y="66">RANGE</text>
+    <text x="66"  y="66">VSRC</text>
+    <text x="84"  y="66">STOP</text>
+    <text x="102" y="66">SUST</text>
+    <text x="12"  y="94">ENABLE</text>
+    <text x="30"  y="94">FIRST</text>
+    <text x="48"  y="94">LAST</text>
+    <text x="66"  y="94">TSRC</text>
+    <text x="84"  y="94">PUL1</text>
+    <text x="102" y="94">PUL2</text>
+  </g>
+
+  <!-- Zone E: LTD / TRANGE labels + selector captions -->
+  <g fill="#c9bda9" font-family="Barlow Condensed" font-weight="600" font-size="2.3" text-anchor="middle">
+    <text x="34"  y="118">LIMITED</text>
+    <text x="81"  y="118">TIME RANGE</text>
+  </g>
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="1.9" text-anchor="middle">
+    <text x="22"  y="129.6">−2</text>
+    <text x="28"  y="129.6">−1</text>
+    <text x="34"  y="129.6">0</text>
+    <text x="40"  y="129.6">+1</text>
+    <text x="46"  y="129.6">+2</text>
+    <text x="58"  y="129.6" fill="#c9bda9">SEL</text>
+    <text x="72"  y="129.6">.002s</text>
+    <text x="78"  y="129.6">.02s</text>
+    <text x="84"  y="129.6">.2s</text>
+    <text x="90"  y="129.6">2s</text>
+    <text x="102" y="129.6" fill="#c9bda9">SEL</text>
+  </g>
+
+  <!-- Zone G: jack labels to the LEFT of each jack -->
+  <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.0" text-anchor="end">
+    <text x="129.5" y="15.7">EXT A</text>
+    <text x="129.5" y="29.7">EXT B</text>
+    <text x="129.5" y="43.7">EXT C</text>
+    <text x="129.5" y="57.7">EXT D</text>
+    <text x="129.5" y="72.7">STAGE V</text>
+    <text x="129.5" y="86.7">STAGE T</text>
+    <text x="129.5" y="100.7">POLY</text>
   </g>
 </svg>
