@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 7;
+static const uint32_t kChainProtocolVersion = 8;
 static const int kMidiHeadControls = 14;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
@@ -160,6 +160,7 @@ struct AnchorToHeadsMsg {
 	uint8_t selectedStage;  // PROGRAM selection, including active Display override
 	bool bulkArmed;         // one-shot apply-to-all state
 	uint8_t hopIndex;     // head id of the receiver; incremented at each relay
+	uint8_t instrumentId; // inherited Program identity (0-F)
 	// Display arbitration (manual: only one Display LED active at a time):
 	// heads unlatch when the owner is another head or when cancelSeq changes
 	// (stage-select scroll cancels Display).
@@ -177,7 +178,7 @@ struct AnchorToHeadsMsg {
 	bool valid;
 
 	AnchorToHeadsMsg()
-		: selectedStage(0), bulkArmed(false), hopIndex(0),
+		: selectedStage(0), bulkArmed(false), hopIndex(0), instrumentId(0),
 		  displayOwner(0xFF), displayCancelSeq(0),
 		  midiClockSeq(0), midiStartSeq(0), midiStopSeq(0), midiContinueSeq(0),
 		  valid(false) {
@@ -225,11 +226,12 @@ struct AnchorToBlocksMsg {
 	HeadStatus status[kMaxHeads];  // merged, for head-position dots
 	uint8_t headCount;
 	uint8_t hopIndex;              // block id of the receiver
+	uint8_t instrumentId;          // inherited Program identity (0-F)
 	uint32_t seq;                  // WP7: batch id; blocks apply ops of each seq once
 	bool valid;
 
 	AnchorToBlocksMsg()
-		: opCount(0), selectedStage(0), headCount(0), hopIndex(0), seq(0), valid(false) {}
+		: opCount(0), selectedStage(0), headCount(0), hopIndex(0), instrumentId(0), seq(0), valid(false) {}
 };
 
 // ---- Relay functions (pure) ---------------------------------------------------

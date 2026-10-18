@@ -3,6 +3,7 @@
 
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
+#include "InstrumentId.hpp"
 #include "MidiCore.hpp"
 
 #include <algorithm>
@@ -58,7 +59,7 @@ struct SpaceTimeMidi : Module {
 
 	SpaceTimeMidi() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configOutput(STATUS_OUTPUT, "Link status");
 		configLight(IN_LIGHT, "MIDI input activity");
 		configLight(CLK_LIGHT, "MIDI clock activity");
@@ -86,7 +87,7 @@ struct SpaceTimeMidi : Module {
 	}
 
 	void processControl(float dt) {
-		int nextId = clamp((int)std::round(params[INSTRUMENT_PARAM].getValue()), 0, 3);
+		int nextId = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 		if (nextId != instrumentId)
 			setInstrumentId(nextId);
 
@@ -121,7 +122,7 @@ struct SpaceTimeMidi : Module {
 
 	void setInstrumentId(int next) {
 		timingBusRegistry.unregisterMonitor(instrumentId);
-		instrumentId = clamp(next, 0, 3);
+		instrumentId = spacetime::clampInstrumentId(next);
 		timingBusRegistry.registerMonitor(instrumentId);
 		lastHeartbeat = 0;
 		staleTime = 1.f;
@@ -144,7 +145,7 @@ struct SpaceTimeMidi : Module {
 		char buffer[128];
 		int length = std::snprintf(buffer, sizeof(buffer),
 			"ID %c %s\nPROGRAM CH%02d\nSLIDER CH%02d\nMIDI CH%02d %s%03d V%03d %s",
-			(char)('A' + instrumentId), linkName,
+			spacetime::instrumentIdHex(instrumentId), linkName,
 			snapshot.controlChannel + 1,
 			snapshot.sliderChannel + 1,
 			(int)(snapshot.lastChannel < 0 ? 0 : snapshot.lastChannel + 1),

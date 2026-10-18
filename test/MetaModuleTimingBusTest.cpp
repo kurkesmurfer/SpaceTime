@@ -48,7 +48,7 @@ TEST_CASE("MetaModule timing buses isolate instruments and count monitors") {
 	uint32_t a = registry.makeToken();
 	uint32_t b = registry.makeToken();
 	CHECK(registry.registerCore(0, a));
-	CHECK(registry.registerCore(1, b));
+	CHECK(registry.registerCore(15, b));
 	registry.registerMonitor(0);
 	registry.registerMonitor(0);
 	CHECK(registry.bus(0).monitorCount.load() == 2);
@@ -58,11 +58,11 @@ TEST_CASE("MetaModule timing buses isolate instruments and count monitors") {
 	snapshotA.sourceEvents[0] = 11;
 	snapshotB.sourceEvents[0] = 22;
 	registry.bus(0).telemetry.publish(snapshotA);
-	registry.bus(1).telemetry.publish(snapshotB);
+	registry.bus(15).telemetry.publish(snapshotB);
 	TimingSnapshot readA;
 	TimingSnapshot readB;
 	CHECK(registry.bus(0).telemetry.read(readA));
-	CHECK(registry.bus(1).telemetry.read(readB));
+	CHECK(registry.bus(15).telemetry.read(readB));
 	CHECK(readA.sourceEvents[0] == 11);
 	CHECK(readB.sourceEvents[0] == 22);
 	registry.unregisterMonitor(0);

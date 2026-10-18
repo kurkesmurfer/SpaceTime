@@ -313,6 +313,7 @@ TEST_CASE("pushOp reports overflow at kMaxOpsPerTick") {
 TEST_CASE("blockRelayRight increments hop index, payload intact") {
 	AnchorToBlocksMsg in;
 	in.valid = true;
+	in.instrumentId = 3;
 	in.selectedStage = 13;
 	in.scaleKey.key = 9;
 	in.scaleKey.scale = 1;
@@ -325,6 +326,7 @@ TEST_CASE("blockRelayRight increments hop index, payload intact") {
 	AnchorToBlocksMsg out;
 	blockRelayRight(in, out);
 	CHECK(out.hopIndex == 1);
+	CHECK(out.instrumentId == 3);
 	CHECK(out.selectedStage == 13);
 	CHECK(out.scaleKey.key == 9);
 	CHECK(out.scaleKey.scale == 1);
@@ -402,6 +404,7 @@ TEST_CASE("anchor broadcast reaches the farthest head with correct hop ids") {
 		first = AnchorToHeadsMsg();
 		first.valid = true;
 		first.hopIndex = 0;
+		first.instrumentId = 2;
 		first.table.count = 16;
 		first.ext[3] = 4.2f;
 		// Each head relays what it consumed to the next head out.
@@ -417,6 +420,7 @@ TEST_CASE("anchor broadcast reaches the farthest head with correct hop ids") {
 	for (int i = 0; i < H; i++) {
 		CHECK(link[i].consumer().valid);
 		CHECK(link[i].consumer().hopIndex == i);  // head id by hop count
+		CHECK(link[i].consumer().instrumentId == 2);
 		CHECK(link[i].consumer().ext[3] == 4.2f);
 		CHECK(link[i].consumer().table.count == 16);
 	}

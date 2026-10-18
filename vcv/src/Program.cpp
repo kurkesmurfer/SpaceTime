@@ -4,6 +4,7 @@
 #include "ChainAdapter.hpp"
 #include "ProgramLogic.hpp"
 #include "PresetRow.hpp"
+#include "NativeModuleContracts.hpp"
 
 // ============================================================================
 // PROGRAM — WP7 integrated.
@@ -23,15 +24,15 @@ constexpr float ROW1_Y = 20.f;
 constexpr float DISPLAY_X = 14.f;
 constexpr float SCROLL_X = 30.f;
 constexpr float CLEAR_X = 43.f;
-constexpr float PULSE1_X = 57.f;
-constexpr float PULSE2_X = 69.f;
+constexpr float PULSE1_X = 55.f;
+constexpr float PULSE2_X = 67.f;
 constexpr float VOLT_Y = 42.f;
 constexpr float QUANT_X = 13.f;
 constexpr float SLOPE_X = 29.f;
 constexpr float RANGE_X = 45.f;
 constexpr float VSRC_X = 61.f;
 constexpr float LTD_Y = 58.f;
-constexpr float LTD_X0 = 13.f, LTD_PITCH = 12.f;
+constexpr float LTD_X0 = 10.f, LTD_PITCH = 11.f;
 constexpr float MODE_Y = 76.f;
 constexpr float MODE_X0 = 13.f, MODE_PITCH = 13.f;
 constexpr float TIME_Y = 95.f;
@@ -44,35 +45,59 @@ constexpr float LOAD_X = 14.f, SAVE_X = 28.f, KEY_X = 42.f, SCALE_X = 56.f;
 constexpr float EXT_X = 84.f;
 constexpr float EXT_Y0 = 20.f, EXT_PITCH = 9.5f;
 constexpr float PULSE_RETRIG_X = 84.f, PULSE_RETRIG_Y = 73.f;
+constexpr float LTD_SELECTOR_X = 65.f, LTD_SELECTOR_Y = LTD_Y;
+constexpr float TRANGE_SELECTOR_X = 52.f, TRANGE_SELECTOR_Y = TIME_Y;
+constexpr float INSTRUMENT_DISPLAY_X = 78.5f, INSTRUMENT_STEP_X = 88.f;
+constexpr float INSTRUMENT_Y = TIME_Y;
 constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 } // namespace Layout
 
-struct Program : Module {
+	struct Program : Module {
 	enum ParamId {
-		STAGE_SCROLL_PARAM,
+		STAGE_SCROLL_DOWN_PARAM,
+		STAGE_SCROLL_UP_PARAM,
 		CLEAR_PARAM,
-		QUANTIZE_PARAM,
-		SLOPE_PARAM,
-		RANGE_PARAM,
-		VSOURCE_PARAM,
+		QUANTIZE_DOWN_PARAM,
+		QUANTIZE_UP_PARAM,
+		SLOPE_DOWN_PARAM,
+		SLOPE_UP_PARAM,
+		RANGE_DOWN_PARAM,
+		RANGE_UP_PARAM,
+		VSOURCE_DOWN_PARAM,
+		VSOURCE_UP_PARAM,
 		ENUMS(LTD_PARAMS, 5),
-		STOP_PARAM,
-		SUSTAIN_PARAM,
-		ENABLE_PARAM,
-		FIRST_PARAM,
-		LAST_PARAM,
+		STOP_DOWN_PARAM,
+		STOP_UP_PARAM,
+		SUSTAIN_DOWN_PARAM,
+		SUSTAIN_UP_PARAM,
+		ENABLE_DOWN_PARAM,
+		ENABLE_UP_PARAM,
+		FIRST_DOWN_PARAM,
+		FIRST_UP_PARAM,
+		LAST_DOWN_PARAM,
+		LAST_UP_PARAM,
 		ENUMS(TRANGE_PARAMS, 4),
-		TSOURCE_PARAM,
-		PULSE1_PARAM,
-		PULSE2_PARAM,
+		TSOURCE_DOWN_PARAM,
+		TSOURCE_UP_PARAM,
+		PULSE1_DOWN_PARAM,
+		PULSE1_UP_PARAM,
+		PULSE2_DOWN_PARAM,
+		PULSE2_UP_PARAM,
 		ENUMS(PRESET_PARAMS, 12),
 		LOAD_PARAM,
 		SAVE_PARAM,
 		KEY_PARAM,
 		SCALE_PARAM,
 		PULSE_RETRIG_PARAM,  // appended for patch compatibility
+		INSTRUMENT_PARAM,
+		LTD_SELECTOR_PARAM,
+		TRANGE_SELECTOR_PARAM,
+		INSTRUMENT_DOWN_PARAM,
+		INSTRUMENT_UP_PARAM,
 		PARAMS_LEN
 	};
+	static_assert((int)PARAMS_LEN == (int)spacetime::NativeProgramContract::NATIVE_PARAMS_LEN,
+		"Program ParamId drift");
 	enum InputId {
 		ENUMS(EXT_INPUTS, 4),
 		INPUTS_LEN
@@ -109,7 +134,8 @@ struct Program : Module {
 
 	// The 12 spring-switch gesture fields, in param order QUANTIZE..PULSE2.
 	struct GestureMap {
-		int param;
+		int downParam;
+		int upParam;
 		spacetime::Field field;
 	};
 	static const GestureMap gestureMap[12];
@@ -127,6 +153,7 @@ struct Program : Module {
 	dsp::BooleanTrigger clearTrigger, ltdTriggers[5], trangeTriggers[4];
 	dsp::BooleanTrigger slotTriggers[12], modeTriggers[4];
 	dsp::BooleanTrigger scrollPressTrigger;
+	dsp::BooleanTrigger instrumentDownTrigger, instrumentUpTrigger;
 	dsp::ClockDivider divider;
 
 	// FG Display arbitration (manual: only one Display LED at a time).
@@ -147,39 +174,47 @@ struct Program : Module {
 	// For the stage-count display widget.
 	int displayCount = 0;
 	bool displayBroken = false;
+	bool rangeSelectorsReady = false;
+	int selectorStage = -1;
+	int lastLtdParam = 2;
+	int lastTrangeParam = spacetime::kDefaultTimeRange;
+	int lastLtdValue = 2;
+	int lastTrangeValue = spacetime::kDefaultTimeRange;
 
 	Program() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 
-		spacetime::configSpring3(this, STAGE_SCROLL_PARAM, "Stage select scroll",
+		spacetime::configDualSpring3(this, STAGE_SCROLL_DOWN_PARAM, STAGE_SCROLL_UP_PARAM,
+			"Stage select scroll",
 			"Scroll left", "Scroll right");
 		configButton(CLEAR_PARAM, "Clear all stages to defaults");
-		spacetime::configSpring3(this, PULSE1_PARAM, "Pulse 1",
+		spacetime::configDualSpring3(this, PULSE1_DOWN_PARAM, PULSE1_UP_PARAM, "Pulse 1",
 			"Remove from stage", "Add to stage");
-		spacetime::configSpring3(this, PULSE2_PARAM, "Pulse 2",
+		spacetime::configDualSpring3(this, PULSE2_DOWN_PARAM, PULSE2_UP_PARAM, "Pulse 2",
 			"Remove from stage", "Add to stage");
-		spacetime::configSpring3(this, QUANTIZE_PARAM, "Quantize / Continuous",
+		spacetime::configDualSpring3(this, QUANTIZE_DOWN_PARAM, QUANTIZE_UP_PARAM,
+			"Quantize / Continuous",
 			"Continuous", "Quantize");
-		spacetime::configSpring3(this, SLOPE_PARAM, "Sloped / Stepped",
+		spacetime::configDualSpring3(this, SLOPE_DOWN_PARAM, SLOPE_UP_PARAM, "Sloped / Stepped",
 			"Reduce slew", "Add slew");
-		spacetime::configSpring3(this, RANGE_PARAM, "Voltage range",
+		spacetime::configDualSpring3(this, RANGE_DOWN_PARAM, RANGE_UP_PARAM, "Voltage range",
 			"Half (0-5 V)", "Full (0-10 V)");
-		spacetime::configSpring3(this, VSOURCE_PARAM, "Voltage source",
+		spacetime::configDualSpring3(this, VSOURCE_DOWN_PARAM, VSOURCE_UP_PARAM, "Voltage source",
 			"Internal", "External (slider selects A-D)");
 		for (int i = 0; i < 5; i++)
 			configButton(LTD_PARAMS + i,
 				string::f("Limited range, octave %+d", i - 2));
-		spacetime::configSpring3(this, STOP_PARAM, "Stop", "Remove", "Add");
-		spacetime::configSpring3(this, SUSTAIN_PARAM, "Sustain", "Remove", "Add");
-		spacetime::configSpring3(this, ENABLE_PARAM, "Enable", "Remove", "Add");
-		spacetime::configSpring3(this, FIRST_PARAM, "Cycle first stage", "Remove", "Set");
-		spacetime::configSpring3(this, LAST_PARAM, "Cycle last stage", "Remove", "Set");
+		spacetime::configDualSpring3(this, STOP_DOWN_PARAM, STOP_UP_PARAM, "Stop", "Remove", "Add");
+		spacetime::configDualSpring3(this, SUSTAIN_DOWN_PARAM, SUSTAIN_UP_PARAM, "Sustain", "Remove", "Add");
+		spacetime::configDualSpring3(this, ENABLE_DOWN_PARAM, ENABLE_UP_PARAM, "Enable", "Remove", "Add");
+		spacetime::configDualSpring3(this, FIRST_DOWN_PARAM, FIRST_UP_PARAM, "Cycle first stage", "Remove", "Set");
+		spacetime::configDualSpring3(this, LAST_DOWN_PARAM, LAST_UP_PARAM, "Cycle last stage", "Remove", "Set");
 		static const char* trangeNames[4] = {
 			"Time range 0.002–0.03 s", "Time range 0.02–0.3 s",
 			"Time range 0.2–3 s", "Time range 2–30 s"};
 		for (int i = 0; i < 4; i++)
 			configButton(TRANGE_PARAMS + i, trangeNames[i]);
-		spacetime::configSpring3(this, TSOURCE_PARAM, "Time source",
+		spacetime::configDualSpring3(this, TSOURCE_DOWN_PARAM, TSOURCE_UP_PARAM, "Time source",
 			"Internal (slider + range)", "External (A-D CV)");
 		for (int i = 0; i < 12; i++) {
 			static const char* notes[12] = {"C", "C#", "D", "D#", "E", "F",
@@ -194,6 +229,13 @@ struct Program : Module {
 		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f,
 			"Pulse retrigger", {"Continuous across adjacent pulse stages",
 			"Hardware-compatible retrigger notch"});
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configSwitch(LTD_SELECTOR_PARAM, 0.f, 4.f, 2.f, "Limited octave",
+			{"-2", "-1", "0", "+1", "+2"});
+		configSwitch(TRANGE_SELECTOR_PARAM, 0.f, 3.f, (float)spacetime::kDefaultTimeRange,
+			"Time range", {"0.002-0.03 s", "0.02-0.3 s", "0.2-3 s", "2-30 s"});
+		configButton(INSTRUMENT_DOWN_PARAM, "Previous Instrument ID");
+		configButton(INSTRUMENT_UP_PARAM, "Next Instrument ID");
 		for (int i = 0; i < 4; i++)
 			configInput(EXT_INPUTS + i, string::f("External %c", 'A' + i));
 		configOutput(POLY_OUTPUT, "Heads CV (polyphonic, channel per head)");
@@ -201,11 +243,6 @@ struct Program : Module {
 		rightPort.attach(rightExpander);
 		leftPort.attach(leftExpander);
 		divider.setDivision(16);
-	}
-
-	int springDir(int paramId) {
-		float v = params[paramId].getValue();
-		return v > 1.5f ? 1 : (v < 0.5f ? -1 : 0);
 	}
 
 	spacetime::Field midiGestureField(int cc) {
@@ -225,6 +262,48 @@ struct Program : Module {
 			case 88: return Field::Pulse2;
 			default: return Field::Count_;
 		}
+	}
+
+	void syncRangeSelectors(spacetime::AnchorToBlocksMsg& message) {
+		using namespace spacetime;
+		int selected = clamp(logic.selectedStage(), 0, table.count - 1);
+		const ProgramWord& word = table.program[selected];
+		int ltdValue = word.limitedOctave();
+		int trangeValue = word.timeRange();
+		int ltdParam = clamp((int)std::round(params[LTD_SELECTOR_PARAM].getValue()), 0, 4);
+		int trangeParam = clamp((int)std::round(params[TRANGE_SELECTOR_PARAM].getValue()), 0, 3);
+		bool selectedChanged = !rangeSelectorsReady || selected != selectorStage;
+		if (selectedChanged) {
+			params[LTD_SELECTOR_PARAM].setValue((float)ltdValue);
+			params[TRANGE_SELECTOR_PARAM].setValue((float)trangeValue);
+		}
+		else {
+			EditOp ops[kMaxOpsPerTick];
+			if (ltdParam != lastLtdParam) {
+				int room = kMaxOpsPerTick - message.opCount;
+				int count = logic.emitLimited(ltdParam, table, ops, room);
+				for (int i = 0; i < count; i++)
+					pushOp(message, ops[i]);
+			}
+			else if (ltdValue != lastLtdValue) {
+				params[LTD_SELECTOR_PARAM].setValue((float)ltdValue);
+			}
+			if (trangeParam != lastTrangeParam) {
+				int room = kMaxOpsPerTick - message.opCount;
+				int count = logic.emitTimeRange(trangeParam, table, ops, room);
+				for (int i = 0; i < count; i++)
+					pushOp(message, ops[i]);
+			}
+			else if (trangeValue != lastTrangeValue) {
+				params[TRANGE_SELECTOR_PARAM].setValue((float)trangeValue);
+			}
+		}
+		selectorStage = selected;
+		lastLtdParam = clamp((int)std::round(params[LTD_SELECTOR_PARAM].getValue()), 0, 4);
+		lastTrangeParam = clamp((int)std::round(params[TRANGE_SELECTOR_PARAM].getValue()), 0, 3);
+		lastLtdValue = ltdValue;
+		lastTrangeValue = trangeValue;
+		rangeSelectorsReady = true;
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -290,7 +369,9 @@ struct Program : Module {
 
 		// ---- Scroll (a press while displaying cancels Display and jumps
 		// the selection to stage 1, per manual)
-		int dir = springDir(STAGE_SCROLL_PARAM);
+		bool scrollDown = params[STAGE_SCROLL_DOWN_PARAM].getValue() > 0.5f;
+		bool scrollUp = params[STAGE_SCROLL_UP_PARAM].getValue() > 0.5f;
+		int dir = scrollUp != scrollDown ? (scrollUp ? 1 : -1) : 0;
 		bool cancelledNow = false;
 		if (scrollPressTrigger.process(dir != 0) && displayOwner >= 0) {
 			displayCancelSeq++;
@@ -309,15 +390,14 @@ struct Program : Module {
 		#define PUSH_OPS(N) for (int _i = 0; _i < (N); _i++) pushOp(om, buf[_i])
 
 		for (int i = 0; i < 12; i++) {
-			int p = gestureMap[i].param;
 			Field f = gestureMap[i].field;
 			room = kMaxOpsPerTick - om.opCount;
-			if (gestureUp[i].process(params[p].getValue() > 1.5f)) {
+			if (gestureUp[i].process(params[gestureMap[i].upParam].getValue() > 0.5f)) {
 				int n = logic.emitModifier(f, +1, table, buf, room);
 				PUSH_OPS(n);
 			}
 			room = kMaxOpsPerTick - om.opCount;
-			if (gestureDown[i].process(params[p].getValue() < 0.5f)) {
+			if (gestureDown[i].process(params[gestureMap[i].downParam].getValue() > 0.5f)) {
 				int n = logic.emitModifier(f, -1, table, buf, room);
 				PUSH_OPS(n);
 			}
@@ -454,6 +534,16 @@ struct Program : Module {
 
 		// ---- Message out to the blocks
 		om.selectedStage = (uint8_t)logic.selectedStage();
+		if (instrumentDownTrigger.process(params[INSTRUMENT_DOWN_PARAM].getValue() > 0.5f)) {
+			int id = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+			params[INSTRUMENT_PARAM].setValue((float)((id + spacetime::kInstrumentIdCount - 1) % spacetime::kInstrumentIdCount));
+		}
+		if (instrumentUpTrigger.process(params[INSTRUMENT_UP_PARAM].getValue() > 0.5f)) {
+			int id = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+			params[INSTRUMENT_PARAM].setValue((float)((id + 1) % spacetime::kInstrumentIdCount));
+		}
+		syncRangeSelectors(om);
+		om.instrumentId = (uint8_t)spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 		om.scaleKey = logic.scaleKey();
 		om.headCount = statusValid ? sm->headCount : 0;
 		for (int i = 0; i < om.headCount; i++)
@@ -485,6 +575,7 @@ struct Program : Module {
 				ho->selectedStage = om.selectedStage;
 				ho->bulkArmed = logic.bulkArmed();
 				ho->hopIndex = 0;
+				ho->instrumentId = om.instrumentId;
 				ho->displayOwner = displayOwner >= 0 ? (uint8_t)displayOwner : 0xFF;
 				ho->displayCancelSeq = displayCancelSeq;
 				ho->valid = true;
@@ -554,6 +645,23 @@ struct Program : Module {
 		json_object_set_new(root, "slewFrac2", json_real(globals.slewFrac2));
 		json_object_set_new(root, "slopeLaw", json_integer(globals.slopeLaw));
 		json_object_set_new(root, "addressScale", json_integer(globals.addressScale));
+
+		// Portable authoring snapshot. VCV still obtains its live table from the
+		// attached Stage4 chain; the MetaModule Program consumes this snapshot
+		// when the patch exporter replaces the original module by its native-slug
+		// implementation.
+		json_object_set_new(root, "portableStageCount", json_integer(table.count));
+		json_t* portableVoltage = json_array();
+		json_t* portableTime = json_array();
+		json_t* portableProgram = json_array();
+		for (int st = 0; st < table.count; st++) {
+			json_array_append_new(portableVoltage, json_real(table.voltage[st]));
+			json_array_append_new(portableTime, json_real(table.time[st]));
+			json_array_append_new(portableProgram, json_integer((json_int_t)table.program[st].bits));
+		}
+		json_object_set_new(root, "portableVoltage", portableVoltage);
+		json_object_set_new(root, "portableTime", portableTime);
+		json_object_set_new(root, "portableProgram", portableProgram);
 
 		json_t* presets = json_array();
 		for (int i = 0; i < spacetime::kPresetSlots; i++) {
@@ -632,18 +740,18 @@ struct Program : Module {
 };
 
 const Program::GestureMap Program::gestureMap[12] = {
-	{Program::QUANTIZE_PARAM, spacetime::Field::Quantize},
-	{Program::SLOPE_PARAM, spacetime::Field::Slew},
-	{Program::RANGE_PARAM, spacetime::Field::Range},
-	{Program::VSOURCE_PARAM, spacetime::Field::VoltageSource},
-	{Program::STOP_PARAM, spacetime::Field::Stop},
-	{Program::SUSTAIN_PARAM, spacetime::Field::Sustain},
-	{Program::ENABLE_PARAM, spacetime::Field::Enable},
-	{Program::FIRST_PARAM, spacetime::Field::First},
-	{Program::LAST_PARAM, spacetime::Field::Last},
-	{Program::TSOURCE_PARAM, spacetime::Field::TimeSource},
-	{Program::PULSE1_PARAM, spacetime::Field::Pulse1},
-	{Program::PULSE2_PARAM, spacetime::Field::Pulse2},
+	{Program::QUANTIZE_DOWN_PARAM, Program::QUANTIZE_UP_PARAM, spacetime::Field::Quantize},
+	{Program::SLOPE_DOWN_PARAM, Program::SLOPE_UP_PARAM, spacetime::Field::Slew},
+	{Program::RANGE_DOWN_PARAM, Program::RANGE_UP_PARAM, spacetime::Field::Range},
+	{Program::VSOURCE_DOWN_PARAM, Program::VSOURCE_UP_PARAM, spacetime::Field::VoltageSource},
+	{Program::STOP_DOWN_PARAM, Program::STOP_UP_PARAM, spacetime::Field::Stop},
+	{Program::SUSTAIN_DOWN_PARAM, Program::SUSTAIN_UP_PARAM, spacetime::Field::Sustain},
+	{Program::ENABLE_DOWN_PARAM, Program::ENABLE_UP_PARAM, spacetime::Field::Enable},
+	{Program::FIRST_DOWN_PARAM, Program::FIRST_UP_PARAM, spacetime::Field::First},
+	{Program::LAST_DOWN_PARAM, Program::LAST_UP_PARAM, spacetime::Field::Last},
+	{Program::TSOURCE_DOWN_PARAM, Program::TSOURCE_UP_PARAM, spacetime::Field::TimeSource},
+	{Program::PULSE1_DOWN_PARAM, Program::PULSE1_UP_PARAM, spacetime::Field::Pulse1},
+	{Program::PULSE2_DOWN_PARAM, Program::PULSE2_UP_PARAM, spacetime::Field::Pulse2},
 };
 
 // Stage count display: N = 4 x block count; '!' marks a broken chain.
@@ -672,6 +780,35 @@ struct StageCountDisplay : Widget {
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgFillColor(args.vg, nvgRGB(0xc1, 0x3c, 0x36));
 		nvgText(args.vg, box.size.x / 2, box.size.y / 2, text.c_str(), NULL);
+	}
+};
+
+struct InstrumentIdDisplay : Widget {
+	Program* module = nullptr;
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer != 1)
+			return;
+		nvgBeginPath(args.vg);
+		nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 2.f);
+		nvgFillColor(args.vg, nvgRGB(0x18, 0x14, 0x11));
+		nvgFill(args.vg);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStrokeColor(args.vg, nvgRGB(0x6f, 0x5d, 0x50));
+		nvgStroke(args.vg);
+		std::shared_ptr<Font> font = APP->window->loadFont(
+			asset::system("res/fonts/ShareTechMono-Regular.ttf"));
+		if (!font)
+			return;
+		char text[2] = {'0', '\0'};
+		if (module)
+			text[0] = spacetime::instrumentIdHex(
+				(int)std::round(module->params[Program::INSTRUMENT_PARAM].getValue()));
+		nvgFontFaceId(args.vg, font->handle);
+		nvgFontSize(args.vg, 17.f);
+		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFillColor(args.vg, nvgRGB(0xc1, 0x3c, 0x36));
+		nvgText(args.vg, box.size.x / 2, box.size.y / 2, text, nullptr);
 	}
 };
 
@@ -745,6 +882,9 @@ struct ProgramWidget : ModuleWidget {
 		spacetime::addIoLabel(this, PULSE_RETRIG_X, 62.f, "RETRIG");
 		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 69.f, "ON");
 		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 77.f, "OFF");
+		spacetime::addMicroLabel(this, LTD_SELECTOR_X, 64.f, "SELECT");
+		spacetime::addMicroLabel(this, TRANGE_SELECTOR_X, 101.f, "SELECT");
+		spacetime::addIoLabel(this, INSTRUMENT_DISPLAY_X + 5.f, 87.8f, "ID");
 		spacetime::addIoLabel(this, POLY_X, 104.9f, "POLY");
 		spacetime::addIoLabel(this, POLY_X, 117.9f, "OUT");
 #endif
@@ -754,17 +894,18 @@ struct ProgramWidget : ModuleWidget {
 		display->module = module;
 		addChild(display);
 
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(SCROLL_X, ROW1_Y)), module, Program::STAGE_SCROLL_PARAM));
+		spacetime::addDualSpring3(this, module, mm2px(Vec(SCROLL_X, ROW1_Y)),
+			Program::STAGE_SCROLL_DOWN_PARAM, Program::STAGE_SCROLL_UP_PARAM);
 		addParam(createParamCentered<VCVButton>(mm2px(Vec(CLEAR_X, ROW1_Y)), module, Program::CLEAR_PARAM));
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(PULSE1_X, ROW1_Y)), module, Program::PULSE1_PARAM));
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(PULSE2_X, ROW1_Y)), module, Program::PULSE2_PARAM));
+		spacetime::addDualSpring3(this, module, mm2px(Vec(PULSE1_X, ROW1_Y)), Program::PULSE1_DOWN_PARAM, Program::PULSE1_UP_PARAM);
+		spacetime::addDualSpring3(this, module, mm2px(Vec(PULSE2_X, ROW1_Y)), Program::PULSE2_DOWN_PARAM, Program::PULSE2_UP_PARAM);
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(PULSE1_X + 4.5f, 15.5f)), module, Program::PULSE1_LIGHT));
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(PULSE2_X + 4.5f, 15.5f)), module, Program::PULSE2_LIGHT));
 
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(QUANT_X, VOLT_Y)), module, Program::QUANTIZE_PARAM));
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(SLOPE_X, VOLT_Y)), module, Program::SLOPE_PARAM));
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(RANGE_X, VOLT_Y)), module, Program::RANGE_PARAM));
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(VSRC_X, VOLT_Y)), module, Program::VSOURCE_PARAM));
+		spacetime::addDualSpring3(this, module, mm2px(Vec(QUANT_X, VOLT_Y)), Program::QUANTIZE_DOWN_PARAM, Program::QUANTIZE_UP_PARAM);
+		spacetime::addDualSpring3(this, module, mm2px(Vec(SLOPE_X, VOLT_Y)), Program::SLOPE_DOWN_PARAM, Program::SLOPE_UP_PARAM);
+		spacetime::addDualSpring3(this, module, mm2px(Vec(RANGE_X, VOLT_Y)), Program::RANGE_DOWN_PARAM, Program::RANGE_UP_PARAM);
+		spacetime::addDualSpring3(this, module, mm2px(Vec(VSRC_X, VOLT_Y)), Program::VSOURCE_DOWN_PARAM, Program::VSOURCE_UP_PARAM);
 
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(QUANT_X + 4.5f, VOLT_Y)), module, Program::QUANTIZE_LIGHT));
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(SLOPE_X + 4.5f, 40.f)), module, Program::SLOPE1_LIGHT));
@@ -776,14 +917,18 @@ struct ProgramWidget : ModuleWidget {
 
 		spacetime::addLimitedBank(this, module, LTD_X0, LTD_Y, LTD_PITCH,
 			Program::LTD_PARAMS, Program::LTD_LIGHTS);
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(LTD_SELECTOR_X, LTD_SELECTOR_Y)),
+			module, Program::LTD_SELECTOR_PARAM));
 
-		static const int modeParams[5] = {Program::STOP_PARAM, Program::SUSTAIN_PARAM,
-			Program::ENABLE_PARAM, Program::FIRST_PARAM, Program::LAST_PARAM};
+		static const int modeDownParams[5] = {Program::STOP_DOWN_PARAM, Program::SUSTAIN_DOWN_PARAM,
+			Program::ENABLE_DOWN_PARAM, Program::FIRST_DOWN_PARAM, Program::LAST_DOWN_PARAM};
+		static const int modeUpParams[5] = {Program::STOP_UP_PARAM, Program::SUSTAIN_UP_PARAM,
+			Program::ENABLE_UP_PARAM, Program::FIRST_UP_PARAM, Program::LAST_UP_PARAM};
 		static const int modeLights[5] = {Program::STOP_LIGHT, Program::SUSTAIN_LIGHT,
 			Program::ENABLE_LIGHT, Program::FIRST_LIGHT, Program::LAST_LIGHT};
 		for (int i = 0; i < 5; i++) {
 			float x = MODE_X0 + MODE_PITCH * i;
-			addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(x, MODE_Y)), module, modeParams[i]));
+			spacetime::addDualSpring3(this, module, mm2px(Vec(x, MODE_Y)), modeDownParams[i], modeUpParams[i]);
 			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(x + 4.2f, 72.f)), module, modeLights[i]));
 		}
 
@@ -792,7 +937,9 @@ struct ProgramWidget : ModuleWidget {
 			addParam(createParamCentered<LEDButton>(mm2px(Vec(x, TIME_Y)), module, Program::TRANGE_PARAMS + i));
 			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, TIME_Y)), module, Program::TRANGE_LIGHTS + i));
 		}
-		addParam(createParamCentered<spacetime::SpringSwitch3>(mm2px(Vec(TSRC_X, TIME_Y)), module, Program::TSOURCE_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(TRANGE_SELECTOR_X, TRANGE_SELECTOR_Y)),
+			module, Program::TRANGE_SELECTOR_PARAM));
+		spacetime::addDualSpring3(this, module, mm2px(Vec(TSRC_X, TIME_Y)), Program::TSOURCE_DOWN_PARAM, Program::TSOURCE_UP_PARAM);
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(TSRC_X + 4.2f, 91.5f)), module, Program::TSOURCE_LIGHT));
 
 		spacetime::addPresetRow(this, module, PRESET_X0, PRESET_Y, PRESET_PITCH,
@@ -805,6 +952,13 @@ struct ProgramWidget : ModuleWidget {
 			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(EXT_X, EXT_Y0 + EXT_PITCH * i)), module, Program::EXT_INPUTS + i));
 		addParam(createParamCentered<CKSS>(mm2px(Vec(PULSE_RETRIG_X, PULSE_RETRIG_Y)),
 			module, Program::PULSE_RETRIG_PARAM));
+		auto* instrumentDisplay = createWidget<InstrumentIdDisplay>(
+			mm2px(Vec(INSTRUMENT_DISPLAY_X - 4.f, INSTRUMENT_Y - 4.f)));
+		instrumentDisplay->box.size = mm2px(Vec(8.f, 8.f));
+		instrumentDisplay->module = module;
+		addChild(instrumentDisplay);
+		spacetime::addDualSpring3(this, module, mm2px(Vec(INSTRUMENT_STEP_X, INSTRUMENT_Y)),
+			Program::INSTRUMENT_DOWN_PARAM, Program::INSTRUMENT_UP_PARAM);
 		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(POLY_X, POLY_Y)), module, Program::POLY_OUTPUT));
 	}
 

@@ -34,9 +34,9 @@ void init(Plugin* p) {
 	p->addModel(modelGlueLeft);
 	p->addModel(modelGlueRight);
 	p->addModel(modelWidgetTest);
-	p->addModel(modelMMProgram);
-	p->addModel(modelMMStage4);
-	p->addModel(modelMMHead);
+	// The former MM* authoring twins remain compiled temporarily as migration
+	// reference code, but are no longer registered. Original Program, Stage4
+	// and Head modules now carry the portable MetaModule contract directly.
 }
 
 json_t* settingsToJson() {

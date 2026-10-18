@@ -2,6 +2,8 @@
 #include <metamodule/VCVTextDisplay.hpp>
 #include "SpaceTimeEngine.hpp"
 #include "MMModuleContracts.hpp"
+#include "NativeModuleContracts.hpp"
+#include "PresetRow.hpp"
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
 
@@ -27,11 +29,10 @@ namespace {
 // individually-named gesture controls, five Limited-octave buttons and four
 // Time-range buttons down to three widgets, which isn't a port, it's a
 // different, smaller interface. This revision gives every one of those
-// twenty-one VCV controls its own button (spacetime::SpringSwitch3 itself
-// still isn't available to this build -- it lives in vcv/widgets -- so each
-// spring is realized as an explicit Up/Down LEDButton pair rather than one
-// three-position widget; functionally identical, same emitModifier() call
-// per press). PRESET_PARAM/SAVE_PARAM/LOAD_PARAM remain a direct knob +
+// twenty-one VCV controls its own button. Every spring lever has two shared
+// native momentary parameters; VCV draws them as one lever while MetaModule
+// presents the same IDs as an explicit Down/Up pair. PRESET_PARAM/SAVE_PARAM/
+// LOAD_PARAM remain a direct knob +
 // two buttons rather than VCV's twelve-button press-mode-then-digit pad
 // (dsp::PresetRowLogic, a second, separate modal class VCV's Program.cpp
 // uses beyond dsp::ProgramLogic) -- reaches the same 12 slots and key/scale
@@ -39,29 +40,60 @@ namespace {
 // rather than adding another 16 widgets to an already-large panel. Flagged
 // to Peet as the one remaining intentional compaction, distinct from the
 // gap this revision actually closes.
-struct SpaceTimeProgram : Module {
+	struct SpaceTimeProgram : Module {
 	enum ParamId {
-		STAGE_PARAM,
-		STAGE_STEP_DOWN_PARAM,
-		PRESET_PARAM,
-		CONTROL_CHANNEL_PARAM,
-		SLIDER_CHANNEL_PARAM,
-		SAVE_PARAM,
-		LOAD_PARAM,
+		STAGE_SCROLL_DOWN_PARAM,
+		STAGE_SCROLL_UP_PARAM,
 		CLEAR_PARAM,
-		PULSE_RETRIG_PARAM,
+		QUANTIZE_DOWN_PARAM,
+		QUANTIZE_UP_PARAM,
+		SLOPE_DOWN_PARAM,
+		SLOPE_UP_PARAM,
+		RANGE_DOWN_PARAM,
+		RANGE_UP_PARAM,
+		VSOURCE_DOWN_PARAM,
+		VSOURCE_UP_PARAM,
+		ENUMS(LTD_PARAMS, 5),
+		STOP_DOWN_PARAM,
+		STOP_UP_PARAM,
+		SUSTAIN_DOWN_PARAM,
+		SUSTAIN_UP_PARAM,
+		ENABLE_DOWN_PARAM,
+		ENABLE_UP_PARAM,
+		FIRST_DOWN_PARAM,
+		FIRST_UP_PARAM,
+		LAST_DOWN_PARAM,
+		LAST_UP_PARAM,
+		ENUMS(TRANGE_PARAMS, 4),
+		TSOURCE_DOWN_PARAM,
+		TSOURCE_UP_PARAM,
+		PULSE1_DOWN_PARAM,
+		PULSE1_UP_PARAM,
+		PULSE2_DOWN_PARAM,
+		PULSE2_UP_PARAM,
+		ENUMS(PRESET_PARAMS, 12),
+		LOAD_PARAM,
+		SAVE_PARAM,
 		KEY_PARAM,
 		SCALE_PARAM,
-		BULK_PARAM,
-		ENUMS(MODIFIER_PARAMS, 12),
-		ENUMS(LTD_PARAMS, 5),
-		ENUMS(TRANGE_PARAMS, 4),
-		STAGE_BANKS_PARAM,
+		PULSE_RETRIG_PARAM,
 		INSTRUMENT_PARAM,
 		LTD_SELECTOR_PARAM,
 		TRANGE_SELECTOR_PARAM,
-		// Appended last (option A): index stable across the update.
-		STAGE_STEP_UP_PARAM,
+		INSTRUMENT_DOWN_PARAM,
+		INSTRUMENT_UP_PARAM,
+		// MetaModule UI conveniences are appended after the complete native
+		// Program contract and are never required by an exported VCV patch.
+		INTERNAL_STAGE_PARAM,
+		INTERNAL_PRESET_PARAM,
+		CONTROL_CHANNEL_PARAM,
+		SLIDER_CHANNEL_PARAM,
+		INTERNAL_SAVE_PARAM,
+		INTERNAL_LOAD_PARAM,
+		INTERNAL_KEY_PARAM,
+		INTERNAL_SCALE_PARAM,
+		BULK_PARAM,
+		STAGE_BANKS_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -69,6 +101,7 @@ struct SpaceTimeProgram : Module {
 		INPUTS_LEN
 	};
 	enum OutputId {
+		POLY_OUTPUT,
 		SELECTED_V_OUTPUT,
 		SELECTED_TIME_OUTPUT,
 		// Real polyphonic output, heads 1-4 (Peet, 2026-08-09): MetaModule's
@@ -76,22 +109,15 @@ struct SpaceTimeProgram : Module {
 		// single POLY_OUTPUT carrying all 8 heads. Per Peet's decision, heads
 		// 5-8 simply have no CV output here -- no second jack, no dynamic
 		// active-head selection, just a fixed 4-channel window onto heads 1-4.
-		POLY_OUTPUT,
 		OUTPUTS_LEN
 	};
-	static_assert((int)STAGE_PARAM == (int)spacetime::MMProgramContract::STAGE_PARAM, "MMProgram ParamId drift");
-	static_assert((int)STAGE_STEP_DOWN_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_DOWN_PARAM, "MMProgram stage-step ParamId drift");
-	static_assert((int)STAGE_STEP_UP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_UP_PARAM, "MMProgram stage-step UP ParamId drift");
-	static_assert((int)MODIFIER_PARAMS == (int)spacetime::MMProgramContract::MODIFIER_PARAMS, "MMProgram modifier ParamId drift");
-	static_assert((int)STAGE_BANKS_PARAM == (int)spacetime::MMProgramContract::STAGE_BANKS_PARAM, "MMProgram stage-count ParamId drift");
-	static_assert((int)PARAMS_LEN == (int)spacetime::MMProgramContract::PARAMS_LEN, "MMProgram ParamId count drift");
-	static_assert((int)EXT_INPUTS == (int)spacetime::MMProgramContract::EXT_INPUTS && (int)INPUTS_LEN == (int)spacetime::MMProgramContract::INPUTS_LEN, "MMProgram InputId drift");
-	static_assert((int)SELECTED_V_OUTPUT == (int)spacetime::MMProgramContract::SELECTED_V_OUTPUT && (int)OUTPUTS_LEN == (int)spacetime::MMProgramContract::OUTPUTS_LEN, "MMProgram OutputId drift");
+	static_assert((int)INSTRUMENT_UP_PARAM + 1 == (int)spacetime::NativeProgramContract::NATIVE_PARAMS_LEN, "Program ParamId drift");
+	static_assert((int)EXT_INPUTS == (int)spacetime::NativeProgramContract::EXT_INPUTS, "Program InputId drift");
+	static_assert((int)POLY_OUTPUT == (int)spacetime::NativeProgramContract::POLY_OUTPUT, "Program OutputId drift");
 	enum LightId {
 		MIDI_IN_LIGHT,
 		MIDI_CLOCK_LIGHT,
 		MIDI_OUT_LIGHT,
-		STATUS_DISPLAY,
 		ENUMS(LTD_LIGHTS, 5),
 		ENUMS(TRANGE_LIGHTS, 4),
 		QUANTIZE_LIGHT,
@@ -110,6 +136,12 @@ struct SpaceTimeProgram : Module {
 		PULSE1_LIGHT,
 		PULSE2_LIGHT,
 		BULK_LIGHT,
+		ENUMS(PRESET_LIGHTS, 12),
+		LOAD_LIGHT,
+		SAVE_LIGHT,
+		KEY_LIGHT,
+		SCALE_LIGHT,
+		INSTRUMENT_DISPLAY,
 		LIGHTS_LEN
 	};
 
@@ -122,6 +154,16 @@ struct SpaceTimeProgram : Module {
 		spacetime::Field::VoltageSource, spacetime::Field::Stop, spacetime::Field::Sustain,
 		spacetime::Field::Enable, spacetime::Field::First, spacetime::Field::Last,
 		spacetime::Field::TimeSource, spacetime::Field::Pulse1, spacetime::Field::Pulse2,
+	};
+	static constexpr int kModDownParams[kModFieldCount] = {
+		QUANTIZE_DOWN_PARAM, SLOPE_DOWN_PARAM, RANGE_DOWN_PARAM, VSOURCE_DOWN_PARAM,
+		STOP_DOWN_PARAM, SUSTAIN_DOWN_PARAM, ENABLE_DOWN_PARAM, FIRST_DOWN_PARAM, LAST_DOWN_PARAM,
+		TSOURCE_DOWN_PARAM, PULSE1_DOWN_PARAM, PULSE2_DOWN_PARAM,
+	};
+	static constexpr int kModUpParams[kModFieldCount] = {
+		QUANTIZE_UP_PARAM, SLOPE_UP_PARAM, RANGE_UP_PARAM, VSOURCE_UP_PARAM,
+		STOP_UP_PARAM, SUSTAIN_UP_PARAM, ENABLE_UP_PARAM, FIRST_UP_PARAM, LAST_UP_PARAM,
+		TSOURCE_UP_PARAM, PULSE1_UP_PARAM, PULSE2_UP_PARAM,
 	};
 	static constexpr const char* kModFieldNames[kModFieldCount] = {
 		"Quantize", "Slew", "Range", "Voltage source", "Stop", "Sustain",
@@ -149,7 +191,11 @@ struct SpaceTimeProgram : Module {
 	dsp::SchmittTrigger bulkTrigger;
 	dsp::SchmittTrigger stageStepDownTrigger;  // momentary button, press = previous stage
 	dsp::SchmittTrigger stageStepUpTrigger;    // momentary button, press = next stage
-	dsp::SchmittTrigger modTrigger[kModFieldCount];  // momentary step buttons
+	dsp::SchmittTrigger instrumentDownTrigger, instrumentUpTrigger;
+	dsp::SchmittTrigger modDownTrigger[kModFieldCount];
+	dsp::SchmittTrigger modUpTrigger[kModFieldCount];
+	dsp::SchmittTrigger presetModeTrigger[4], presetSlotTrigger[12];
+	spacetime::PresetRowLogic presetRow;
 	dsp::SchmittTrigger ltdTrigger[5];
 	dsp::SchmittTrigger trangeTrigger[4];
 	dsp::ClockDivider controlDivider;
@@ -202,37 +248,41 @@ struct SpaceTimeProgram : Module {
 
 	SpaceTimeProgram() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(STAGE_PARAM, 0.f, 63.f, 0.f, "Selected stage", "", 0.f, 1.f, 1.f)->snapEnabled = true;
-		// Two momentary stage-step buttons (option A, 2026-09-04): every
-		// press = one stage in that direction, wrapping at both ends. Both
-		// sides of the module use SchmittTrigger + applyOps.
-		configButton(STAGE_STEP_DOWN_PARAM, "Previous stage (wrap)");
-		configButton(STAGE_STEP_UP_PARAM, "Next stage (wrap)");
-		configParam(PRESET_PARAM, 0.f, 11.f, 0.f, "Preset slot", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configButton(STAGE_SCROLL_DOWN_PARAM, "Stage select down: previous stage");
+		configButton(STAGE_SCROLL_UP_PARAM, "Stage select up: next stage");
+		configParam(INTERNAL_STAGE_PARAM, 0.f, 63.f, 0.f, "Selected stage", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INTERNAL_PRESET_PARAM, 0.f, 11.f, 0.f, "Preset slot", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(CONTROL_CHANNEL_PARAM, 0.f, 15.f, 15.f, "Program MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(SLIDER_CHANNEL_PARAM, 0.f, 15.f, 14.f, "Stage slider MIDI channel", "", 0.f, 1.f, 1.f)->snapEnabled = true;
-		configButton(SAVE_PARAM, "Save selected preset");
-		configButton(LOAD_PARAM, "Load selected preset");
+		configButton(INTERNAL_SAVE_PARAM, "Save selected preset");
+		configButton(INTERNAL_LOAD_PARAM, "Load selected preset");
 		configButton(CLEAR_PARAM, "Clear all stage program words");
 		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f, "Pulse retrigger",
 			{"Continuous", "Hardware-compatible notch"});
-		configParam(KEY_PARAM, 0.f, 11.f, 0.f, "Key", "", 0.f, 1.f, 1.f)->snapEnabled = true;
-		configSwitch(SCALE_PARAM, 0.f, 2.f, 0.f, "Scale", {"Major", "Minor", "Chromatic"});
+		configParam(INTERNAL_KEY_PARAM, 0.f, 11.f, 0.f, "Key", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configSwitch(INTERNAL_SCALE_PARAM, 0.f, 2.f, 0.f, "Scale", {"Major", "Minor", "Chromatic"});
+		for (int i = 0; i < 12; i++)
+			configButton(PRESET_PARAMS + i, string::f("Preset / key button %d", i + 1));
+		configButton(LOAD_PARAM, "Arm preset load");
+		configButton(SAVE_PARAM, "Arm preset save");
+		configButton(KEY_PARAM, "Arm key selection");
+		configButton(SCALE_PARAM, "Arm scale selection");
 		configButton(BULK_PARAM, "Arm bulk edit (next modifier applies to all stages)");
 		configLight(BULK_LIGHT, "Bulk edit armed");
-		for (int i = 0; i < kModFieldCount; i++) {
-			// 3-way param (0 = remove/disable, 1 = off, 2 = add/enable) that the
-			// module treats as a *momentary step button* via SchmittTrigger:
-			// every press = increment-with-wrap one step (see emitStep).
-			// Position is a no-op on the module side; the modifier-state LED
-			// reads the stage table. The 0..2 range is preserved so the
-			// VCV twin can show a small "add/neutral/remove" glyph when the
-			// widget is still a three-position SvgSwitch in a future pass.
-			configParam<SwitchQuantity>(MODIFIER_PARAMS + i, 0.f, 2.f, 1.f,
-				string::f("%s (down: %s / up: %s)",
-					kModFieldNames[i], kModDownLabels[i], kModUpLabels[i]),
-				"off", 0.f, 1.f, 2.f);
-		}
+		// MetaModule presents parameters in registration order in its binding
+		// browser. Keep the browser aligned with the faceplate: Pulse 1 and
+		// Pulse 2 are top-row controls, even though the DSP field table keeps
+		// them at the end for compatibility with the shared modifier mapping.
+		auto configModifier = [&](int field) {
+			configButton(kModUpParams[field],
+				string::f("%s up: %s", kModFieldNames[field], kModUpLabels[field]));
+			configButton(kModDownParams[field],
+				string::f("%s down: %s", kModFieldNames[field], kModDownLabels[field]));
+		};
+		configModifier(10); // Pulse 1, top row
+		configModifier(11); // Pulse 2, top row
+		for (int i = 0; i < 10; i++)
+			configModifier(i);
 		{
 			static const char* ltdNames[5] = {"-2", "-1", "0", "+1", "+2"};
 			for (int i = 0; i < 5; i++)
@@ -249,11 +299,13 @@ struct SpaceTimeProgram : Module {
 			configInput(EXT_INPUTS + i, string::f("External %c", 'A' + i));
 		configParam(STAGE_BANKS_PARAM, 1.f, 16.f, 16.f, "Number of stages",
 			" stages", 0.f, 4.f)->snapEnabled = true;
-		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configSwitch(LTD_SELECTOR_PARAM, 0.f, 4.f, 2.f, "Limited octave",
 			{"-2", "-1", "0", "+1", "+2"});
 		configSwitch(TRANGE_SELECTOR_PARAM, 0.f, 3.f, (float)spacetime::kDefaultTimeRange,
 			"Time range", {"0.002-0.03 s", "0.02-0.3 s", "0.2-3 s", "2-30 s"});
+		configButton(INSTRUMENT_DOWN_PARAM, "Previous Instrument ID");
+		configButton(INSTRUMENT_UP_PARAM, "Next Instrument ID");
 		configOutput(SELECTED_V_OUTPUT, "Selected stage voltage");
 		configOutput(SELECTED_TIME_OUTPUT, "Selected stage time slider");
 		configOutput(POLY_OUTPUT, "Heads CV (polyphonic, heads 1-4)");
@@ -279,6 +331,12 @@ struct SpaceTimeProgram : Module {
 		configLight(TSOURCE_LIGHT, "Selected stage external time source");
 		configLight(PULSE1_LIGHT, "Selected stage pulse 1");
 		configLight(PULSE2_LIGHT, "Selected stage pulse 2");
+		for (int i = 0; i < 12; i++)
+			configLight(PRESET_LIGHTS + i, string::f("Preset slot %d stored", i + 1));
+		configLight(LOAD_LIGHT, "Preset load armed");
+		configLight(SAVE_LIGHT, "Preset save armed");
+		configLight(KEY_LIGHT, "Key selection armed");
+		configLight(SCALE_LIGHT, "Scale selection armed");
 		midiInput.channel = -1;
 		midiOutput.channel = -1;
 		controlDivider.setDivision(16);
@@ -306,18 +364,26 @@ struct SpaceTimeProgram : Module {
 			}
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SELECT_PREV ||
 				engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SELECT_NEXT)
-				params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
+				params[INTERNAL_STAGE_PARAM].setValue((float)engine.program().selectedStage());
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_PULSE_RETRIG)
 				params[PULSE_RETRIG_PARAM].setValue(engine.globals().pulseRetrig ? 1.f : 0.f);
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_KEY)
-				params[KEY_PARAM].setValue((float)engine.program().scaleKey().key);
+				params[INTERNAL_KEY_PARAM].setValue((float)engine.program().scaleKey().key);
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_SCALE)
-				params[SCALE_PARAM].setValue((float)engine.program().scaleKey().scale);
+				params[INTERNAL_SCALE_PARAM].setValue((float)engine.program().scaleKey().scale);
 		}
 
 		bool controlTick = controlDivider.process();
 		if (controlTick) {
 			engine.setStageBanks((int)std::round(params[STAGE_BANKS_PARAM].getValue()));
+			if (instrumentDownTrigger.process(params[INSTRUMENT_DOWN_PARAM].getValue())) {
+				int id = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+				params[INSTRUMENT_PARAM].setValue((float)((id + spacetime::kInstrumentIdCount - 1) % spacetime::kInstrumentIdCount));
+			}
+			if (instrumentUpTrigger.process(params[INSTRUMENT_UP_PARAM].getValue())) {
+				int id = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+				params[INSTRUMENT_PARAM].setValue((float)((id + 1) % spacetime::kInstrumentIdCount));
+			}
 			setInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 			int controlChannel = clamp((int)std::round(params[CONTROL_CHANNEL_PARAM].getValue()), 0, 15);
 			int sliderChannel = clamp((int)std::round(params[SLIDER_CHANNEL_PARAM].getValue()), 0, 15);
@@ -327,53 +393,60 @@ struct SpaceTimeProgram : Module {
 			}
 			engine.midi().controlChannel = controlChannel;
 			engine.midi().sliderChannel = sliderChannel;
-			int selectedStage = clamp((int)std::round(params[STAGE_PARAM].getValue()),
+			int selectedStage = clamp((int)std::round(params[INTERNAL_STAGE_PARAM].getValue()),
 				0, engine.stageCount() - 1);
 			engine.program().setSelected(selectedStage);
-			params[STAGE_PARAM].setValue((float)selectedStage);
+			params[INTERNAL_STAGE_PARAM].setValue((float)selectedStage);
 			engine.globals().pulseRetrig = params[PULSE_RETRIG_PARAM].getValue() > 0.5f;
 			spacetime::ScaleKey scaleKey = engine.program().scaleKey();
-			scaleKey.key = (uint8_t)clamp((int)std::round(params[KEY_PARAM].getValue()), 0, 11);
-			scaleKey.scale = (uint8_t)clamp((int)std::round(params[SCALE_PARAM].getValue()), 0, 2);
+			scaleKey.key = (uint8_t)clamp((int)std::round(params[INTERNAL_KEY_PARAM].getValue()), 0, 11);
+			scaleKey.scale = (uint8_t)clamp((int)std::round(params[INTERNAL_SCALE_PARAM].getValue()), 0, 2);
 			engine.program().setScaleKey(scaleKey);
 			for (int i = 0; i < 4; i++)
 				engine.setExternal(i, inputs[EXT_INPUTS + i].getVoltage(), inputs[EXT_INPUTS + i].isConnected());
 
-			int preset = clamp((int)std::round(params[PRESET_PARAM].getValue()), 0, 11);
-			if (saveTrigger.process(params[SAVE_PARAM].getValue()))
+			// These are the same dual-action IDs exported by the VCV Program.
+			if (stageStepDownTrigger.process(params[STAGE_SCROLL_DOWN_PARAM].getValue())) {
+				engine.selectRelative(-1);
+				params[INTERNAL_STAGE_PARAM].setValue((float)engine.program().selectedStage());
+			}
+			if (stageStepUpTrigger.process(params[STAGE_SCROLL_UP_PARAM].getValue())) {
+				engine.selectRelative(+1);
+				params[INTERNAL_STAGE_PARAM].setValue((float)engine.program().selectedStage());
+			}
+			for (int i = 0; i < kModFieldCount; i++) {
+				if (modDownTrigger[i].process(params[kModDownParams[i]].getValue()))
+					applyOps(engine.program().emitModifier(kModFields[i], -1,
+						engine.table(), opsBuffer, kOpsBufferLen));
+				if (modUpTrigger[i].process(params[kModUpParams[i]].getValue()))
+					applyOps(engine.program().emitModifier(kModFields[i], +1,
+						engine.table(), opsBuffer, kOpsBufferLen));
+			}
+			static const spacetime::PresetMode presetModes[4] = {
+				spacetime::PresetMode::Load, spacetime::PresetMode::Save,
+				spacetime::PresetMode::Key, spacetime::PresetMode::Scale};
+			for (int i = 0; i < 4; i++)
+				if (presetModeTrigger[i].process(params[LOAD_PARAM + i].getValue()))
+					presetRow.onModePress(presetModes[i]);
+			for (int i = 0; i < 12; i++) {
+				if (!presetSlotTrigger[i].process(params[PRESET_PARAMS + i].getValue()))
+					continue;
+				spacetime::PresetAction action = presetRow.onSlotPress((uint8_t)i);
+				engine.program().handlePresetAction(action, engine.table());
+				params[INTERNAL_KEY_PARAM].setValue((float)engine.program().scaleKey().key);
+				params[INTERNAL_SCALE_PARAM].setValue((float)engine.program().scaleKey().scale);
+			}
+
+			int preset = clamp((int)std::round(params[INTERNAL_PRESET_PARAM].getValue()), 0, 11);
+			if (saveTrigger.process(params[INTERNAL_SAVE_PARAM].getValue()))
 				engine.savePreset(preset);
-			if (loadTrigger.process(params[LOAD_PARAM].getValue()))
+			if (loadTrigger.process(params[INTERNAL_LOAD_PARAM].getValue()))
 				engine.loadPreset(preset);
 			if (clearTrigger.process(params[CLEAR_PARAM].getValue()))
 				applyOps(engine.program().emitClear(engine.table(),
 					opsBuffer, kOpsBufferLen));
 			if (bulkTrigger.process(params[BULK_PARAM].getValue()))
 				engine.program().armBulkOnce();
-			// Stage-step buttons (option A): press = one stage in that direction,
-			// wrapping at both ends. Every press advances one stage regardless of
-			// current pos; SchmittTrigger catches the leading edge so holding the
-			// button does not re-step.
-			if (stageStepDownTrigger.process(params[STAGE_STEP_DOWN_PARAM].getValue())) {
-				int n = engine.stageCount();
-				int cur = engine.program().selectedStage();
-				engine.program().setSelected((cur - 1 + n) % n);
-				params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
-			}
-			if (stageStepUpTrigger.process(params[STAGE_STEP_UP_PARAM].getValue())) {
-				int n = engine.stageCount();
-				int cur = engine.program().selectedStage();
-				engine.program().setSelected((cur + 1) % n);
-				params[STAGE_PARAM].setValue((float)engine.program().selectedStage());
-			}
-			// Modifier step buttons: every press = increment-with-wrap one step
-			// in the stage table. The param's position is ignored; the modifier-
-			// state LEDs read the table, so the buttons are stateless and the
-			// same C++ serves a VCV momentary spring and an MM momentary
-			// push-button.
-			for (int i = 0; i < kModFieldCount; i++)
-				if (modTrigger[i].process(params[MODIFIER_PARAMS + i].getValue()))
-					applyOps(engine.program().emitStep(
-						kModFields[i], engine.table(), opsBuffer, kOpsBufferLen));
 			for (int i = 0; i < 5; i++)
 				if (ltdTrigger[i].process(params[LTD_PARAMS + i].getValue()))
 					applyOps(engine.program().emitLimited(i, engine.table(), opsBuffer, kOpsBufferLen));
@@ -420,6 +493,11 @@ struct SpaceTimeProgram : Module {
 		lights[PULSE1_LIGHT].setBrightness(selectedWord.pulse1());
 		lights[PULSE2_LIGHT].setBrightness(selectedWord.pulse2());
 		lights[BULK_LIGHT].setBrightness(engine.program().bulkArmed() ? 1.f : 0.f);
+		for (int i = 0; i < 12; i++)
+			lights[PRESET_LIGHTS + i].setBrightness(engine.program().slotUsed(i) ? 0.35f : 0.f);
+		for (int i = 0; i < 4; i++)
+			lights[LOAD_LIGHT + i].setBrightness(
+				presetRow.mode() == static_cast<spacetime::PresetMode>(i + 1) ? 1.f : 0.f);
 		RackMidiSink sink(this);
 		engine.processMidiOutput(args.sampleTime, sink);
 
@@ -526,7 +604,7 @@ struct SpaceTimeProgram : Module {
 			if (focusSequence != bankFocusSequence[b]) {
 				int selected = clamp((int)requestedFocus, 0, engine.stageCount() - 1);
 				engine.program().setSelected(selected);
-				params[STAGE_PARAM].setValue((float)selected);
+				params[INTERNAL_STAGE_PARAM].setValue((float)selected);
 				bankFocusSequence[b] = focusSequence;
 			}
 			for (int i = 0; i < 4; i++) {
@@ -570,40 +648,6 @@ struct SpaceTimeProgram : Module {
 	// those 16+8 slots reads as unclaimed by design today, not as a fault.
 	bool coreConflict() const {
 		return timingBusRegistry.bus(instrumentId).coreCount.load(std::memory_order_acquire) != 1;
-	}
-
-	size_t get_display_text(int lightId, std::span<char> text) override {
-		if (lightId != STATUS_DISPLAY || text.empty())
-			return 0;
-		int selected = clamp(engine.program().selectedStage(), 0, spacetime::kMaxStages - 1);
-		char runStates[spacetime::kMaxHeads + 1];
-		for (int h = 0; h < spacetime::kMaxHeads; h++)
-			runStates[h] = engine.headOut(h).runState == spacetime::RUN_RUNNING ? 'R' :
-				(engine.headOut(h).runState == spacetime::RUN_HOLDING ? 'H' : '-');
-		runStates[spacetime::kMaxHeads] = '\0';
-		const char* midiKind = engine.midi().lastStatus < 0 ? "---" :
-			(engine.midi().lastChannel < 0 ? "RT " :
-				(((engine.midi().lastStatus >> 4) & 0xf) == 0xc ? "PC " : "CC "));
-		char buffer[128];
-		int length = std::snprintf(buffer, sizeof(buffer),
-			"STAGE %02d V %.2f T %.3f R%d%s\nID %c P%02d S%02d K%02d SC%d\nRUN 1-8 %s\nMIDI CH%02d %s%03d V%03d %s",
-			selected + 1, engine.table().voltage[selected], engine.table().time[selected],
-			engine.table().program[selected].timeRange() + 1,
-			coreConflict() ? "!" : "",
-			(char)('A' + instrumentId),
-			engine.midi().controlChannel + 1, engine.midi().sliderChannel + 1,
-			engine.program().scaleKey().key, engine.program().scaleKey().scale,
-			runStates,
-			engine.midi().lastChannel < 0 ? 0 : engine.midi().lastChannel + 1,
-			midiKind,
-			engine.midi().lastNumber < 0 ? 0 : engine.midi().lastNumber,
-			engine.midi().lastValue < 0 ? 0 : engine.midi().lastValue,
-			spacetime::MidiCore::routeName(engine.midi().lastRoute));
-		if (length < 0)
-			return 0;
-		size_t copyLength = std::min(text.size(), (size_t)length);
-		std::copy(buffer, buffer + copyLength, text.begin());
-		return copyLength;
 	}
 
 	json_t* dataToJson() override {
@@ -701,6 +745,14 @@ struct SpaceTimeProgram : Module {
 		if ((value = json_object_get(root, "midiInput"))) midiInput.fromJson(value);
 		if ((value = json_object_get(root, "midiOutput"))) midiOutput.fromJson(value);
 		loadTableArrays(root, engine.table());
+		json_t* portableCount = json_object_get(root, "portableStageCount");
+		if (portableCount) {
+			int count = clamp((int)json_integer_value(portableCount), 4, spacetime::kMaxStages);
+			int banks = spacetime::stageBanksFromCount(count);
+			engine.setStageBanks(banks);
+			params[STAGE_BANKS_PARAM].setValue((float)banks);
+			loadPortableTableArrays(root, engine.table(), count);
+		}
 
 		json_t* presets = json_object_get(root, "presets");
 		if (presets) {
@@ -771,8 +823,26 @@ struct SpaceTimeProgram : Module {
 		}
 	}
 
+	static void loadPortableTableArrays(json_t* root, spacetime::StageTable& table, int count) {
+		json_t* voltage = json_object_get(root, "portableVoltage");
+		json_t* time = json_object_get(root, "portableTime");
+		json_t* words = json_object_get(root, "portableProgram");
+		for (int stage = 0; stage < count; stage++) {
+			json_t* value;
+			if (voltage && (value = json_array_get(voltage, stage)))
+				table.voltage[stage] = clamp((float)json_number_value(value), 0.f, 10.f);
+			if (time && (value = json_array_get(time, stage)))
+				table.time[stage] = clamp((float)json_number_value(value), 0.f, 1.f);
+			if (words && (value = json_array_get(words, stage))) {
+				uint32_t bits = (uint32_t)json_integer_value(value);
+				if (bits < (1u << 19))
+					table.program[stage].bits = bits;
+			}
+		}
+	}
+
 	void setInstrumentId(int next) {
-		next = clamp(next, 0, 3);
+		next = spacetime::clampInstrumentId(next);
 		params[INSTRUMENT_PARAM].setValue((float)next);
 		if (next == instrumentId)
 			return;
@@ -835,6 +905,13 @@ struct SpaceTimeProgram : Module {
 		statusSnapshot.lastRoute = engine.midi().lastRoute;
 		midiStatusRegistry.publish(instrumentId, statusSnapshot);
 	}
+
+	size_t get_display_text(int lightId, std::span<char> text) override {
+		if (lightId != INSTRUMENT_DISPLAY || text.empty())
+			return 0;
+		text[0] = spacetime::instrumentIdHex(instrumentId);
+		return 1;
+	}
 };
 
 struct SpaceTimeProgramWidget : ModuleWidget {
@@ -842,102 +919,91 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Program.svg")));
 
-		// MetaModule renders only the pre-baked faceplate PNG plus the engine-
-		// drawn Param/Port/Light elements it knows about. All silkscreen labels,
-		// lever wells, the display bezel and knob recesses live in the SVG and
-		// are rasterised into res/Program.png by scripts/render_panels.py, so
-		// this file places no runtime text. Coordinates (mm) mirror that SVG.
-		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 9.f)));
-		display->box.size = mm2px(Vec(58.f, 25.f));
-		display->firstLightId = SpaceTimeProgram::STATUS_DISPLAY;
-		display->font = "Default_10";
-		display->color = Colors565::White;
-		addChild(display);
+		// Keep the original Program control grammar. Stage count and instrument
+		// ID are the only MetaModule-specific values. Every spring switch is a
+		// pair of momentary buttons so both directions can be hardware-bound.
+		auto addModifierPair = [&](float x, float y, int field) {
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x - 3.f, y)), module,
+				SpaceTimeProgram::kModDownParams[field]));
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x + 3.f, y)), module,
+				SpaceTimeProgram::kModUpParams[field]));
+		};
+		constexpr float row1Y = 20.f;
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(14.f, row1Y)), module, SpaceTimeProgram::STAGE_BANKS_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(27.f, row1Y)), module, SpaceTimeProgram::STAGE_SCROLL_DOWN_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(33.f, row1Y)), module, SpaceTimeProgram::STAGE_SCROLL_UP_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(43.f, row1Y)), module, SpaceTimeProgram::CLEAR_PARAM));
+		addModifierPair(55.f, row1Y, 10);
+		addModifierPair(67.f, row1Y, 11);
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(59.5f, 15.5f)), module, SpaceTimeProgram::PULSE1_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(71.5f, 15.5f)), module, SpaceTimeProgram::PULSE2_LIGHT));
 
-		// Two momentary stage-step buttons (option A): press = one stage in
-		// that direction, wraps at both ends. LEDButton is mapped to a
-		// MomentaryButton{} on MetaModule, so the param simply pulses on
-		// each press and SchmittTrigger in process() advances one step.
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(12.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_DOWN_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(26.f, 48.f)), module, SpaceTimeProgram::STAGE_STEP_UP_PARAM));
-
-		// 12 modifier momentary step buttons: 6 columns x 2 rows.
-		// Every press = increment-with-wrap one step (see emitStep). The
-		// param's position is never read; only the modifier-state LEDs
-		// (which read the stage table) expose the current state.
-		static const float leverX[6] = {12.f, 30.f, 48.f, 66.f, 84.f, 102.f};
-		static const float leverY[2] = {72.f, 100.f};
-		for (int r = 0; r < 2; r++)
-			for (int c = 0; c < 6; c++)
-				addParam(createParamCentered<LEDButton>(mm2px(Vec(leverX[c], leverY[r])),
-					module, SpaceTimeProgram::MODIFIER_PARAMS + r * 6 + c));
-
-		// 16 modifier-state LEDs hugging their lever column. The 16 lights group
-		// under the fields they describe: row1 = QUANT(1) SLEW(2) RANGE(3) VSRC(1)
-		// STOP(1) SUSTAIN(1); row2 = one light per field.
-		static const int row1Lights[9] = {
-			SpaceTimeProgram::QUANTIZE_LIGHT, SpaceTimeProgram::SLEW1_LIGHT, SpaceTimeProgram::SLEW2_LIGHT,
-			SpaceTimeProgram::RANGE_FULL_LIGHT, SpaceTimeProgram::RANGE_HALF_LIGHT, SpaceTimeProgram::RANGE_LTD_LIGHT,
-			SpaceTimeProgram::VSOURCE_LIGHT, SpaceTimeProgram::STOP_LIGHT, SpaceTimeProgram::SUSTAIN_LIGHT};
-		static const int row1Count[6] = {1, 2, 3, 1, 1, 1};
-		{
-			int li = 0;
-			for (int c = 0; c < 6; c++) {
-				for (int k = 0; k < row1Count[c]; k++)
-					addChild(createLightCentered<SmallLight<RedLight>>(
-						mm2px(Vec(leverX[c] - 4.f + k * 4.f, 61.f)), module, row1Lights[li++]));
-			}
-		}
-		static const int row2Lights[6] = {
-			SpaceTimeProgram::ENABLE_LIGHT, SpaceTimeProgram::FIRST_LIGHT, SpaceTimeProgram::LAST_LIGHT,
-			SpaceTimeProgram::TSOURCE_LIGHT, SpaceTimeProgram::PULSE1_LIGHT, SpaceTimeProgram::PULSE2_LIGHT};
-		for (int i = 0; i < 6; i++)
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(leverX[i], 89.f)), module, row2Lights[i]));
-
-		// Action row: BULK (with indicator), CLEAR, SAVE, LOAD, PRESET, KEY, SCALE.
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(40.f, 48.f)), module, SpaceTimeProgram::BULK_PARAM));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(34.f, 41.f)), module, SpaceTimeProgram::BULK_LIGHT));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(54.f, 48.f)), module, SpaceTimeProgram::CLEAR_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(68.f, 48.f)), module, SpaceTimeProgram::SAVE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(82.f, 48.f)), module, SpaceTimeProgram::LOAD_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(96.f, 46.f)), module, SpaceTimeProgram::PRESET_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(110.f, 46.f)), module, SpaceTimeProgram::KEY_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(122.f, 46.f)), module, SpaceTimeProgram::SCALE_PARAM));
-
-		// Setup cluster (top-right): STAGE count, INSTRUMENT ID, MIDI channels, pulse retrigger.
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(74.f, 15.f)), module, SpaceTimeProgram::STAGE_BANKS_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(74.f, 29.f)), module, SpaceTimeProgram::INSTRUMENT_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 15.f)), module, SpaceTimeProgram::CONTROL_CHANNEL_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 29.f)), module, SpaceTimeProgram::SLIDER_CHANNEL_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(114.f, 20.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
-
-		// MIDI activity LEDs (near the display, bottom-left of the setup area).
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(110.f, 33.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(114.5f, 33.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(119.f, 33.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
-
-		// Bottom band: LTD (5 momentary + 5-pos selector) and TRANGE (4 momentary + 4-pos selector).
-		static const float ltdBtnX[5] = {22.f, 28.f, 34.f, 40.f, 46.f};
-		for (int i = 0; i < 5; i++) {
-			addParam(createParamCentered<LEDButton>(mm2px(Vec(ltdBtnX[i], 122.f)), module, SpaceTimeProgram::LTD_PARAMS + i));
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(ltdBtnX[i], 116.f)), module, SpaceTimeProgram::LTD_LIGHTS + i));
-		}
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(58.f, 122.f)), module, SpaceTimeProgram::LTD_SELECTOR_PARAM));
-		static const float trangeBtnX[4] = {72.f, 78.f, 84.f, 90.f};
-		for (int i = 0; i < 4; i++) {
-			addParam(createParamCentered<LEDButton>(mm2px(Vec(trangeBtnX[i], 122.f)), module, SpaceTimeProgram::TRANGE_PARAMS + i));
-			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(trangeBtnX[i], 116.f)), module, SpaceTimeProgram::TRANGE_LIGHTS + i));
-		}
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(102.f, 122.f)), module, SpaceTimeProgram::TRANGE_SELECTOR_PARAM));
-
-		// Right-hand jack column (labels baked to their left in the SVG).
-		static const float jackY[4] = {15.f, 29.f, 43.f, 57.f};
+		static const float voltageX[4] = {13.f, 29.f, 45.f, 61.f};
 		for (int i = 0; i < 4; i++)
-			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(140.f, jackY[i])), module, SpaceTimeProgram::EXT_INPUTS + i));
-		static const float outY[3] = {72.f, 86.f, 100.f};
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[0])), module, SpaceTimeProgram::SELECTED_V_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[1])), module, SpaceTimeProgram::SELECTED_TIME_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(140.f, outY[2])), module, SpaceTimeProgram::POLY_OUTPUT));
+			addModifierPair(voltageX[i], 42.f, i);
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(17.5f, 42.f)), module, SpaceTimeProgram::QUANTIZE_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(33.5f, 40.f)), module, SpaceTimeProgram::SLEW1_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(33.5f, 44.f)), module, SpaceTimeProgram::SLEW2_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(49.5f, 39.f)), module, SpaceTimeProgram::RANGE_FULL_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(49.5f, 42.f)), module, SpaceTimeProgram::RANGE_HALF_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(49.5f, 45.f)), module, SpaceTimeProgram::RANGE_LTD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(65.5f, 42.f)), module, SpaceTimeProgram::VSOURCE_LIGHT));
+
+		for (int i = 0; i < 5; i++) {
+			float x = 10.f + 11.f * i;
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x, 58.f)), module, SpaceTimeProgram::LTD_PARAMS + i));
+			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, 58.f)), module, SpaceTimeProgram::LTD_LIGHTS + i));
+		}
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(65.f, 58.f)), module,
+			SpaceTimeProgram::LTD_SELECTOR_PARAM));
+
+		static const int modeLights[5] = {SpaceTimeProgram::STOP_LIGHT, SpaceTimeProgram::SUSTAIN_LIGHT,
+			SpaceTimeProgram::ENABLE_LIGHT, SpaceTimeProgram::FIRST_LIGHT, SpaceTimeProgram::LAST_LIGHT};
+		for (int i = 0; i < 5; i++) {
+			float x = 13.f + 13.f * i;
+			addModifierPair(x, 76.f, 4 + i);
+			addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(x + 4.2f, 72.f)), module, modeLights[i]));
+		}
+
+		for (int i = 0; i < 4; i++) {
+			float x = 13.f + 10.f * i;
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x, 95.f)), module, SpaceTimeProgram::TRANGE_PARAMS + i));
+			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, 95.f)), module, SpaceTimeProgram::TRANGE_LIGHTS + i));
+		}
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(52.f, 95.f)), module,
+			SpaceTimeProgram::TRANGE_SELECTOR_PARAM));
+		addModifierPair(64.f, 95.f, 9);
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(68.2f, 91.5f)), module, SpaceTimeProgram::TSOURCE_LIGHT));
+
+		for (int i = 0; i < 12; i++) {
+			float x = 5.5f + 6.3f * i;
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x, 109.5f)), module, SpaceTimeProgram::PRESET_PARAMS + i));
+			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, 109.5f)), module, SpaceTimeProgram::PRESET_LIGHTS + i));
+		}
+		for (int i = 0; i < 4; i++) {
+			float x = 14.f + 14.f * i;
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(x, 116.8f)), module, SpaceTimeProgram::LOAD_PARAM + i));
+			addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(x, 116.8f)), module, SpaceTimeProgram::LOAD_LIGHT + i));
+		}
+
+		for (int i = 0; i < 4; i++)
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(84.f, 20.f + 9.5f * i)), module, SpaceTimeProgram::EXT_INPUTS + i));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(84.f, 73.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+		auto idDisplay = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(74.5f, 91.f)));
+		idDisplay->box.size = mm2px(Vec(8.f, 8.f));
+		idDisplay->firstLightId = SpaceTimeProgram::INSTRUMENT_DISPLAY;
+		idDisplay->font = "Default_14";
+		idDisplay->color = Colors565::Black;
+		addChild(idDisplay);
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(88.f, 92.f)), module,
+			SpaceTimeProgram::INSTRUMENT_UP_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(88.f, 98.f)), module,
+			SpaceTimeProgram::INSTRUMENT_DOWN_PARAM));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(84.f, 112.5f)), module, SpaceTimeProgram::POLY_OUTPUT));
+
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(77.f, 101.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(84.f, 101.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(91.f, 101.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {
@@ -945,15 +1011,14 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
-		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
 		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
 			// EB6: same '!' convention as the panel display, spelled out here
 			// since the menu has room for the word rather than just the glyph.
-			return std::string(instrumentLabels[module->instrumentId]) +
+			return std::string(1, spacetime::instrumentIdHex(module->instrumentId)) +
 				(module->coreConflict() ? " (duplicate Program!)" : "");
 		}, [=](Menu* ids) {
-			for (int id = 0; id < 4; id++)
-				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
+			for (int id = 0; id < spacetime::kInstrumentIdCount; id++)
+				ids->addChild(createCheckMenuItem(std::string(1, spacetime::instrumentIdHex(id)), "",
 					[=]() { return module->instrumentId == id; },
 					[=]() { module->setInstrumentId(id); }));
 		}));
@@ -1004,4 +1069,4 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeProgram = createModel<SpaceTimeProgram, SpaceTimeProgramWidget>(spacetime::MMProgramContract::slug);
+Model* modelSpaceTimeProgram = createModel<SpaceTimeProgram, SpaceTimeProgramWidget>(spacetime::NativeProgramContract::slug);

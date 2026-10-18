@@ -15,8 +15,8 @@ endif()
 include(${METAMODULE_SDK_DIR}/plugin.cmake)
 
 project(SpaceTimeMetaModule
-        VERSION 0.3
-        DESCRIPTION "SpaceTime Core and shared-memory bus probes"
+        VERSION 2.0.7
+        DESCRIPTION "SpaceTime sequencer modules for MetaModule"
         LANGUAGES C CXX ASM)
 
 add_library(SpaceTime STATIC)

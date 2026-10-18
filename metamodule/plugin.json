@@ -1,16 +1,16 @@
 {
   "slug": "SpaceTime",
   "name": "SpaceTime",
-  "version": "0.3.0",
+  "version": "2.0.7",
   "license": "GPL-3.0-or-later",
   "brand": "Kurkesmurfer",
   "author": "Peet Siemensz",
   "authorEmail": "",
   "modules": [
     {
-      "slug": "MMProgram",
-      "name": "SpaceTime MM Program",
-      "description": "Portable Program and MIDI owner with a manually selectable 4-64 stage range"
+	  "slug": "Program",
+	  "name": "SpaceTime Program",
+      "description": "MetaModule runtime for VCV-authored SpaceTime Program patches, with a manually selectable 4-64 stage range"
     },
     {
       "slug": "TimingMonitor",
@@ -18,14 +18,14 @@
       "description": "Diagnostic clock-to-stage timing monitor for eight SpaceTime heads"
     },
     {
-      "slug": "MMHead",
-      "name": "SpaceTime MM Head",
-      "description": "Portable Function Generator head and sole DSP owner for its claimed head index"
+	  "slug": "Head",
+	  "name": "SpaceTime Head",
+      "description": "MetaModule runtime for VCV-authored SpaceTime Head patches and sole DSP owner for its inherited head index"
     },
     {
-      "slug": "MMStage4",
-      "name": "SpaceTime MM Stage4",
-      "description": "Portable four-stage bank viewer and editor for MMProgram"
+	  "slug": "Stage4",
+	  "name": "SpaceTime Stage4",
+      "description": "MetaModule runtime for a VCV-authored four-stage bank, linked to Program"
     },
     {
       "slug": "Midi",

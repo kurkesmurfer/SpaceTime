@@ -106,19 +106,19 @@ TEST_CASE("Stage bank slots are isolated per Instrument ID") {
 	uint32_t tokenA = registry.makeToken();
 	uint32_t tokenB = registry.makeToken();
 	CHECK(registry.registerBank(0, 0, tokenA));
-	CHECK(registry.registerBank(1, 0, tokenB));  // same bank index, different instrument
+	CHECK(registry.registerBank(15, 0, tokenB)); // same bank index, different instrument
 
 	BlockSegment segA;
 	segA.voltage[0] = 1.f;
 	BlockSegment segB;
 	segB.voltage[0] = 2.f;
 	registry.publishBank(0, 0, segA);
-	registry.publishBank(1, 0, segB);
+	registry.publishBank(15, 0, segB);
 
 	BlockSegment outA;
 	BlockSegment outB;
 	CHECK(registry.readBank(0, 0, outA));
-	CHECK(registry.readBank(1, 0, outB));
+	CHECK(registry.readBank(15, 0, outB));
 	CHECK(outA.voltage[0] == doctest::Approx(1.f));
 	CHECK(outB.voltage[0] == doctest::Approx(2.f));
 }

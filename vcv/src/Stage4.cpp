@@ -4,6 +4,7 @@
 #include "ChainAdapter.hpp"
 #include "ProgramLogic.hpp"  // SliderTakeover
 #include "StageAnnotation.hpp"
+#include "NativeModuleContracts.hpp"
 
 // ============================================================================
 // STAGE4 — WP7 integrated.
@@ -64,6 +65,8 @@ struct Stage4 : Module {
 	uint8_t lastOpField = 0;
 	float lastOpValue = 0.f;
 	spacetime::ScaleKey scaleKey;
+	uint8_t portableInstrumentId = 0;
+	uint8_t portableBankIndex = 0;
 	bool musicalContextValid = false;
 	dsp::ClockDivider divider;
 
@@ -111,6 +114,10 @@ struct Stage4 : Module {
 		musicalContextValid = amValid;
 		if (amValid)
 			scaleKey = am->scaleKey;
+		if (amValid) {
+			portableInstrumentId = am->instrumentId;
+			portableBankIndex = (uint8_t)blockIndex;
+		}
 
 		if (amValid && am->seq != lastSeq) {
 			lastSeq = am->seq;
@@ -237,6 +244,8 @@ struct Stage4 : Module {
 			json_array_append_new(take, pair);
 		}
 		json_object_set_new(root, "takeover", take);
+		json_object_set_new(root, "mmInstrumentId", json_integer(portableInstrumentId));
+		json_object_set_new(root, "mmBankIndex", json_integer(portableBankIndex));
 		return root;
 	}
 

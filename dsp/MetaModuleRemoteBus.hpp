@@ -57,7 +57,7 @@ namespace spacetime {
 // them, passing the already-known core-validity bool in.
 class MetaModuleStageTableRegistry {
 public:
-	static const unsigned kBusCount = 4;  // Instrument ID A-D
+	static const unsigned kBusCount = kInstrumentIdCount;
 	static const unsigned kFieldCount = kMaxStages * 3 + 1;  // voltage, time, program.bits, count
 
 	// Caller is responsible for only calling this from the module that holds
@@ -75,15 +75,20 @@ public:
 	// (coreCount(busIndex) == 1); this only adds the heartbeat check, the
 	// same "claimed but never published" guard EB5 established elsewhere.
 	bool readTable(unsigned busIndex, bool coreValid, StageTable& out) {
-		out = StageTable();
-		if (!coreValid)
+		if (!coreValid) {
+			out = StageTable();
 			return false;
-		if (bus(busIndex).heartbeat() == 0)
+		}
+		if (bus(busIndex).heartbeat() == 0) {
+			out = StageTable();
 			return false;
+		}
 		uint32_t fields[kFieldCount];
 		if (!bus(busIndex).read(fields))
 			return false;
-		unpack(fields, out);
+		StageTable next;
+		unpack(fields, next);
+		out = next;
 		return true;
 	}
 
@@ -112,17 +117,31 @@ public:
 
 	bool readContext(unsigned busIndex, bool coreValid, ExtInputs& ext, Globals& globals,
 			ScaleKey& scaleKey, uint8_t* selectedStage = nullptr) {
-		ext = ExtInputs();
-		globals = Globals();
-		scaleKey = ScaleKey();
-		if (!coreValid)
+		if (!coreValid) {
+			ext = ExtInputs();
+			globals = Globals();
+			scaleKey = ScaleKey();
 			return false;
-		if (contextBus(busIndex).heartbeat() == 0)
+		}
+		if (contextBus(busIndex).heartbeat() == 0) {
+			ext = ExtInputs();
+			globals = Globals();
+			scaleKey = ScaleKey();
 			return false;
+		}
 		uint32_t fields[kContextFieldCount];
 		if (!contextBus(busIndex).read(fields))
 			return false;
-		unpackContext(fields, ext, globals, scaleKey, selectedStage);
+		ExtInputs nextExt;
+		Globals nextGlobals;
+		ScaleKey nextScaleKey;
+		uint8_t nextSelectedStage = 0;
+		unpackContext(fields, nextExt, nextGlobals, nextScaleKey, &nextSelectedStage);
+		ext = nextExt;
+		globals = nextGlobals;
+		scaleKey = nextScaleKey;
+		if (selectedStage)
+			*selectedStage = nextSelectedStage;
 		return true;
 	}
 
@@ -238,7 +257,7 @@ struct MetaModuleHeadMidiSnapshot {
 
 class MetaModuleHeadMidiRegistry {
 public:
-	static const unsigned kBusCount = 4;  // Instrument ID A-D
+	static const unsigned kBusCount = kInstrumentIdCount;
 	static const unsigned kFieldCount = 4 + kMaxHeads * kMidiHeadControls * 2;
 
 	void publishMidi(unsigned busIndex, const MetaModuleHeadMidiSnapshot& snapshot) {
@@ -343,7 +362,7 @@ struct MetaModuleMidiStatusSnapshot {
 
 class MetaModuleMidiStatusRegistry {
 public:
-	static const unsigned kBusCount = 4;  // Instrument ID A-D
+	static const unsigned kBusCount = kInstrumentIdCount;
 	static const unsigned kFieldCount = 10;
 
 	void publish(unsigned busIndex, const MetaModuleMidiStatusSnapshot& snapshot) {
@@ -419,7 +438,7 @@ struct MetaModuleStageBankBus {
 
 class MetaModuleStageBankRegistry {
 public:
-	static const unsigned kBusCount = 4;            // Instrument ID A-D
+	static const unsigned kBusCount = kInstrumentIdCount;
 	static const unsigned kBankCount = kMaxBlocks;   // 16
 
 	uint32_t makeToken() {
@@ -586,7 +605,7 @@ struct MetaModuleHeadConfigBus {
 
 class MetaModuleHeadRegistry {
 public:
-	static const unsigned kBusCount = 4;           // Instrument ID A-D
+	static const unsigned kBusCount = kInstrumentIdCount;
 	static const unsigned kHeadCount = kMaxHeads;  // 8
 
 	uint32_t makeToken() {

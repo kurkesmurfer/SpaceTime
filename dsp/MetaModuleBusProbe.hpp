@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ExpanderLink.hpp"
+#include "InstrumentId.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -48,7 +49,7 @@ struct MetaModuleProbeBus {
 
 class MetaModuleBusProbeRegistry {
 public:
-	static const unsigned kBusCount = 4;
+	static const unsigned kBusCount = kInstrumentIdCount;
 
 	uint32_t makeToken() {
 		uint32_t token = nextToken_.fetch_add(1, std::memory_order_relaxed);

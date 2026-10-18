@@ -4,8 +4,10 @@
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
 #include "MMModuleContracts.hpp"
+#include "NativeModuleContracts.hpp"
 #include "Chain.hpp"
 #include "StageAnnotation.hpp"
+#include "InstrumentId.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -28,21 +30,20 @@ namespace {
 // syncStageBanks().
 struct SpaceTimeStage4 : Module {
 	enum ParamId {
-		INSTRUMENT_PARAM,
-		BANK_PARAM,
 		ENUMS(VOLTAGE_PARAMS, 4),
 		ENUMS(TIME_PARAMS, 4),
+		INSTRUMENT_PARAM,
+		BANK_PARAM,
 		FOCUS_PARAM,
 		PARAMS_LEN
 	};
-	static_assert((int)INSTRUMENT_PARAM == (int)spacetime::MMStage4Contract::INSTRUMENT_PARAM, "MMStage4 ParamId drift");
-	static_assert((int)VOLTAGE_PARAMS == (int)spacetime::MMStage4Contract::VOLTAGE_PARAMS, "MMStage4 slider ParamId drift");
-	static_assert((int)FOCUS_PARAM == (int)spacetime::MMStage4Contract::FOCUS_PARAM && (int)PARAMS_LEN == (int)spacetime::MMStage4Contract::PARAMS_LEN, "MMStage4 ParamId count drift");
+	static_assert((int)VOLTAGE_PARAMS == (int)spacetime::NativeStage4Contract::VOLTAGE_PARAMS, "Stage4 slider ParamId drift");
+	static_assert((int)INSTRUMENT_PARAM == (int)spacetime::NativeStage4Contract::INSTRUMENT_PARAM, "Stage4 identity ParamId drift");
+	static_assert((int)PARAMS_LEN == (int)spacetime::NativeStage4Contract::PARAMS_LEN, "Stage4 ParamId count drift");
 	enum InputId { INPUTS_LEN };
 	enum OutputId { OUTPUTS_LEN };
 	enum LightId {
 		LINK_LIGHT,
-		STATUS_DISPLAY,
 		ENUMS(PITCH_DISPLAYS, 4),
 		ENUMS(TIME_DISPLAYS, 4),
 		ENUMS(EDIT_LIGHTS, 4),
@@ -80,7 +81,7 @@ struct SpaceTimeStage4 : Module {
 
 	SpaceTimeStage4() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(BANK_PARAM, 0.f, 15.f, 0.f, "Bank index", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(FOCUS_PARAM, 0.f, 3.f, 0.f, "Focused stage", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		for (int s = 0; s < 4; s++) {
@@ -125,7 +126,7 @@ struct SpaceTimeStage4 : Module {
 	}
 
 	void processControl(float dt) {
-		int nextInstrument = clamp((int)std::round(params[INSTRUMENT_PARAM].getValue()), 0, 3);
+		int nextInstrument = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 		int nextBank = clamp((int)std::round(params[BANK_PARAM].getValue()), 0, 15);
 		if (nextInstrument != instrumentId || nextBank != bankIndex)
 			setBinding(nextInstrument, nextBank);
@@ -220,6 +221,16 @@ struct SpaceTimeStage4 : Module {
 		reflectionReady = false;
 	}
 
+	void dataFromJson(json_t* root) override {
+		json_t* value = json_object_get(root, "mmInstrumentId");
+		int nextInstrument = value ? spacetime::clampInstrumentId((int)json_integer_value(value)) : 0;
+		value = json_object_get(root, "mmBankIndex");
+		int nextBank = value ? clamp((int)json_integer_value(value), 0, 15) : 0;
+		params[INSTRUMENT_PARAM].setValue((float)nextInstrument);
+		params[BANK_PARAM].setValue((float)nextBank);
+		setBinding(nextInstrument, nextBank);
+	}
+
 	size_t get_display_text(int lightId, std::span<char> text) override {
 		if (text.empty())
 			return 0;
@@ -227,25 +238,7 @@ struct SpaceTimeStage4 : Module {
 			return copyAnnotationText(lightId - PITCH_DISPLAYS, true, text);
 		if (lightId >= TIME_DISPLAYS && lightId < TIME_DISPLAYS + 4)
 			return copyAnnotationText(lightId - TIME_DISPLAYS, false, text);
-		if (lightId != STATUS_DISPLAY)
-			return 0;
-		const char* linkName = coreLink == CoreLink::Linked ? "LINK" :
-			(coreLink == CoreLink::Duplicate ? "DUP" : "WAIT");
-		char buffer[128];
-		bool inBank = selectedStage >= bankIndex * spacetime::kStagesPerBlock &&
-			selectedStage < (bankIndex + 1) * spacetime::kStagesPerBlock;
-		int length = std::snprintf(buffer, sizeof(buffer),
-			"ID %c BANK %02d%s\n%s %02d-%02d SEL %02d%s\nV %.2f %.2f %.2f %.2f",
-			(char)('A' + instrumentId), bankIndex + 1, bankConflict ? "!" : "",
-			linkName, bankIndex * 4 + 1, bankIndex * 4 + 4,
-			selectedStage < 0 ? 0 : selectedStage + 1, inBank ? "" : " OUT",
-			params[VOLTAGE_PARAMS + 0].getValue(), params[VOLTAGE_PARAMS + 1].getValue(),
-			params[VOLTAGE_PARAMS + 2].getValue(), params[VOLTAGE_PARAMS + 3].getValue());
-		if (length < 0)
-			return 0;
-		size_t copyLength = std::min(text.size(), (size_t)length);
-		std::copy(buffer, buffer + copyLength, text.begin());
-		return copyLength;
+		return 0;
 	}
 
 	size_t copyAnnotationText(int localStage, bool pitch, std::span<char> text) {
@@ -256,8 +249,6 @@ struct SpaceTimeStage4 : Module {
 				table.voltage[stage], table.time[stage], table.program[stage], scaleKey, true);
 			if (pitch) {
 				value = annotation.pitch == "EXT CV" ? "EXT" : annotation.pitch;
-				if (!annotation.cents.empty())
-					value += "\n" + annotation.cents;
 			}
 			else {
 				value = annotation.duration == "EXT TIME" ? "EXT" : annotation.duration;
@@ -275,50 +266,36 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Stage4.svg")));
 
-		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 12.f)));
-		display->box.size = mm2px(Vec(53.f, 20.f));
-		display->firstLightId = SpaceTimeStage4::STATUS_DISPLAY;
-		display->font = "Default_10";
-		display->color = Colors565::White;
-		addChild(display);
-
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(15.f, 42.f)), module, SpaceTimeStage4::INSTRUMENT_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(45.f, 42.f)), module, SpaceTimeStage4::BANK_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(30.f, 42.f)), module, SpaceTimeStage4::FOCUS_PARAM));
-
-		// VCVSlider is about 20 mm tall in the SDK, so both rows fit comfortably
-		// on a standard 128.5 mm panel. The former 180 mm panel treated the row
-		// pitch as the widget height and produced an invalid MetaModule asset.
-		static const float colX[4] = {10.f, 23.6f, 37.2f, 50.8f};
+		static const float colX[4] = {9.4f, 20.4f, 31.4f, 42.4f};
 		for (int s = 0; s < 4; s++) {
-			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 66.f)), module, SpaceTimeStage4::VOLTAGE_PARAMS + s));
-			auto pitch = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 6.2f, 77.f)));
-			pitch->box.size = mm2px(Vec(12.4f, 10.f));
+			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 33.f)), module, SpaceTimeStage4::VOLTAGE_PARAMS + s));
+			auto pitch = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 5.2f, 47.0f)));
+			pitch->box.size = mm2px(Vec(10.4f, 6.f));
 			pitch->firstLightId = SpaceTimeStage4::PITCH_DISPLAYS + s;
 			pitch->font = "Default_10";
 			pitch->color = Colors565::Black;
 			addChild(pitch);
 
-			auto time = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 6.2f, 92.f)));
-			time->box.size = mm2px(Vec(12.4f, 6.f));
+			auto time = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(colX[s] - 5.2f, 78.2f)));
+			time->box.size = mm2px(Vec(10.4f, 6.f));
 			time->firstLightId = SpaceTimeStage4::TIME_DISPLAYS + s;
 			time->font = "Default_10";
 			time->color = Colors565::Black;
 			addChild(time);
 
-			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 107.5f)), module, SpaceTimeStage4::TIME_PARAMS + s));
-			addChild(createLightCentered<MediumLight<RedLight>>(
-				mm2px(Vec(colX[s], 78.f)), module, SpaceTimeStage4::EDIT_LIGHTS + s));
+			addParam(createParamCentered<VCVSlider>(mm2px(Vec(colX[s], 97.25f)), module, SpaceTimeStage4::TIME_PARAMS + s));
+			addChild(createLightCentered<SmallLight<RedLight>>(
+				mm2px(Vec(colX[s] - 4.2f, 62.5f)), module, SpaceTimeStage4::EDIT_LIGHTS + s));
 			for (int h = 0; h < 8; h++) {
-				float dx = (h % 4 - 1.5f) * 2.2f;
-				float dy = h < 4 ? 0.f : 3.f;
+				float dx = (h % 4 - 1.5f) * 1.75f;
+				float dy = h < 4 ? 0.f : 2.7f;
 				addChild(createLightCentered<SmallLight<RedGreenBlueLight>>(
-					mm2px(Vec(colX[s] + dx, 82.f + dy)), module,
+					mm2px(Vec(colX[s] + dx, 62.5f + dy)), module,
 					SpaceTimeStage4::HEAD_LIGHTS + s * 8 * 3 + h * 3));
 			}
 		}
 
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(56.f, 42.f)), module, SpaceTimeStage4::LINK_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(47.f, 8.5f)), module, SpaceTimeStage4::LINK_LIGHT));
 	}
 
 	void appendContextMenu(Menu* menu) override {
@@ -326,13 +303,12 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
-		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
 		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
-			return std::string(instrumentLabels[module->instrumentId]) +
+			return std::string(1, spacetime::instrumentIdHex(module->instrumentId)) +
 				(module->bankConflict ? " (duplicate bank!)" : "");
 		}, [=](Menu* ids) {
-			for (int id = 0; id < 4; id++)
-				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
+			for (int id = 0; id < spacetime::kInstrumentIdCount; id++)
+				ids->addChild(createCheckMenuItem(std::string(1, spacetime::instrumentIdHex(id)), "",
 					[=]() { return module->instrumentId == id; },
 					[=]() {
 						module->params[SpaceTimeStage4::INSTRUMENT_PARAM].setValue((float)id);
@@ -356,4 +332,4 @@ struct SpaceTimeStage4Widget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeStage4 = createModel<SpaceTimeStage4, SpaceTimeStage4Widget>(spacetime::MMStage4Contract::slug);
+Model* modelSpaceTimeStage4 = createModel<SpaceTimeStage4, SpaceTimeStage4Widget>(spacetime::NativeStage4Contract::slug);

@@ -31,6 +31,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include "InstrumentId.hpp"
 
 namespace spacetime {
 

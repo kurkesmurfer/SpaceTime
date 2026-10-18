@@ -63,38 +63,35 @@ Manifest: `vcv/plugin.json`. All panels are 128.5 mm tall (3U); widths below are
 
 | Slug | Class (`vcv/src/`) | HP | Params | Inputs | Outputs | Lights | Role |
 |---|---|---|---|---|---|---|---|
-| `Program` | `Program` | 18 | 40 | 4 (EXT A–D) | 1 (poly) | 40 | Programming-section **anchor**: stage select/scroll, 12 modifier gestures, Limited-octave bank, time-range bank, Clear, 12-slot preset row (Load/Save/Key/Scale), pulse-retrigger switch, key/scale/globals. Broadcasts the merged table + EXT inputs + globals to the HEAD chain; emits edit-ops to the STAGE4 chain; merges head statuses onto POLY OUT. |
+| `Program` | `Program` | 18 | 58 | 4 (EXT A–D) | 1 (poly) | 40 | Programming-section **anchor** and MetaModule authoring source. Each of its 13 visual spring levers is backed by two independently bindable momentary parameters. Limited-octave and time-range settings expose both their individual buttons and a discrete selector. The Instrument ID is inherited by Stage4 and Head instances during export. |
 | `Stage4` | `Stage4` | 10 | 8 (4×voltage, 4×time sliders) | 0 | 0 | 100 (4 edit-select + 4×8 RGB head-position dots) | One 4-stage **block**. Owns its program words and slider values; applies edit-ops addressed to it; relays the block-to-block table chain and the anchor-to-blocks op/status chain; renders stage-annotation readouts (note name/cents/duration). Chainable right of PROGRAM, up to 16 blocks (64 stages). |
-| `Head` | `Head` | 10 | 13 | 8 | 7 | 7 | One Function Generator **playhead** (`dsp::HeadDSP`, ticked at audio rate). Transport (Start/Stop/Advance/Reset/Strobe), addressing (knob/CV, Strobe/Sequential/Continuous), direction, clock source/division, loop mode, FG Display arbitration. Chainable left of PROGRAM, up to 8 heads. |
+| `Head` | `Head` | 10 | 14 | 8 | 7 | 7 | One Function Generator **playhead** (`dsp::HeadDSP`, ticked at audio rate). Its visual addressing lever uses separate Continuous-latch and momentary-Strobe parameters. Chainable left of PROGRAM, up to 8 heads. |
 | `HeadAll` | `HeadAll` | 10 | 12 | 8 | 0 | 1 | Common transport/playback/CV **control source** injected at the far-left end of the HEAD chain; contributes no playhead or signal output itself. Edge-safe common inputs and persistent panel state travel rightward with head statuses. |
 | `Midi` | `Midi` | 4 | 0 | 0 (Rack MIDI device widget) | 0 | 3 | **MIDI gateway**: clock/transport, preset recall, per-stage/per-head CC control, outgoing note/CC per head, and a bidirectional DROID-controller feedback protocol. Adapter around `dsp::MidiCore` + `dsp::MidiFeedbackCore`. Chains transparently into the HEAD side (no hop increment). |
 | `GlueLeft` | `GlueLeft` : `GlueEndpoint` | 2 | 0 | 0 | 0 | 2 | Virtual expander **bridge**, right-hand fragment. Paired with a same-numbered `GlueRight` elsewhere in the rack via a lock-free `GlueBus`, so a HEAD-side fragment and a PROGRAM/STAGE4-side fragment need not be panel-adjacent. |
 | `GlueRight` | `GlueRight` : `GlueEndpoint` | 2 | 0 | 0 | 0 | 2 | Same mechanism, left-hand fragment. |
-| `MMProgram` | `SpaceTimeProgram` | 32 | 46 | 4 | 3 | Portable Program/MIDI owner with a manual 4-64 active-stage count and eight fallback heads. |
-| `MMStage4` | `SpaceTimeStage4` | 12 | 11 | 0 | 0 | Portable four-stage bank viewer/editor, addressed by Instrument ID and bank. |
-| `MMHead` | `SpaceTimeHead` | 16 | 14 | 8 | 7 | Portable playhead; claiming a head index disables Program's fallback DSP for that index. |
 | `WidgetTest` (hidden) | `WidgetTest` | — | 23 | 0 | 0 | ≥29 | Dev-only exerciser for every custom widget (spring switches, LED cluster, Limited bank, preset row). Not shown in the module browser; not for patches. |
 
 ### 2.2 MetaModule plugin `SpaceTime`
 
-Manifest: `metamodule/plugin.json`. MetaModule modules are **not** expander-chained; they bind to each other over shared plugin memory by **Instrument ID** (`MetaModuleRemoteBus.hpp` registries), addressed via an `INSTRUMENT_PARAM` knob on each module.
+Manifest: `metamodule/plugin.json`. MetaModule modules are **not** expander-chained; they bind to each other over shared plugin memory by **Instrument ID** (`MetaModuleRemoteBus.hpp` registries). Program exposes its ID compactly; Head and Stage4 normally inherit their identities from VCV authoring and offer context-menu overrides rather than permanent identity knobs.
 
 | Slug | Class (`metamodule/src/`) | Role |
 |---|---|---|
-| `MMProgram` | `SpaceTimeProgram` | Portable Program/MIDI owner. Stores 64 stages, exposes the same snapped 4-64 active-stage parameter as its VCV twin, and runs fallback heads only for unclaimed head indexes. |
+| `Program` | `SpaceTimeProgram` | Runtime counterpart of the original VCV Program. Restores the exported 4-64-stage snapshot and runs fallback heads only for unclaimed indexes. |
 | `TimingMonitor` | `SpaceTimeTimingMonitor` | Diagnostic-only: read-only clock-to-stage timing monitor for all eight heads, bound to an Instrument ID, reading `MetaModuleTimingBusRegistry`. |
-| `MMHead` | `SpaceTimeHead` | Portable Head: claims one index, runs the shared `HeadRemoteController`/`HeadDSP`, and reports its output to Program. Full 14-param, 8-input, 7-output contract parity with VCV. |
-| `MMStage4` | `SpaceTimeStage4` | Portable four-stage bank viewer/editor. Banks beyond Program's active count remain inactive and do not publish edits. |
+| `Head` | `SpaceTimeHead` | Runtime counterpart of the original VCV Head. Instrument and head index are inherited from the authored chain. |
+| `Stage4` | `SpaceTimeStage4` | Runtime counterpart of the original VCV Stage4. Instrument and bank are inherited from the authored chain. |
 | `Midi` | `SpaceTimeMidi` | **Read-only monitor**: no device queues of its own; reads `MetaModuleMidiStatusRegistry` for whatever `Program` already tracks. VCV's `Midi` owns real device I/O and DROID feedback; this one does not. |
 | `BusProbeCore` / `BusProbeRemote` | `ProbeCore` / `ProbeRemote` : `ProbeModule` : `CoreProcessor` | **Disposable diagnostic pair** built directly on MetaModule's native `CoreProcessor` interface (bypassing the Rack-compatibility `Module` layer entirely) — verifies the shared-memory transport primitives on real hardware, including which physical core (AArch32 Cortex-A7) each instance runs on. Not part of the musical instrument. |
 
 ### 2.3 Portable contract naming
 
-The native expander-chain family keeps its established slugs. The parallel
-authoring family uses frozen `MMProgram`, `MMStage4` and `MMHead` slugs on both
-VCV Rack and MetaModule. `dsp/MMModuleContracts.hpp` is the append-only source
-of parameter, input and output IDs, so mappings authored in VCV retain their
-meaning on hardware.
+The original expander-chain modules are also the authoring family. Their frozen
+cross-target IDs live in `dsp/NativeModuleContracts.hpp`. MetaModule registers
+the same `Program`, `Stage4` and `Head` slugs, so the standard exporter can map
+them without a custom YAML translation step. The older `MM*` sources remain
+temporarily as unregistered migration reference code.
 
 ---
 
@@ -453,7 +450,7 @@ classDiagram
     MetaModuleHeadRegistry ..> ExpanderSnapshot~kFieldCount~ : marshals via
 ```
 
-*`ProbeMailbox` is a type alias (`using ProbeMailbox = ExpanderMailbox<float>`), not a subclass. All six `MetaModule*Registry` classes follow the same shape (`kBusCount = 4` instrument slots, CAS-based exclusive-owner tokens, `makeToken()`/`registerX()`/`tryClaimX()`/`unregisterX()`) — `MetaModuleBusProbeRegistry` is the generalized original; the later ones are purpose-specific siblings rather than a shared template, by deliberate choice (documented in-source as deferred generalization pending a second real consumer).*
+*`ProbeMailbox` is a type alias (`using ProbeMailbox = ExpanderMailbox<float>`), not a subclass. All six `MetaModule*Registry` classes follow the same shape (`kBusCount = 16` instrument slots, IDs `0-F`, CAS-based exclusive-owner tokens, `makeToken()`/`registerX()`/`tryClaimX()`/`unregisterX()`) — `MetaModuleBusProbeRegistry` is the generalized original; the later ones are purpose-specific siblings rather than a shared template, by deliberate choice (documented in-source as deferred generalization pending a second real consumer).*
 
 ### 4.4 VCV Rack module & widget hierarchy — `vcv/src/`, `vcv/widgets/`
 
@@ -569,7 +566,8 @@ classDiagram
 | `PresetRow.hpp` | `PresetMode`, `PresetAction`, `PresetRowLogic` | Modal Load/Save/Key/Scale press behaviour for the 12-button preset row. |
 | `MidiCore.hpp` | `MidiOutLaneConfig`, `MidiOutputSink` (interface), `MidiCore` | Platform-neutral MIDI router: clock/transport, program/slider/head/head-all CC decoding, outgoing note/CC per head. |
 | `MidiFeedback.hpp` | `MidiFeedbackSink` (interface), `HeadFeedbackState`, `ProgramFeedbackState`, `MidiFeedbackState`, `MidiFeedbackCore` | Bidirectional MIDI controller feedback protocol (v1): request decoding, full-state snapshot framing, change-detected deltas, coalesced stage-page deltas, ack pulses. |
-| `MMModuleContracts.hpp` | `MMProgramContract`, `MMStage4Contract`, `MMHeadContract` | Frozen cross-target slugs and append-only parameter/input/output IDs; also owns the shared 1-16 bank to 4-64 stage conversion. |
+| `NativeModuleContracts.hpp` | `NativeProgramContract`, `NativeStage4Contract`, `NativeHeadContract` | Shared original-module slugs and cross-target parameter/input/output IDs. Program's post-2.0.4 contract uses separate Down/Up parameters for every spring lever. |
+| `MMModuleContracts.hpp` | legacy `MM*Contract` types and stage-bank helpers | Temporary migration reference plus the shared 1-16 bank to 4-64 stage conversion. |
 | `SpaceTimeEngine.hpp` | `SpaceTimeEngine` | Portable single-instrument owner (table + eight shared fallback head controllers + `ProgramLogic` + `MidiCore` + globals). Claimed heads replace their corresponding fallback at runtime. |
 | `HeadRemoteController.hpp` | `HeadRemoteController` | Shared single-head MIDI-to-signals and DSP controller used by both Program fallback heads and claimed portable Head modules. |
 | `StageAnnotation.hpp` | `StageAnnotation` (data), free functions | Derives human-readable pitch/cents/duration strings for a stage (note name, quantization, time range) — consumed by both VCV `Stage4`'s and MetaModule `SpaceTimeStage4`'s readout widgets. |
@@ -585,10 +583,10 @@ classDiagram
 |---|---|---|
 | `plugin.hpp` / `plugin.cpp` | `PanelText`, `Model*` externs, panel-theme preference | Plugin entry point (`init()`), model registry, the NanoVG-drawn `PanelText` base widget (NanoSVG doesn't render `<text>`), panel light/dark theme setting persisted in Rack's global settings JSON. |
 | `paneltheme.hpp` | `ThemedPanel`, `RotatedPanelText`, `ManufacturerWordmark`, `CornerMark`, label helpers | The "Bone" design system (ported from the Collide plugin): colour tokens, bundled fonts, `addTitle/addSubtitle/addKnobLabel/...` label placement helpers, the Kurkesmurfer corner-mark logo widget. |
-| `spacetime_widgets.hpp` | `kHeadColors[8]`, `SpringSwitch3`, `LatchSpringSwitch3`, `Switch4`, `addStageLedCluster/addLimitedBank/addPresetRow` | Reusable widget library: the single source of truth for the 8 head colours; the spring-return 3-position switch (and its latch/momentary variant used for HEAD's addressing mode); the 4-position latching selector; layout helpers for the LED cluster, Limited bank and preset row. |
+| `spacetime_widgets.hpp` | `kHeadColors[8]`, spring and selector widgets, layout helpers | Reusable widget library: the single source of truth for the 8 head colours; dual-bindable Program levers; the asymmetric Head Continuous/Strobe lever; selectors; and layout helpers. |
 | `ChainAdapter.hpp` | `MessagePort<T>`, `RackNeighborView` | The only Rack-expander-plumbing file for the chain protocol (§3.1). |
-| `MMBus.hpp` / `MMBus.cpp` | portable registry globals | VCV-hosted shared-memory registry instances for the MM-prefixed authoring family. |
-| `MMProgram.cpp`, `MMStage4.cpp`, `MMHead.cpp` | portable VCV adapters | Fully playable VCV twins of the MetaModule contracts. |
+| `MMBus.hpp` / `MMBus.cpp` | portable registry globals | VCV-hosted shared-memory registry instances retained for migration reference. |
+| `MMProgram.cpp`, `MMStage4.cpp`, `MMHead.cpp` | unregistered legacy adapters | Former parallel authoring family; compiled temporarily but no longer registered or listed in the VCV manifest. |
 | `Program.cpp` | `Program`, `StageCountDisplay`, `ProgramWidget` | PROGRAM module + widget (§2.1). Largest VCV module file (34 KB). |
 | `Stage4.cpp` | `Stage4`, `StageAnnotation` (widget), `Stage4Widget` | STAGE4 module + widget. |
 | `Head.cpp` | `Head`, `HeadWidget` | HEAD module + widget. |
@@ -604,7 +602,7 @@ classDiagram
 | `plugin.cpp` | `init()` / `init_SpaceTime()` | Plugin entry point; registers the 5 musical models and initializes the probe pair. Handles both the simulator's (`METAMODULE_BUILTIN`) and real-hardware init conventions. |
 | `RemoteBus.hpp` / `RemoteBus.cpp` | externs for the 5 EB registries | Single shared-plugin-memory definition point for `headRegistry`, `stageTableRegistry`, `headMidiRegistry`, `midiStatusRegistry`, `stageBankRegistry`. |
 | `TimingBus.hpp` / `TimingBus.cpp` | extern `timingBusRegistry` | Same pattern for the timing telemetry bus. |
-| `Program.cpp` | `SpaceTimeProgram`, `SpaceTimeProgramWidget`, `RackMidiSink` | Fused PROGRAM (§2.2); largest MetaModule file (39 KB). Every VCV `Program` control reproduced as an explicit button pair (no `SpringSwitch3` widget on this target) plus `dsp::SpaceTimeEngine`. |
+| `Program.cpp` | `SpaceTimeProgram`, `SpaceTimeProgramWidget`, `RackMidiSink` | Fused PROGRAM (§2.2). Every VCV Program spring lever uses the same shared Down/Up parameter IDs, rendered as explicit button pairs on MetaModule, plus `dsp::SpaceTimeEngine`. |
 | `Head.cpp` | `SpaceTimeHead`, `SpaceTimeHeadWidget` | Relocated HEAD (EB8) — full VCV `Head` param/jack parity, feed-forward shadow-compare arbitration between MIDI-driven config and the physical knob (no locking needed: single-threaded, control-rate, fixed order per tick). |
 | `Stage4.cpp` | `SpaceTimeStage4`, `SpaceTimeStage4Widget` | Thin STAGE4 publisher (§2.2), `INSTRUMENT_PARAM`/`BANK_PARAM` binding. |
 | `Midi.cpp` | `SpaceTimeMidi`, `SpaceTimeMidiWidget` | Read-only MIDI monitor (§2.2). |
@@ -655,10 +653,10 @@ Run via `test/Makefile` (host `g++`, produces `test/run`); `check.sh` at the rep
 
 `dataToJson()`/`dataFromJson()` is implemented on: VCV `Program` (presets, key/scale, globals), `Stage4` (per-stage program words, slider-takeover state), `Head` (no owned persistent state beyond Rack's automatic param serialization, plus `DISPLAY_PARAM` patch-compat handling), `Midi` (MIDI channel/lane config, feedback settings), `Glue` (link number); and MetaModule `SpaceTimeProgram`, `SpaceTimeHead`.
 
-Two append-only contracts protect old patches against new code:
+Two compatibility contracts normally protect old patches against new code:
 
 1. **`Field` enum** (`StageTable.hpp`) — the edit-op wire format. New fields (`ClearWord`, `ProgramWord` itself were appended for WP6) may only be added at the end; existing values/bit positions are frozen forever (program-word layout is explicitly versioned, `kProgramLayoutVersion = 1`).
-2. **Module `ParamId`/`InputId`/`LightId` enums** — several modules show an explicit `// appended for patch compatibility` comment marking fields added after initial release (e.g. `Program::PULSE_RETRIG_PARAM`, `Head::DISPLAY_PARAM`/`RESET_INPUT`) rather than inserted in logical position, so old patch JSON (which references params by index) keeps loading correctly.
+2. **Module `ParamId`/`InputId`/`LightId` enums** — fields are normally appended so old patch JSON keeps loading correctly. The deliberate 2.0.5/2.0.6 exceptions are Program's thirteen dual-action levers and Head's split Continuous/Strobe addressing lever. Peet explicitly retired compatibility with earlier development patches so VCV mapping and MetaModule hardware binding could share correct contracts.
 
 ---
 

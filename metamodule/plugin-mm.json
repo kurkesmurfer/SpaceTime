@@ -3,12 +3,12 @@
   "MetaModulePluginMaintainer": "Kurkesmurfer",
   "MetaModulePluginMaintainerEmail": "",
   "MetaModulePluginMaintainerUrl": "https://www.kurkesmurfer.com/",
-  "MetaModuleDescription": "Portable SpaceTime Program, Stage4 and Head modules with manually selectable 4-64 stage programs",
+  "MetaModuleDescription": "SpaceTime Program, Stage4 and Head implementations for patches authored with the original VCV modules",
   "MetaModuleIncludedModules": [
-    { "slug": "MMProgram", "name": "SpaceTime MM Program" },
+    { "slug": "Program", "name": "SpaceTime Program" },
     { "slug": "TimingMonitor", "name": "SpaceTime Timing Monitor" },
-    { "slug": "MMHead", "name": "SpaceTime MM Head" },
-    { "slug": "MMStage4", "name": "SpaceTime MM Stage4" },
+    { "slug": "Head", "name": "SpaceTime Head" },
+    { "slug": "Stage4", "name": "SpaceTime Stage4" },
     { "slug": "Midi", "name": "SpaceTime Midi" },
     { "slug": "BusProbeCore", "name": "BUS PROBE CORE" },
     { "slug": "BusProbeRemote", "name": "BUS PROBE REMOTE" }

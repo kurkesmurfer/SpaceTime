@@ -1,10 +1,10 @@
 # SpaceTime for MetaModule
 
-The development package contains the portable `MMProgram`, `MMStage4` and
-`MMHead` authoring family plus the accepted shared-memory bus probes.
-`MMProgram` owns a 64-stage-capacity table, Program state, presets and MIDI. Its
+The development package implements the original VCV `Program`, `Stage4` and
+`Head` modules on MetaModule, plus the accepted shared-memory bus probes.
+`Program` owns a 64-stage-capacity table, Program state, presets and MIDI. Its
 snapped **STAGES** parameter selects 1-16 four-stage banks (4-64 active stages)
-and is identical in VCV Rack and MetaModule. A claimed `MMHead` owns that head's
+on MetaModule. A claimed `Head` owns that head's
 only active DSP instance; Program's matching fallback head is skipped.
 
 ## Build
@@ -25,6 +25,18 @@ cmake --build metamodule/build
 The installable package is written to
 `metamodule/metamodule-plugins/SpaceTime.mmplugin`.
 
+With MetaModule Developer Mode exposing `/Volumes/DEV_MM`, the package can be
+installed directly from the repository root with:
+
+```sh
+metamodule/scripts/install_dev_mode.sh
+```
+
+The script verifies the package, mounted volume, and serial device before it
+copies anything. It then unmounts cleanly, sends the `INSTALL` command, and
+waits for the developer volume to return. An explicit package, volume, and
+serial device may be supplied as the first, second, and third arguments.
+
 ## Panel assets
 
 All SpaceTime MetaModule faceplates use a light theme and a standard 128.5 mm
@@ -34,8 +46,21 @@ height. Regenerate their native-resolution PNGs after editing the SVG sources:
 python3 metamodule/scripts/render_panels.py
 ```
 
-The renderer requires CairoSVG. Program is 32 HP (304 x 240 px) so its full
-control set fits without vertical overflow; Stage4 is 12 HP (114 x 240 px).
+The renderer requires CairoSVG. The native-authoring modules deliberately stay
+close to the original SpaceTime proportions: Program is 18 HP (171 x 240 px),
+while Head and Stage4 are both 10 HP (95 x 240 px). Large development status
+screens are not part of these panels. Identity and routing values that are
+normally inherited from the authored VCV patch remain available in the module
+context menu instead of consuming permanent faceplate space.
+Program's spring-return controls share one dual-action parameter contract on
+both targets. VCV draws each pair as one lever with independently bindable upper
+and lower halves. MetaModule shows those same parameter IDs as paired momentary
+buttons: left is Down/Remove and right is Up/Add.
+
+Head's addressing lever is asymmetric. Its upper `Continuous` action is a
+latching boolean: press once for Continuous and press again to return to
+Sequential. Its lower `Strobe` action is momentary. On MetaModule, configure the
+upper hardware-button binding as latching and leave the lower binding momentary.
 Stage4 reads Program's authoritative key, scale and stage table to show the
 same note/cent and nominal-time annotations as its VCV counterpart. External
 voltage or time sources are shown as `EXT` because their live result belongs to
@@ -49,10 +74,9 @@ via virtual rtmidi ports. It cannot model the two-core scheduler or CPU load
 (those numbers below stay hardware-only), and as a desktop process it almost
 certainly does not reproduce the undocumented loader `.bss`-zeroing behavior
 the shared bus depends on, so the unload/reload robustness item stays
-hardware-only too. Everything else -- MIDI CC injection, the STATUS_DISPLAY
-text (including the EB6 `!`/`(duplicate Core!)` indication), preset save/load,
-the action menu -- is fair game there, and it's the fast loop for MM2-style
-legibility checks instead of waiting for the next bench session.
+hardware-only too. Everything else -- MIDI CC injection, control and LED
+behavior, preset save/load, the action menu and panel legibility -- is fair game
+there, and it is the fast loop before the next hardware session.
 
 Setup: `~/Development/metamodule` already exists on this machine (gcc-12+
 confirmed present) and already builds three other plugins as simulator
@@ -201,7 +225,7 @@ test state; use Clear Program if necessary.
    PROBE REMOTE to a patch.
 2. Both probes default to Instrument ID A. To change it, open the probe's module
    view, rotate through its element list to `Instrument ID`, press the rotary,
-   and choose A-D. This is an alternate parameter, so it appears in the element
+   and choose 0-F. This is an alternate parameter, so it appears in the element
    list rather than on the panel image. With matching IDs, the displays must
    change from `WAIT Cn` to `LINK Cn`; both STATUS outputs must read +5 V. `C1`
    and `C2` identify the processor core actually running that probe.
@@ -235,7 +259,7 @@ Principle accepted on 2026-07-16 with firmware 2.2.0:
 - `LINK`, `DUP` and mismatched-ID `WAIT` states behaved correctly.
 - STATUS output was verified at +5 V for `LINK`, 0 V for `WAIT` and -5 V for
   `DUP`.
-- Instrument IDs A, B, C and D were verified, including matching and mismatched
+- Instrument IDs 0-F are available; A, B, C and D were hardware-verified, including matching and mismatched
   pair behavior.
 - Save and reload recovered the link and state.
 - Endpoint deletion, reinsertion and reconnection recovered correctly.

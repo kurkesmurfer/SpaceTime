@@ -93,7 +93,7 @@ struct MetaModuleTimingBus {
 
 class MetaModuleTimingBusRegistry {
 public:
-	static const unsigned kBusCount = 4;
+	static const unsigned kBusCount = kInstrumentIdCount;
 
 	uint32_t makeToken() {
 		uint32_t token = nextToken_.fetch_add(1, std::memory_order_relaxed);
@@ -132,7 +132,7 @@ public:
 	// Instrument ID to join. Returns true and sets instrumentId only when
 	// exactly one Instrument ID currently has a live (single-owner) Core;
 	// returns false when none or more than one exist, so the caller falls
-	// back to explicit A-D selection rather than guessing among ambiguous
+	// back to explicit 0-F selection rather than guessing among ambiguous
 	// candidates. Claims nothing and changes no ownership -- callers still
 	// register/tryClaim through the normal entry points once they have the
 	// resolved instrumentId (see METAMODULE_EXPANDER_BUS_PLAN.md, EB4).

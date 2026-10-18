@@ -3,6 +3,7 @@
 #include "spacetime_widgets.hpp"
 #include "ChainAdapter.hpp"
 #include "HeadDSP.hpp"
+#include "NativeModuleContracts.hpp"
 
 // ============================================================================
 // HEAD — WP7 integrated.
@@ -35,7 +36,8 @@ struct Head : Module {
 		RESET_PARAM,
 		ADDRESS_PARAM,
 		ADDR_SOURCE_PARAM,
-		ADDR_MODE_PARAM,
+		ADDR_CONTINUOUS_PARAM,
+		ADDR_STROBE_PARAM,
 		DIRECTION_PARAM,
 		CLK_SOURCE_PARAM,
 		CLK_DIV_PARAM,
@@ -84,12 +86,13 @@ struct Head : Module {
 	spacetime::Globals globals;
 	spacetime::ScaleKey scaleKey;
 	int headId = 0;
+	uint8_t portableInstrumentId = 0;
 	bool chainOk = false;
 
 	spacetime::MessagePort<spacetime::AnchorToHeadsMsg> rightPort;  // broadcast in
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;   // statuses in
 
-	rack::dsp::BooleanTrigger resetTrigger, resetInputTrigger, strobeDownTrigger, displayTrigger;
+	rack::dsp::BooleanTrigger resetTrigger, resetInputTrigger, strobeTrigger, displayTrigger;
 	rack::dsp::BooleanTrigger feedbackAdvanceTrigger;
 	bool resetPending = false, strobePending = false;
 	bool displayLatch = false;
@@ -121,10 +124,7 @@ struct Head : Module {
 		configParam(ADDRESS_PARAM, 0.f, 10.f, 0.f, "Address", " V");
 		configSwitch(ADDR_SOURCE_PARAM, 0.f, 1.f, 0.f, "Address source",
 			{"Internal (knob)", "External (ADDRESS CV)"});
-		configSwitch(ADDR_MODE_PARAM, 0.f, 2.f, 1.f,
-			"Addressing mode (up/center latch, down is momentary)",
-			{"Strobe (momentary: load stage at address)", "Sequential",
-			 "Continuous (address sweeps stages)"});
+		spacetime::configDualLatchSpring3(this, ADDR_CONTINUOUS_PARAM, ADDR_STROBE_PARAM);
 		configSwitch(DIRECTION_PARAM, 0.f, 4.f, 0.f, "Direction",
 			{"Forward", "Reverse", "Pendulum", "Random", "Brownian"});
 		configSwitch(CLK_SOURCE_PARAM, 0.f, 3.f, 0.f, "Clock source",
@@ -191,7 +191,7 @@ struct Head : Module {
 				if (mode == 0)
 					strobePending = true;
 				else
-					params[ADDR_MODE_PARAM].setValue((float)mode);
+					params[ADDR_CONTINUOUS_PARAM].setValue(mode == 2 ? 1.f : 0.f);
 				break;
 			}
 			case 8: params[DIRECTION_PARAM].setValue((float)clamp((int)std::round(value), 0, 4)); break;
@@ -228,6 +228,7 @@ struct Head : Module {
 				globals = bm->globals;
 				scaleKey = bm->scaleKey;
 				headId = bm->hopIndex;
+				portableInstrumentId = bm->instrumentId;
 				if (bm->midiClockSeq != lastMidiClockSeq) {
 					lastMidiClockSeq = bm->midiClockSeq;
 					midiClockTimer = 1e-3f;
@@ -317,7 +318,7 @@ struct Head : Module {
 			}
 
 			// ---- Config from panel
-			cfg.continuous = params[ADDR_MODE_PARAM].getValue() > 1.5f;
+			cfg.continuous = params[ADDR_CONTINUOUS_PARAM].getValue() > 0.5f;
 			cfg.addrExt = params[ADDR_SOURCE_PARAM].getValue() > 0.5f;
 			cfg.addressKnob = params[ADDRESS_PARAM].getValue();
 			cfg.direction = (uint8_t)std::round(params[DIRECTION_PARAM].getValue());
@@ -330,7 +331,7 @@ struct Head : Module {
 			if (resetTrigger.process(params[RESET_PARAM].getValue() > 0.5f))
 				resetPending = true;
 			// Momentary-down on the addressing switch fires one strobe.
-			if (strobeDownTrigger.process(params[ADDR_MODE_PARAM].getValue() < 0.5f))
+			if (strobeTrigger.process(params[ADDR_STROBE_PARAM].getValue() > 0.5f))
 				strobePending = true;
 
 			// ---- Relay the broadcast to the next head (leftward)
@@ -361,8 +362,7 @@ struct Head : Module {
 					own.runState = out.runState;
 					own.display = displayLatch ? 1 : 0;
 					own.addressExternal = cfg.addrExt ? 1 : 0;
-					own.addressMode = (uint8_t)clamp(
-						(int)std::round(params[ADDR_MODE_PARAM].getValue()), 0, 2);
+					own.addressMode = params[ADDR_CONTINUOUS_PARAM].getValue() > 0.5f ? 2 : 1;
 					own.direction = cfg.direction;
 					own.clockSource = (uint8_t)clockSource;
 					own.clockDivIndex = cfg.clkDivIndex;
@@ -446,6 +446,8 @@ struct Head : Module {
 	json_t* dataToJson() override {
 		json_t* root = json_object();
 		json_object_set_new(root, "followMidiTransport", json_boolean(followMidiTransport));
+		json_object_set_new(root, "mmInstrumentId", json_integer(portableInstrumentId));
+		json_object_set_new(root, "mmHeadIndex", json_integer(headId));
 		return root;
 	}
 
@@ -539,7 +541,8 @@ struct HeadWidget : ModuleWidget {
 
 		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(ADDR_KNOB_X, ADDR_Y)), module, Head::ADDRESS_PARAM));
 		addParam(createParamCentered<CKSS>(mm2px(Vec(ADDR_SRC_X, ADDR_Y)), module, Head::ADDR_SOURCE_PARAM));
-		addParam(createParamCentered<spacetime::LatchSpringSwitch3>(mm2px(Vec(ADDR_MODE_X, ADDR_Y)), module, Head::ADDR_MODE_PARAM));
+		spacetime::addDualLatchSpring3(this, module, mm2px(Vec(ADDR_MODE_X, ADDR_Y)),
+			Head::ADDR_CONTINUOUS_PARAM, Head::ADDR_STROBE_PARAM);
 
 		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(DIR_X, PLAY_Y)), module, Head::DIRECTION_PARAM));
 		addParam(createParamCentered<spacetime::Switch4>(mm2px(Vec(CLKSRC_X, PLAY_Y)), module, Head::CLK_SOURCE_PARAM));

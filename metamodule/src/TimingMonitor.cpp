@@ -3,6 +3,7 @@
 
 #include "Chain.hpp"
 #include "TimingBus.hpp"
+#include "InstrumentId.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -56,7 +57,7 @@ struct SpaceTimeTimingMonitor : Module {
 
 	SpaceTimeTimingMonitor() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(HEAD_PARAM, 0.f, 7.f, 0.f, "Selected head", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configButton(RESET_PARAM, "Reset timing baseline");
 		configOutput(CLOCK_OUTPUT, "Selected head source clock event");
@@ -89,7 +90,7 @@ struct SpaceTimeTimingMonitor : Module {
 	}
 
 	void processControl(float dt) {
-		int nextId = clamp((int)std::round(params[INSTRUMENT_PARAM].getValue()), 0, 3);
+		int nextId = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 		if (nextId != monitorId)
 			setMonitorId(nextId);
 		selectedHead = clamp((int)std::round(params[HEAD_PARAM].getValue()), 0, 7);
@@ -159,7 +160,7 @@ struct SpaceTimeTimingMonitor : Module {
 		char buffer[128];
 		int length = std::snprintf(buffer, sizeof(buffer),
 			"%c %s H%d S%02d\n%s %s %s\nCLK %08lu\nSTP %08lu\nD%+ld %s",
-			(char)('A' + monitorId), linkName, selectedHead + 1,
+			spacetime::instrumentIdHex(monitorId), linkName, selectedHead + 1,
 			(int)snapshot.stage[selectedHead] + 1,
 			sourceNames[source], divisionNames[division],
 			snapshot.runState[selectedHead] == spacetime::RUN_STOPPED ? "STOP" :
@@ -176,7 +177,7 @@ struct SpaceTimeTimingMonitor : Module {
 
 	void setMonitorId(int next) {
 		timingBusRegistry.unregisterMonitor(monitorId);
-		monitorId = clamp(next, 0, 3);
+		monitorId = spacetime::clampInstrumentId(next);
 		timingBusRegistry.registerMonitor(monitorId);
 		lastHeartbeat = 0;
 		staleTime = 1.f;

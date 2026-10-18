@@ -21,10 +21,10 @@ ROOT = Path(__file__).resolve().parents[1]
 FONT_DIR = ROOT.parent / "vcv" / "res" / "fonts"
 SUPERSAMPLE = 8
 PANELS = {
-    "Program": (285, 240),
+    "Program": (171, 240),
     "TimingMonitor": (114, 240),
-    "Head": (171, 240),
-    "Stage4": (114, 240),
+    "Head": (95, 240),
+    "Stage4": (95, 240),
     "Midi": (114, 240),
     "ProbeCore": (76, 240),
     "ProbeRemote": (76, 240),

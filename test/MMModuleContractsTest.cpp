@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "MMModuleContracts.hpp"
+#include "NativeModuleContracts.hpp"
 #include "SpaceTimeEngine.hpp"
 
 using namespace spacetime;
@@ -15,6 +16,38 @@ TEST_CASE("portable MM module slugs and contract sizes are frozen") {
 	CHECK(MMHeadContract::PARAMS_LEN == 14);
 	CHECK(MMHeadContract::INPUTS_LEN == 8);
 	CHECK(MMHeadContract::OUTPUTS_LEN == 7);
+}
+
+TEST_CASE("original module IDs are the portable MetaModule contract") {
+	CHECK(std::string(NativeProgramContract::slug) == "Program");
+	CHECK(NativeProgramContract::STAGE_SCROLL_DOWN_PARAM == 0);
+	CHECK(NativeProgramContract::STAGE_SCROLL_UP_PARAM == 1);
+	CHECK(NativeProgramContract::PULSE1_DOWN_PARAM == 32);
+	CHECK(NativeProgramContract::PULSE1_UP_PARAM == 33);
+	CHECK(NativeProgramContract::PULSE_RETRIG_PARAM == 52);
+	CHECK(NativeProgramContract::INSTRUMENT_PARAM == 53);
+	CHECK(NativeProgramContract::LTD_SELECTOR_PARAM == 54);
+	CHECK(NativeProgramContract::TRANGE_SELECTOR_PARAM == 55);
+	CHECK(NativeProgramContract::INSTRUMENT_DOWN_PARAM == 56);
+	CHECK(NativeProgramContract::INSTRUMENT_UP_PARAM == 57);
+	CHECK(NativeProgramContract::NATIVE_PARAMS_LEN == 58);
+	CHECK(NativeProgramContract::POLY_OUTPUT == 0);
+
+	CHECK(std::string(NativeStage4Contract::slug) == "Stage4");
+	CHECK(NativeStage4Contract::VOLTAGE_PARAMS == 0);
+	CHECK(NativeStage4Contract::TIME_PARAMS == 4);
+	CHECK(NativeStage4Contract::INSTRUMENT_PARAM == 8);
+
+	CHECK(std::string(NativeHeadContract::slug) == "Head");
+	CHECK(NativeHeadContract::START_PARAM == 0);
+	CHECK(NativeHeadContract::ADDR_CONTINUOUS_PARAM == 6);
+	CHECK(NativeHeadContract::ADDR_STROBE_PARAM == 7);
+	CHECK(NativeHeadContract::DISPLAY_PARAM == 13);
+	CHECK(NativeHeadContract::INSTRUMENT_PARAM == 14);
+	CHECK(NativeHeadContract::HEAD_PARAM == 15);
+	CHECK(NativeHeadContract::PARAMS_LEN == 16);
+	CHECK(NativeHeadContract::RESET_INPUT == 7);
+	CHECK(NativeHeadContract::EOC_OUTPUT == 6);
 }
 
 TEST_CASE("stage count uses one four-stage-bank mechanism on every target") {

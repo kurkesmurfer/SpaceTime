@@ -80,6 +80,129 @@ inline void configSpring3(engine::Module* m, int paramId, const std::string& nam
 	m->configSwitch(paramId, 0.f, 2.f, 1.f, name, {downLabel, "—", upLabel});
 }
 
+// ---- DualSpringSwitch3 -----------------------------------------------------
+// One visual three-position lever backed by two real momentary parameters.
+// The upper and lower halves are separate ParamWidgets, so Rack MIDI mapping
+// and MetaModule export can bind both actions independently.
+struct DualSpringButton : app::Switch {
+	DualSpringButton() {
+		momentary = true;
+		box.size = mm2px(Vec(5.f, 6.f));
+	}
+};
+
+struct DualSpringDisplay : widget::SvgWidget {
+	engine::Module* module = nullptr;
+	int downParamId = -1;
+	int upParamId = -1;
+	int frame = -1;
+	std::shared_ptr<window::Svg> frames[3];
+
+	DualSpringDisplay() {
+		frames[0] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_0.svg"));
+		frames[1] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_1.svg"));
+		frames[2] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_2.svg"));
+		setSvg(frames[1]);
+		frame = 1;
+	}
+
+	void step() override {
+		int next = 1;
+		if (module) {
+			bool down = module->params[downParamId].getValue() > 0.5f;
+			bool up = module->params[upParamId].getValue() > 0.5f;
+			if (down != up)
+				next = up ? 2 : 0;
+		}
+		if (next != frame) {
+			setSvg(frames[next]);
+			frame = next;
+		}
+		widget::SvgWidget::step();
+	}
+};
+
+inline void configDualSpring3(engine::Module* m, int downParamId, int upParamId,
+		const std::string& name, const std::string& downLabel, const std::string& upLabel) {
+	m->configButton(downParamId, name + " down: " + downLabel);
+	m->configButton(upParamId, name + " up: " + upLabel);
+}
+
+inline void addDualSpring3(ModuleWidget* w, engine::Module* m, Vec center,
+		int downParamId, int upParamId) {
+	auto* display = new DualSpringDisplay;
+	display->module = m;
+	display->downParamId = downParamId;
+	display->upParamId = upParamId;
+	display->box.pos = center.minus(display->box.size.div(2));
+	w->addChild(display);
+	w->addParam(createParamCentered<DualSpringButton>(
+		center.plus(mm2px(Vec(0.f, 3.f))), m, downParamId));
+	w->addParam(createParamCentered<DualSpringButton>(
+		center.minus(mm2px(Vec(0.f, 3.f))), m, upParamId));
+}
+
+// Asymmetric Head addressing lever: upper action toggles Continuous and
+// remains up until pressed again; lower action emits a momentary Strobe.
+struct LatchSpringToggle : app::Switch {
+	LatchSpringToggle() {
+		momentary = false;
+		box.size = mm2px(Vec(5.f, 6.f));
+	}
+};
+
+struct DualLatchSpringDisplay : widget::SvgWidget {
+	engine::Module* module = nullptr;
+	int continuousParamId = -1;
+	int strobeParamId = -1;
+	int frame = -1;
+	std::shared_ptr<window::Svg> frames[3];
+
+	DualLatchSpringDisplay() {
+		frames[0] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_0.svg"));
+		frames[1] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_1.svg"));
+		frames[2] = Svg::load(asset::plugin(pluginInstance, "res/components/spring3_2.svg"));
+		setSvg(frames[1]);
+		frame = 1;
+	}
+
+	void step() override {
+		int next = 1;
+		if (module) {
+			if (module->params[strobeParamId].getValue() > 0.5f)
+				next = 0;
+			else if (module->params[continuousParamId].getValue() > 0.5f)
+				next = 2;
+		}
+		if (next != frame) {
+			setSvg(frames[next]);
+			frame = next;
+		}
+		widget::SvgWidget::step();
+	}
+};
+
+inline void configDualLatchSpring3(engine::Module* m, int continuousParamId,
+		int strobeParamId) {
+	m->configSwitch(continuousParamId, 0.f, 1.f, 0.f, "Addressing mode",
+		{"Sequential", "Continuous"});
+	m->configButton(strobeParamId, "Addressing strobe");
+}
+
+inline void addDualLatchSpring3(ModuleWidget* w, engine::Module* m, Vec center,
+		int continuousParamId, int strobeParamId) {
+	auto* display = new DualLatchSpringDisplay;
+	display->module = m;
+	display->continuousParamId = continuousParamId;
+	display->strobeParamId = strobeParamId;
+	display->box.pos = center.minus(display->box.size.div(2));
+	w->addChild(display);
+	w->addParam(createParamCentered<DualSpringButton>(
+		center.plus(mm2px(Vec(0.f, 3.f))), m, strobeParamId));
+	w->addParam(createParamCentered<LatchSpringToggle>(
+		center.minus(mm2px(Vec(0.f, 3.f))), m, continuousParamId));
+}
+
 // ---- LatchSpringSwitch3 -----------------------------------------------------
 // Hardware Cont/Strobe switch: LATCHING up and center, MOMENTARY down.
 // Clicking the upper half toggles between up (2) and center (1); the lower

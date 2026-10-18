@@ -1,10 +1,11 @@
 #include <rack.hpp>
-#include <metamodule/VCVTextDisplay.hpp>
 
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
 #include "HeadRemoteController.hpp"
 #include "MMModuleContracts.hpp"
+#include "NativeModuleContracts.hpp"
+#include "InstrumentId.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -69,20 +70,22 @@ namespace {
 // own description exactly.
 struct SpaceTimeHead : Module {
 	enum ParamId {
-		INSTRUMENT_PARAM,
-		HEAD_PARAM,
 		START_PARAM,
 		STOP_PARAM,
 		ADVANCE_PARAM,
 		RESET_PARAM,
 		ADDRESS_PARAM,
 		ADDR_SOURCE_PARAM,
-		ADDR_MODE_PARAM,
+		ADDR_CONTINUOUS_PARAM,
+		ADDR_STROBE_PARAM,
 		DIRECTION_PARAM,
 		CLK_SOURCE_PARAM,
 		CLK_DIV_PARAM,
 		TIMECV_PARAM,
 		LOOP_PARAM,
+		DISPLAY_PARAM,
+		INSTRUMENT_PARAM,
+		HEAD_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -106,16 +109,16 @@ struct SpaceTimeHead : Module {
 		EOC_OUTPUT,
 		OUTPUTS_LEN
 	};
-	static_assert((int)INSTRUMENT_PARAM == (int)spacetime::MMHeadContract::INSTRUMENT_PARAM, "MMHead ParamId drift");
-	static_assert((int)PARAMS_LEN == (int)spacetime::MMHeadContract::PARAMS_LEN, "MMHead ParamId count drift");
-	static_assert((int)START_INPUT == (int)spacetime::MMHeadContract::START_INPUT && (int)INPUTS_LEN == (int)spacetime::MMHeadContract::INPUTS_LEN, "MMHead InputId drift");
-	static_assert((int)CV_OUTPUT == (int)spacetime::MMHeadContract::CV_OUTPUT && (int)OUTPUTS_LEN == (int)spacetime::MMHeadContract::OUTPUTS_LEN, "MMHead OutputId drift");
+	static_assert((int)START_PARAM == (int)spacetime::NativeHeadContract::START_PARAM, "Head ParamId drift");
+	static_assert((int)INSTRUMENT_PARAM == (int)spacetime::NativeHeadContract::INSTRUMENT_PARAM, "Head identity ParamId drift");
+	static_assert((int)PARAMS_LEN == (int)spacetime::NativeHeadContract::PARAMS_LEN, "Head ParamId count drift");
+	static_assert((int)START_INPUT == (int)spacetime::NativeHeadContract::START_INPUT && (int)INPUTS_LEN == (int)spacetime::NativeHeadContract::INPUTS_LEN, "Head InputId drift");
+	static_assert((int)CV_OUTPUT == (int)spacetime::NativeHeadContract::CV_OUTPUT && (int)OUTPUTS_LEN == (int)spacetime::NativeHeadContract::OUTPUTS_LEN, "Head OutputId drift");
 	enum LightId {
 		RUN_LIGHT,
 		HOLD_LIGHT,
 		STOPPED_LIGHT,
 		LINK_LIGHT,
-		STATUS_DISPLAY,
 		LIGHTS_LEN
 	};
 
@@ -148,7 +151,7 @@ struct SpaceTimeHead : Module {
 	// the struct-level comment above for the reasoning.
 	float shadowAddress = 0.f;
 	float shadowAddrSource = 0.f;
-	float shadowAddrMode = 1.f;
+	float shadowAddrContinuous = 0.f;
 	float shadowDirection = 0.f;
 	float shadowClkSource = 0.f;
 	float shadowClkDiv = 4.f;
@@ -157,7 +160,7 @@ struct SpaceTimeHead : Module {
 
 	SpaceTimeHead() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configParam(INSTRUMENT_PARAM, 0.f, 3.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(HEAD_PARAM, 0.f, 7.f, 0.f, "Head index", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configButton(START_PARAM, "Start");
 		configButton(STOP_PARAM, "Stop");
@@ -166,10 +169,9 @@ struct SpaceTimeHead : Module {
 		configParam(ADDRESS_PARAM, 0.f, 10.f, 0.f, "Address", " V");
 		configSwitch(ADDR_SOURCE_PARAM, 0.f, 1.f, 0.f, "Address source",
 			{"Internal (knob)", "External (ADDRESS CV)"});
-		configSwitch(ADDR_MODE_PARAM, 0.f, 2.f, 1.f,
-			"Addressing mode (Strobe fires once; Sequential/Continuous latch)",
-			{"Strobe (momentary: load stage at address)", "Sequential",
-			 "Continuous (address sweeps stages)"});
+		configSwitch(ADDR_CONTINUOUS_PARAM, 0.f, 1.f, 0.f,
+			"Addressing mode", {"Sequential", "Continuous"});
+		configButton(ADDR_STROBE_PARAM, "Addressing strobe");
 		configSwitch(DIRECTION_PARAM, 0.f, 4.f, 0.f, "Direction",
 			{"Forward", "Reverse", "Pendulum", "Random", "Brownian"});
 		configSwitch(CLK_SOURCE_PARAM, 0.f, 3.f, 0.f, "Clock source",
@@ -179,6 +181,7 @@ struct SpaceTimeHead : Module {
 		configParam(TIMECV_PARAM, -1.f, 1.f, 0.f, "Time CV amount", "%", 0.f, 100.f);
 		configSwitch(LOOP_PARAM, 0.f, 2.f, 1.f, "Loop mode",
 			{"One-shot", "Cycle first-last", "Full chain"});
+		configButton(DISPLAY_PARAM, "Display (reserved for Program selection feedback)");
 		configInput(START_INPUT, "Start (pulse; Sustain gate / Enable >5 V)");
 		configInput(STOP_INPUT, "Stop (pulse)");
 		configInput(ADVANCE_INPUT, "Advance (pulse)");
@@ -249,7 +252,7 @@ struct SpaceTimeHead : Module {
 	}
 
 	void processControl(float dt) {
-		int nextInstrument = clamp((int)std::round(params[INSTRUMENT_PARAM].getValue()), 0, 3);
+		int nextInstrument = spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
 		int nextHead = clamp((int)std::round(params[HEAD_PARAM].getValue()), 0, 7);
 		if (nextInstrument != instrumentId || nextHead != headIndex)
 			setBinding(nextInstrument, nextHead);
@@ -361,28 +364,14 @@ struct SpaceTimeHead : Module {
 		}
 	}
 
-	// ADDR_MODE is not a plain 3-state field: position 0 (Strobe) is
-	// momentary on real hardware and on VCV's own LatchSpringSwitch3 (spring-
-	// returns after release). A plain CKSSThree has no spring return, so
-	// here position 0 is instead treated purely as a trigger zone -- moving
-	// the switch to 0 fires one strobe pulse (mirroring MIDI CC7 mode 0's
-	// own "pulse, don't change continuous" behavior exactly) and the
-	// continuous/sequential state underneath is left untouched regardless of
-	// how long the switch dwells at 0. Only positions 1/2 participate in the
-	// feed-forward mirror against cfg.continuous.
+	// The visual Head lever has asymmetric semantics: Continuous is a latching
+	// boolean, while Strobe is momentary. They are separate parameters so both
+	// actions can be bound independently on VCV and MetaModule.
 	void processAddrMode() {
-		float knob = params[ADDR_MODE_PARAM].getValue();
-		if (addrModeStrobeTrigger.process(knob < 0.5f))
+		if (addrModeStrobeTrigger.process(params[ADDR_STROBE_PARAM].getValue()))
 			strobePending = true;
 		spacetime::HeadConfig& cfg = controller.config();
-		float target = cfg.continuous ? 2.f : 1.f;
-		if (target != shadowAddrMode) {
-			params[ADDR_MODE_PARAM].setValue(target);
-			shadowAddrMode = target;
-		} else if (knob >= 0.5f && knob != shadowAddrMode) {
-			cfg.continuous = knob > 1.5f;
-			shadowAddrMode = knob;
-		}
+		mirrorBool(ADDR_CONTINUOUS_PARAM, cfg.continuous, shadowAddrContinuous);
 	}
 
 	void setBinding(int nextInstrument, int nextHead) {
@@ -400,37 +389,7 @@ struct SpaceTimeHead : Module {
 		// tick, rather than assuming the old shadow values still apply to a
 		// different head.
 		shadowAddress = shadowAddrSource = shadowDirection = shadowClkSource =
-			shadowClkDiv = shadowTimeCv = shadowLoop = shadowAddrMode = -1000.f;
-	}
-
-	size_t get_display_text(int lightId, std::span<char> text) override {
-		if (lightId != STATUS_DISPLAY || text.empty())
-			return 0;
-		const char* linkName = coreLink == CoreLink::Linked ? "LINK" :
-			(coreLink == CoreLink::Duplicate ? "DUP" : "WAIT");
-		const char* runName = out.runState == spacetime::RUN_STOPPED ? "STOP" :
-			(out.runState == spacetime::RUN_HOLDING ? "HOLD" : "RUN");
-		const char* sourceNames[] = {"INT", "EXT CV", "MIDI", "VIRTUAL"};
-		const char* divisionNames[] = {"/16", "/8", "/4", "/2", "x1", "x2", "x4", "x8", "x16"};
-		const char* directionNames[] = {"FWD", "REV", "PEND", "RAND", "BROWN"};
-		const char* loopNames[] = {"1-SHOT", "F-L", "FULL"};
-		const spacetime::HeadConfig& cfg = controller.config();
-		int source = clamp(controller.clockSource(), 0, 3);
-		int division = clamp((int)cfg.clkDivIndex, 0, 8);
-		int direction = clamp((int)cfg.direction, 0, 4);
-		int loop = clamp((int)cfg.loopMode, 0, 2);
-		char buffer[128];
-		int length = std::snprintf(buffer, sizeof(buffer),
-			"ID %c HEAD %d%s\n%s %s S%02d\nCLK %s %s\nDIR %s LOOP %s",
-			(char)('A' + instrumentId), headIndex + 1, headConflict ? "!" : "",
-			linkName, runName, (int)out.currentStage + 1,
-			sourceNames[source], divisionNames[division],
-			directionNames[direction], loopNames[loop]);
-		if (length < 0)
-			return 0;
-		size_t copyLength = std::min(text.size(), (size_t)length);
-		std::copy(buffer, buffer + copyLength, text.begin());
-		return copyLength;
+			shadowClkDiv = shadowTimeCv = shadowLoop = shadowAddrContinuous = -1000.f;
 	}
 
 	// Every field except followMidiTransport is now a real Param (Rack
@@ -450,40 +409,40 @@ struct SpaceTimeHead : Module {
 		json_t* value = json_object_get(root, "followMidiTransport");
 		if (value)
 			controller.setFollowsMidiTransport(json_boolean_value(value));
+		value = json_object_get(root, "mmInstrumentId");
+		int nextInstrument = value ? spacetime::clampInstrumentId((int)json_integer_value(value)) : 0;
+		value = json_object_get(root, "mmHeadIndex");
+		int nextHead = value ? clamp((int)json_integer_value(value), 0, 7) : 0;
+		params[INSTRUMENT_PARAM].setValue((float)nextInstrument);
+		params[HEAD_PARAM].setValue((float)nextHead);
+		setBinding(nextInstrument, nextHead);
 	}
 };
 
 struct SpaceTimeHeadWidget : ModuleWidget {
 	SpaceTimeHeadWidget(SpaceTimeHead* module) {
-		using namespace LayoutHR;
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Head.svg")));
 
-		auto display = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(4.f, 14.2f)));
-		display->box.size = mm2px(Vec(83.44f, 27.f));
-		display->firstLightId = SpaceTimeHead::STATUS_DISPLAY;
-		display->font = "Default_10";
-		display->color = Colors565::White;
-		addChild(display);
+		static const float bx = 9.4f, pitch = 11.f;
+		for (int i = 0; i < 4; i++)
+			addParam(createParamCentered<LEDButton>(mm2px(Vec(bx + i * pitch, 21.5f)), module,
+				SpaceTimeHead::START_PARAM + i));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(16.4f, 30.5f)), module, SpaceTimeHead::RUN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(24.4f, 30.5f)), module, SpaceTimeHead::HOLD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(32.4f, 30.5f)), module, SpaceTimeHead::STOPPED_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(41.f, 30.5f)), module, SpaceTimeHead::LINK_LIGHT));
 
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(IH_X0, IH_KNOB_Y)), module,
-			SpaceTimeHead::INSTRUMENT_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(IH_X1, IH_KNOB_Y)), module,
-			SpaceTimeHead::HEAD_PARAM));
-
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(TR_X0 + 0 * TR_PITCH, TR_BTN_Y)), module, SpaceTimeHead::START_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(TR_X0 + 1 * TR_PITCH, TR_BTN_Y)), module, SpaceTimeHead::STOP_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(TR_X0 + 2 * TR_PITCH, TR_BTN_Y)), module, SpaceTimeHead::ADVANCE_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(TR_X0 + 3 * TR_PITCH, TR_BTN_Y)), module, SpaceTimeHead::RESET_PARAM));
-
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 0 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::ADDRESS_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(CFG_X0 + 1 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::ADDR_SOURCE_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(CFG_X0 + 2 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::ADDR_MODE_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 3 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::DIRECTION_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 4 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::CLK_SOURCE_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 5 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::CLK_DIV_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 6 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::TIMECV_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(CFG_X0 + 7 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::LOOP_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(10.f, 45.f)), module, SpaceTimeHead::ADDRESS_PARAM));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(25.4f, 45.f)), module, SpaceTimeHead::ADDR_SOURCE_PARAM));
+		addParam(createParamCentered<VCVLatch>(mm2px(Vec(41.f, 42.f)), module, SpaceTimeHead::ADDR_CONTINUOUS_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(41.f, 48.f)), module, SpaceTimeHead::ADDR_STROBE_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(10.f, 64.5f)), module, SpaceTimeHead::DIRECTION_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(25.4f, 64.5f)), module, SpaceTimeHead::CLK_SOURCE_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(41.f, 64.5f)), module, SpaceTimeHead::CLK_DIV_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(10.f, 78.f)), module, SpaceTimeHead::TIMECV_PARAM));
+		addParam(createParamCentered<CKSSThree>(mm2px(Vec(25.4f, 78.f)), module, SpaceTimeHead::LOOP_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(41.f, 78.f)), module, SpaceTimeHead::DISPLAY_PARAM));
 
 		static const int inputIds[8] = {
 			SpaceTimeHead::START_INPUT, SpaceTimeHead::STOP_INPUT,
@@ -491,18 +450,14 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 			SpaceTimeHead::ADDRESS_INPUT, SpaceTimeHead::CLK_INPUT,
 			SpaceTimeHead::TIMECV_INPUT, SpaceTimeHead::RESET_INPUT,
 		};
-		for (int i = 0; i < 8; i++)
-			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(IN_X0 + i * IN_PITCH, IN_JACK_Y)), module, inputIds[i]));
-
-		for (int i = 0; i < 7; i++)
-			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(OUT_X0 + i * OUT_PITCH, OUT_JACK_Y)), module,
-				SpaceTimeHead::CV_OUTPUT + i));
-
-		// Status belongs to the first functional row; keep the identity band clear.
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(60.f, 38.2f)), module, SpaceTimeHead::RUN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(68.f, 38.2f)), module, SpaceTimeHead::HOLD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(76.f, 38.2f)), module, SpaceTimeHead::STOPPED_LIGHT));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(84.f, 38.2f)), module, SpaceTimeHead::LINK_LIGHT));
+		for (int i = 0; i < 4; i++) {
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(bx + i * pitch, 92.f)), module, inputIds[i]));
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(bx + i * pitch, 100.4f)), module, inputIds[4 + i]));
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(bx + i * pitch, 108.8f)), module, SpaceTimeHead::CV_OUTPUT + i));
+		}
+		for (int i = 0; i < 3; i++)
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(bx + i * pitch, 117.2f)), module,
+				SpaceTimeHead::PULSE1_OUTPUT + i));
 	}
 
 	void appendContextMenu(Menu* menu) override {
@@ -510,13 +465,12 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
-		static const char* instrumentLabels[] = {"A", "B", "C", "D"};
 		menu->addChild(createSubmenuItem("Instrument ID", [=]() {
-			return std::string(instrumentLabels[module->instrumentId]) +
+			return std::string(1, spacetime::instrumentIdHex(module->instrumentId)) +
 				(module->headConflict ? " (duplicate head slot!)" : "");
 		}, [=](Menu* ids) {
-			for (int id = 0; id < 4; id++)
-				ids->addChild(createCheckMenuItem(instrumentLabels[id], "",
+			for (int id = 0; id < spacetime::kInstrumentIdCount; id++)
+				ids->addChild(createCheckMenuItem(std::string(1, spacetime::instrumentIdHex(id)), "",
 					[=]() { return module->instrumentId == id; },
 					[=]() {
 						module->params[SpaceTimeHead::INSTRUMENT_PARAM].setValue((float)id);
@@ -542,4 +496,4 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 
 } // namespace
 
-Model* modelSpaceTimeHead = createModel<SpaceTimeHead, SpaceTimeHeadWidget>(spacetime::MMHeadContract::slug);
+Model* modelSpaceTimeHead = createModel<SpaceTimeHead, SpaceTimeHeadWidget>(spacetime::NativeHeadContract::slug);

@@ -1,7 +1,7 @@
 # SpaceTime MetaModule Authoring Architecture
 
-**Status:** Accepted product direction; implementation specification and plan  
-**Date:** 2026-08-27
+**Status:** Accepted product direction; original-module authoring migration in progress
+**Date:** 2026-09-19
 **Scope:** MetaModule runtime modules, their VCV authoring twins, preset export,
 controller bindings, shared state, MIDI parity, and hardware verification  
 **Related documents:** `docs/ARCHITECTURE.md`,
@@ -68,14 +68,16 @@ The following decisions are accepted and are not implementation options:
 14. Head All is an optional singleton per Instrument ID. It has the same common
     controls and eight inputs as native VCV HEAD ALL, but no signal outputs and
     no HeadDSP.
-15. Native VCV's existing expander-chain modules and old patches remain
-    unchanged. A parallel, fully functional VCV Rack authoring family provides
-    the exact MetaModule module contracts.
-16. The portable authoring slugs are frozen as `MMProgram`, `MMStage4` and
-    `MMHead`. `MMHeadAll` is reserved for the deferred Head All module.
-17. The VCV authoring modules are complete playable SpaceTime modules, not
-    export-only parameter shells. A patch made from them must run and be
-    testable in VCV before it is exported to MetaModule.
+15. Native VCV's existing `Program`, `Stage4` and `Head` modules are the
+    MetaModule authoring modules. There is no user-visible parallel `MM*`
+    family.
+16. The portable authoring slugs are frozen as `Program`, `Stage4` and `Head`.
+    Stage4 retains its established parameter, input and output IDs. Program and
+    Head use the dual-action contracts described below; earlier development
+    patches and mappings are intentionally not compatible.
+17. A patch made from the original modules must run and be testable in VCV
+    before it is exported. The MetaModule implementation may use shared memory
+    instead of expanders, but must preserve the original controls and jacks.
 18. The existing MetaModule MIDI implementation is the accepted foundation.
     Complete MetaModule controller snapshot/live-feedback support follows after
     the three-module authoring family is operational.
@@ -85,7 +87,7 @@ The following decisions are accepted and are not implementation options:
 
 ### 3.1 Program/MIDI
 
-There is exactly one Program/MIDI owner for each Instrument ID A-D. It owns:
+There is exactly one Program/MIDI owner for each Instrument ID 0-F. It owns:
 
 - the fixed-capacity 64-stage table;
 - the active stage count;
@@ -105,23 +107,34 @@ parameter positions.
 Program's module state is the only serialized owner of the stage table and
 Program presets. Stage4 must never serialize another copy.
 
-### 3.2 Stage4 Viewer
+Every native three-position Program spring action is backed by two shared
+momentary parameters, Down/Remove and Up/Add. VCV overlays the two parameter
+hotspots on one visual lever; MetaModule renders those same IDs as separate
+buttons. Both directions can therefore be bound independently without a
+target-specific duplicate control surface.
+
+Head's addressing lever likewise uses two shared parameters, but preserves its
+different hardware semantics: `Continuous` is a latching boolean whose off
+state is Sequential, while `Strobe` is momentary. MetaModule hardware bindings
+must therefore latch the Continuous button and leave Strobe momentary.
+
+### 3.2 Stage4 Runtime Viewer
 
 Stage4 Viewer is an optional control-rate module with no jacks and no audio-rate
 DSP. Its minimum interface is:
 
 | Control | Range | Purpose |
 |---|---:|---|
-| Instrument ID | A-D | Select the Program owner |
-| Bank | 1-16 | Select stages 1-4, 5-8, ... 61-64 |
-| Focus | 1-4 | Select the stage targeted by Program modifiers |
+| Instrument ID | 0-F | Inherited from the VCV Program; context-menu override |
+| Bank | 1-16 | Inherited from Stage4's chain position; context-menu override |
+| Focus | 1-4 | Derived by moving a slider or Program selection |
 | Voltage 1-4 | 0-10 V | Edit the selected bank's stage voltages |
 | Time 1-4 | 0-1 | Edit the selected bank's normalized times |
 
-It displays bank range, focus, link/duplicate state, pitch/cents, nominal time
-and relevant stage flags. Moving one of its eight sliders also focuses that
-slider's stage. Explicit Focus remains available so flags can be edited without
-first disturbing a continuous value.
+Its compact panel displays link state, pitch/cents, nominal time and the stage
+edit/head-position indicators. Moving one of its eight sliders also focuses
+that slider's stage. Bank and Instrument ID remain editable in the context menu;
+Focus is reflected by the indicators rather than a dedicated faceplate knob.
 
 On a bank change or initial bind, Stage4 Viewer first reads Program and updates
 its eight parameters. Those programmatic parameter changes are marked as
@@ -372,39 +385,29 @@ has restored state and published a complete generation. They then pull state
 before enabling local edits. This specifically prevents stale Stage4 slider
 parameters from overwriting a freshly loaded Program preset.
 
-## 9. VCV Authoring Twins
+## 9. Original-Module Authoring
 
-The existing VCV modules keep their current slugs and expander behavior. New
-authoring modules have unique slugs shared exactly with their MetaModule
-counterparts. The frozen slugs are:
+The existing VCV modules keep their current slugs and expander behavior and
+are themselves the MetaModule authoring modules. The frozen slugs are:
 
 ```text
-MMProgram
-MMStage4
-MMHead
-MMHeadAll
+Program
+Stage4
+Head
 ```
 
-`MMProgram`, `MMStage4` and `MMHead` form the first implementation set.
-`MMHeadAll` reserves the namespace for the deferred fourth module. Once
-implemented, ParamId, InputId and OutputId orders are append-only.
-
-The VCV twins use the same Instrument-ID shared bus and the same ownership and
-reflection behavior as MetaModule. They are not expander-chain adapters or
-passive export facades. They run the real Program/MIDI, stage-editing and Head
-DSP paths in VCV Rack, expose the complete accepted controls and jacks, save and
-restore their musical state, and produce inspectable audio/CV behavior. A VCV
-preset built from them must therefore be playable and testable before export,
-then behave equivalently on MetaModule.
+VCV continues to use expander adjacency. Program records a portable table
+snapshot and broadcasts its Instrument ID through the chain so each Stage4 and
+Head records its resolved bank/head assignment. The MetaModule implementations
+restore that metadata and communicate through the shared-memory bus.
 
 Shared headers define all parameter, input and output indexes. Both adapters
 include those headers, and compile-time/static unit tests assert every index and
 count. Matching slugs without matching indexes is explicitly forbidden.
 
-The provisional MetaModule slugs `Program`, `Stage4`, `Head` and `Midi` already
-exist locally. Migration must be deliberate: either recreate development
-presets once under the new slugs, or retain hidden legacy wrappers long enough
-to load and convert them. Brand aliases cannot migrate module slugs.
+The former `MMProgram`, `MMStage4` and `MMHead` sources remain temporarily as
+unregistered migration references. They are not shown in VCV Rack and are not
+part of the MetaModule manifest.
 
 ## 10. Memory and CPU Budget
 
@@ -443,8 +446,8 @@ processing.
 2. Add shared module-ID contract headers.
 3. Add compile-time index/count tests.
 4. Capture current ARM `size`, package size and hardware CPU figures.
-5. Freeze new slugs and the Number of Stages default. **Done:**
-   `MMProgram`, `MMStage4`, `MMHead`; `MMHeadAll` reserved; 64 stages by default.
+5. Freeze the original slugs and the Number of Stages default. **Done:**
+   `Program`, `Stage4`, `Head`; 64 stages by default.
 
 **Exit:** contracts compile on host, VCV and ARM; no current VCV patch changes.
 
@@ -465,10 +468,9 @@ processing.
 2. Retain the accepted incoming, clock/transport and outgoing MIDI behavior.
 3. Verify byte-for-byte incoming route parity against native VCV.
 4. Add generation-based Program publication after patch/preset load.
-5. Build the fully functional `MMProgram` VCV authoring twin against the shared
-   contract.
+5. Add portable snapshot and Instrument ID metadata to the original Program.
 
-**Exit:** `MMProgram` owns identical portable musical state and MIDI behavior in
+**Exit:** `Program` owns identical portable musical state and MIDI behavior in
 VCV and MetaModule; physical endpoint selection remains target-specific.
 
 ### Phase 3 - Stage4 Viewer
@@ -497,7 +499,7 @@ one identical head state; eight Heads distribute across hardware cores.
 
 ### Phase 5 - Portable preset authoring
 
-1. Build a VCV patch with `MMProgram`, `MMStage4` and one to eight `MMHead`
+1. Build a VCV patch with `Program`, one or more `Stage4` modules and one to eight `Head`
    instances.
 2. Map representative knobs, buttons and hardware jacks.
 3. Export YML and inspect module/parameter/jack indexes.
@@ -511,7 +513,7 @@ state repair.
 
 ### Phase 6 - MetaModule controller feedback
 
-1. Integrate full `MidiFeedbackCore` into MetaModule `MMProgram`.
+1. Integrate full `MidiFeedbackCore` into MetaModule `Program`.
 2. Preserve the accepted controller capability negotiation and snapshot
    protocol.
 3. Verify DROID snapshot and live-update parity for all 64 stages and eight
@@ -528,7 +530,7 @@ VCV without changing the established performance MIDI map.
 3. Add aggregate/mixed-state reflection.
 4. Add common-signal normaling to unpatched Head inputs.
 5. Preserve channel 9 MIDI behavior with or without the module.
-6. Build the fully functional `MMHeadAll` VCV authoring twin.
+6. Add the MetaModule runtime counterpart for the existing `HeadAll` module.
 
 **Exit:** panel, CV and channel 9 operations produce the same all-head results.
 
@@ -620,13 +622,13 @@ Accepted on 2026-08-22/23:
 - one DSP owner per claimed head;
 - optional Head All singleton per Instrument ID;
 - MIDI behavior remains identical to native VCV;
-- a separate, index-identical and fully functional VCV authoring family is
-  required.
+- the original VCV modules are the index-identical authoring family.
 
-Accepted on 2026-08-27:
+Superseded on 2026-09-19:
 
-- authoring slugs are `MMProgram`, `MMStage4` and `MMHead`;
-- `MMHeadAll` is reserved but its implementation is deferred;
+- the earlier `MMProgram`, `MMStage4` and `MMHead` authoring slugs were replaced
+  by direct use of `Program`, `Stage4` and `Head`;
+- the MetaModule `HeadAll` implementation remains deferred;
 - the VCV authoring modules must be playable and testable in VCV Rack;
 - the existing MetaModule MIDI solution is retained;
 - complete MetaModule controller feedback follows after the initial portable

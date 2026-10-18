@@ -67,7 +67,8 @@ public:
 	void set_param(int paramId, float value) override {
 		if (paramId != BusIdParam)
 			return;
-		unsigned next = std::min(3u, (unsigned)(value * 4.f));
+		unsigned next = std::min((unsigned)spacetime::kInstrumentIdCount - 1,
+			(unsigned)(value * (float)spacetime::kInstrumentIdCount));
 		if (next == busId_)
 			return;
 		unregisterEndpoint();
@@ -78,7 +79,8 @@ public:
 	}
 
 	float get_param(int paramId) const override {
-		return paramId == BusIdParam ? (float)busId_ / 3.f : 0.f;
+		return paramId == BusIdParam ?
+			(float)busId_ / (float)(spacetime::kInstrumentIdCount - 1) : 0.f;
 	}
 
 	void set_input(int inputId, float value) override {
@@ -209,9 +211,10 @@ void registerProbe(const char* slug, const char* description, const char* panel)
 
 	AltParamChoiceLabeled busId;
 	busId.short_name = "Instrument ID";
-	busId.num_pos = 4;
+	busId.num_pos = spacetime::kInstrumentIdCount;
 	busId.default_value = 0;
-	busId.pos_names = {"A", "B", "C", "D"};
+	busId.pos_names = {"0", "1", "2", "3", "4", "5", "6", "7",
+		"8", "9", "A", "B", "C", "D", "E", "F"};
 	elements[0] = busId;
 	indices[0] = {.param_idx = BusIdParam};
 
