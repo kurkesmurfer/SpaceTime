@@ -119,6 +119,9 @@ programming. While the lever is held, any programming press applies to
 with a mouse, the context menu offers *Apply next edit to ALL stages* — the
 display shows `AL` until the next gesture. CLEAR resets every stage's
 programming to defaults; sliders are never moved by Clear.
+For MIDI remote control, send CC 92 on the PROGRAM-controls channel: 127 holds
+Select and 0 releases it. While held, modifier CCs apply to all active stages;
+slider CCs, stage navigation, Clear and presets remain unaffected.
 
 **Output voltage modifiers** (per stage; up adds, down removes):
 

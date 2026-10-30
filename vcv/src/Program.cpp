@@ -453,6 +453,9 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 				else if (ev.type == MIDI_PROG_BULK_ARM) {
 					logic.armBulkOnce();
 				}
+				else if (ev.type == MIDI_PROG_SELECT_HOLD) {
+					logic.setSelectHeld(ev.value >= 64);
+				}
 				else if (ev.type == MIDI_PROG_CLEAR) {
 					room = kMaxOpsPerTick - om.opCount;
 					int n = logic.emitClear(table, buf, room);

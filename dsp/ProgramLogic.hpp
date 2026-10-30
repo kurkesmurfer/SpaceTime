@@ -87,7 +87,7 @@ struct PresetSlot {
 class ProgramLogic {
 public:
 	ProgramLogic()
-		: selected_(0), selectOverride_(-1), bulkOnce_(false), scrollDir_(0),
+		: selected_(0), selectOverride_(-1), bulkOnce_(false), selectHeld_(false), scrollDir_(0),
 		  holdTimer_(0.f), repeatTimer_(0.f), pendingCount_(0), pendingHead_(0) {}
 
 	// ---- Stage-select scroll -------------------------------------------------
@@ -142,6 +142,8 @@ public:
 	void armBulkOnce() { bulkOnce_ = true; }
 	void disarmBulkOnce() { bulkOnce_ = false; }
 	bool bulkArmed() const { return bulkOnce_; }
+	void setSelectHeld(bool held) { selectHeld_ = held; }
+	bool selectHeld() const { return selectHeld_; }
 
 	// ---- Modifier gestures -> edit ops ----------------------------------------
 	// dir: +1 = switch pressed up (add), -1 = pressed down (remove).
@@ -315,6 +317,7 @@ private:
 	int selected_;
 	int selectOverride_;
 	bool bulkOnce_;
+	bool selectHeld_;
 	int scrollDir_;
 	float holdTimer_, repeatTimer_;
 	ScaleKey scaleKey_;
@@ -340,13 +343,14 @@ private:
 			selected_ = 0;
 	}
 
-	// Gesture targets: all stages while scrolling or one-shot armed (bulk
-	// edit), else the selected/displayed stage.
+	// Modifier targets: all stages while the panel selector is held, MIDI
+	// Hold Select is active, or one-shot bulk edit is armed; otherwise the
+	// selected/displayed stage.
 	template <typename F>
 	void forEachTarget(const StageTable& t, F f) {
 		if (t.count == 0)
 			return;
-		if (scrollActive() || bulkOnce_) {
+		if (scrollActive() || selectHeld_ || bulkOnce_) {
 			for (int s = 0; s < t.count; s++)
 				f(s);
 			bulkOnce_ = false;  // consumed by this gesture

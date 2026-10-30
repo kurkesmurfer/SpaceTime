@@ -242,6 +242,9 @@ private:
 			case MIDI_PROG_BULK_ARM:
 				program_.armBulkOnce();
 				break;
+			case MIDI_PROG_SELECT_HOLD:
+				program_.setSelectHeld(event.value >= 64);
+				break;
 			case MIDI_PROG_CLEAR:
 				count = program_.emitClear(table_, ops, kMaxOpsPerTick);
 				applyOps(ops, count);

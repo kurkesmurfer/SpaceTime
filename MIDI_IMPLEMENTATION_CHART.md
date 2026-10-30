@@ -67,10 +67,18 @@ These messages use the PROGRAM-controls channel.
 | 65 | Select next stage | `64-127` | One stage forward, circular |
 | 66 | Clear | `64-127` | Clears all stages to defaults |
 | 67 | Bulk arm | `64-127` | The next PROGRAM edit applies to all stages |
+| 92 | Hold Select | `64-127` held, `0-63` released | Modifier CCs 68-88 apply to all stages while held; release returns them to the selected stage |
 
-Values below 64 are ignored, so `127` press / `0` release is safe.
+For CCs 64-67, values below 64 are ignored, so `127` press / `0` release is
+safe. Hold Select (CC 92) is momentary and uses both value ranges as its state.
 
-### 3.3 Selected-stage gestures
+### 3.3 Selected-stage gestures and modifiers
+
+Modifier CCs 68-88 normally target the selected stage. While Hold Select (CC
+92) is held at 64-127, those modifier presses target every active stage;
+releasing CC 92 to 0-63 restores selected-stage behavior. This hold affects
+modifier presses only: stage-slider CCs, stage selection, Clear, preset/key/
+scale controls and other PROGRAM actions keep their normal behavior.
 
 These are relative hardware-lever gestures. High and low are both active.
 

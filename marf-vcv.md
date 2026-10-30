@@ -281,6 +281,9 @@ The separate PROGRAM-controls channel uses:
 - CC 89: Key C..B (12 equal bins over 0..127).
 - CC 90: Scale Major / Minor / Chromatic (3 equal bins over 0..127).
 - CC 91: Pulse Retrig Off / On (value <64 / >=64).
+- CC 92: Hold Select (>=64 held, <64 released); while held, modifier CCs 68-88
+  apply their modifier to all active stages. Slider CCs, stage selection,
+  Clear, presets, key/scale and other PROGRAM actions are unaffected.
 
 Key and Scale set the current PROGRAM state directly; they do not simulate the
 panel's modal KEY/SCALE button sequence. Pulse Retrig moves the visible PROGRAM

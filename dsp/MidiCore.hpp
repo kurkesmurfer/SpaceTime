@@ -66,6 +66,7 @@ public:
 	MidiProgramEvent programEvents[kMaxMidiProgramEvents];
 	uint8_t programEventCount;
 	uint32_t programEventSeq;
+	bool selectHeld_;
 
 	int lastStatus, lastChannel, lastNumber, lastValue;
 	uint8_t lastRoute;
@@ -76,7 +77,7 @@ public:
 	MidiCore()
 		: controlChannel(15), sliderChannel(14), moveStageSliders(true),
 		  midiClockSeq(0), midiStartSeq(0), midiStopSeq(0), midiContinueSeq(0),
-		  programEventCount(0), programEventSeq(0),
+		  programEventCount(0), programEventSeq(0), selectHeld_(false),
 		  lastStatus(-1), lastChannel(-1), lastNumber(-1), lastValue(-1),
 		  lastRoute(MIDI_ROUTE_NONE), outNoteCount(0), outCcCount(0) {
 		for (int h = 0; h < kMaxHeads; h++) {
@@ -340,6 +341,13 @@ private:
 			pushProgramEvent(MIDI_PROG_SET_SCALE, (uint8_t)scaleIndex(value, 2), value);
 		else if (cc == 91)
 			pushProgramEvent(MIDI_PROG_SET_PULSE_RETRIG, value >= 64 ? 1 : 0, value);
+		else if (cc == 92) {
+			bool held = value >= 64;
+			if (held != selectHeld_) {
+				selectHeld_ = held;
+				pushProgramEvent(MIDI_PROG_SELECT_HOLD, 0, value);
+			}
+		}
 	}
 
 	void handleHeadCc(uint8_t channel, uint8_t cc, uint8_t value) {
