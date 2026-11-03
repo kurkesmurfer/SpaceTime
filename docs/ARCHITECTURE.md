@@ -128,6 +128,7 @@ Because MetaModule modules cannot rely on physical adjacency, the equivalent tra
 | `MetaModuleBusProbeRegistry` | exclusive-owner Core/Remote/aux-role slots + a float mailbox each way | `BusProbeCore`/`BusProbeRemote` (diagnostic only) |
 | `MetaModuleTimingBusRegistry` | per-instrument `TimingSnapshot` (8-head source/stage/run-state/clock telemetry) | `SpaceTimeTimingMonitor`; also `findSoleCore()` for auto-bind |
 | `MetaModuleStageTableRegistry` | the full `StageTable` + `ExtInputs` context | `SpaceTimeHead` (EB8) |
+| `MetaModuleStageTimeRegistry` | selected stage + per-stage Free/Sync mode command | Stage Time sidecar ↔ Program |
 | `MetaModuleHeadMidiRegistry` / `MetaModuleMidiStatusRegistry` | per-head MIDI CC rows / MIDI status snapshot | `SpaceTimeHead`, `SpaceTimeMidi` |
 | `MetaModuleStageBankRegistry` | one `BlockSegment` (4 stages) per bank index | `SpaceTimeStage4` publishes, `SpaceTimeProgram` reads/arbitrates |
 | `MetaModuleHeadRegistry` | per-head `HeadConfig` in, `HeadOut` back | future per-head relocation (EB8), exclusive-owner claim per head slot |
@@ -549,7 +550,7 @@ classDiagram
     SpaceTimeHead *-- "1" HeadRemoteController_
 ```
 
-*Two entirely separate MetaModule integration styles coexist in this plugin binary: the five musical modules use the Rack-compatibility `Module`/`ModuleWidget` layer (same API surface VCV uses), while the disposable `BusProbeCore`/`BusProbeRemote` diagnostic pair is built directly on MetaModule's native, lower-level `CoreProcessor` interface — a deliberate choice for that pair only, to test the shared-memory transport primitives closer to the metal.*
+*Two entirely separate MetaModule integration styles coexist in this plugin binary: the six musical modules use the Rack-compatibility `Module`/`ModuleWidget` layer (same API surface VCV uses), while the disposable `BusProbeCore`/`BusProbeRemote` diagnostic pair is built directly on MetaModule's native, lower-level `CoreProcessor` interface — a deliberate choice for that pair only, to test the shared-memory transport primitives closer to the metal.*
 
 ---
 
@@ -559,7 +560,7 @@ classDiagram
 
 | File | Key types | Contents |
 |---|---|---|
-| `StageTable.hpp` | `ProgramWord`, `StageTable`, `EditOp`, `Field`, `BlockSegment` | Program-word bit layout (frozen v1), the `Field` wire-format enum (append-only), the stage table data model, generic field get/set, `apply()`, `concatenate()`. |
+| `StageTable.hpp` | `ProgramWord`, `StageTable`, `EditOp`, `Field`, `BlockSegment` | Program-word bit layout v2 (bit 19 stores per-stage Sync mode), append-only `Field` wire format, stage table data model, generic field get/set, `apply()`, `concatenate()`. |
 | `Chain.hpp` | `Globals`, `ScaleKey`, `HeadStatus`, `HeadAllState`, `MidiProgramEvent`, the four `*Msg` structs, `NeighborView`, `ChainLayout` | The expander-chain wire protocol: message structs and the pure relay/enumeration functions (`blockRelayLeft/Right`, `headRelayLeft/Right`, `pushOp`, `applyOpsToSegment`, `enumerateChain`). |
 | `HeadDSP.hpp` | `Behaviour`, `ExtInputs`, `HeadConfig`, `HeadSignals`, `HeadOut`, `HeadDSP` | The Function Generator core: tick-driven, sample-rate-agnostic state machine (direction modes, loop modes, slew, quantizer, EOC, external clock div/mult, stop/sustain/enable stage semantics, retrigger notch). All open hardware-interpretation questions are isolated in `kBehaviour`. |
 | `ProgramLogic.hpp` | `SliderTakeover`, `PresetSlot`, `ProgramLogic` | Programming-section logic: stage-select scroll/autoscroll, the 12 modifier-gesture emitters, Limited/time-range bank emitters, Clear, 12-slot presets with budget-drained load, bulk-edit targeting. |
@@ -599,7 +600,7 @@ classDiagram
 
 | File | Key types | Contents |
 |---|---|---|
-| `plugin.cpp` | `init()` / `init_SpaceTime()` | Plugin entry point; registers the 5 musical models and initializes the probe pair. Handles both the simulator's (`METAMODULE_BUILTIN`) and real-hardware init conventions. |
+| `plugin.cpp` | `init()` / `init_SpaceTime()` | Plugin entry point; registers the 6 musical models and initializes the probe pair. Handles both the simulator's (`METAMODULE_BUILTIN`) and real-hardware init conventions. |
 | `RemoteBus.hpp` / `RemoteBus.cpp` | externs for the 5 EB registries | Single shared-plugin-memory definition point for `headRegistry`, `stageTableRegistry`, `headMidiRegistry`, `midiStatusRegistry`, `stageBankRegistry`. |
 | `TimingBus.hpp` / `TimingBus.cpp` | extern `timingBusRegistry` | Same pattern for the timing telemetry bus. |
 | `Program.cpp` | `SpaceTimeProgram`, `SpaceTimeProgramWidget`, `RackMidiSink` | Fused PROGRAM (§2.2). Every VCV Program spring lever uses the same shared Down/Up parameter IDs, rendered as explicit button pairs on MetaModule, plus `dsp::SpaceTimeEngine`. |
@@ -655,7 +656,7 @@ Run via `test/Makefile` (host `g++`, produces `test/run`); `check.sh` at the rep
 
 Two compatibility contracts normally protect old patches against new code:
 
-1. **`Field` enum** (`StageTable.hpp`) — the edit-op wire format. New fields (`ClearWord`, `ProgramWord` itself were appended for WP6) may only be added at the end; existing values/bit positions are frozen forever (program-word layout is explicitly versioned, `kProgramLayoutVersion = 1`).
+1. **`Field` enum** (`StageTable.hpp`) — the edit-op wire format. New fields (`ClearWord`, `ProgramWord` itself were appended for WP6) may only be added at the end; existing values/bit positions are frozen forever (program-word layout is explicitly versioned, `kProgramLayoutVersion = 2`, with bit 19 assigned to per-stage synchronized time).
 2. **Module `ParamId`/`InputId`/`LightId` enums** — fields are normally appended so old patch JSON keeps loading correctly. The deliberate 2.0.5/2.0.6 exceptions are Program's thirteen dual-action levers and Head's split Continuous/Strobe addressing lever. Peet explicitly retired compatibility with earlier development patches so VCV mapping and MetaModule hardware binding could share correct contracts.
 
 ---

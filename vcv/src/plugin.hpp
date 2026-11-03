@@ -53,6 +53,7 @@ extern Model* modelStage4;
 extern Model* modelHead;
 extern Model* modelHeadAll;
 extern Model* modelMidi;
+extern Model* modelStageTime;
 extern Model* modelGlueLeft;
 extern Model* modelGlueRight;
 extern Model* modelWidgetTest;  // WP3 dev-only; hide at release (WP8)

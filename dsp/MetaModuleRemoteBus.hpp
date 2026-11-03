@@ -214,6 +214,65 @@ private:
 	ExpanderSnapshot<kContextFieldCount> contextBuses_[kBusCount];
 };
 
+// Selected-stage timing mode commands from the small Stage Time sidecar to
+// Program. The command targets the Program's current selected stage at send
+// time; Program remains the sole owner and publisher of the stage table.
+class MetaModuleStageTimeRegistry {
+public:
+	static const unsigned kBusCount = kInstrumentIdCount;
+	static const unsigned kFieldCount = 2; // stage index, sync enabled
+	static const unsigned kSelectionFieldCount = 2;
+
+	void publishSelection(unsigned busIndex, uint8_t stage, bool sync) {
+		uint32_t fields[kSelectionFieldCount] = {stage, sync ? 1u : 0u};
+		selectionBus(busIndex).publish(fields);
+	}
+
+	bool readSelection(unsigned busIndex, uint32_t& sequence, uint8_t& stage, bool& sync) {
+		ExpanderSnapshot<kSelectionFieldCount>& target = selectionBus(busIndex);
+		uint32_t before = target.heartbeat();
+		if (before == 0) return false;
+		uint32_t fields[kSelectionFieldCount];
+		if (!target.read(fields) || before != target.heartbeat()) return false;
+		sequence = before;
+		stage = (uint8_t)fields[0];
+		sync = fields[1] != 0;
+		return true;
+	}
+
+	void publishMode(unsigned busIndex, uint8_t stage, bool sync) {
+		uint32_t fields[kFieldCount] = {stage, sync ? 1u : 0u};
+		bus(busIndex).publish(fields);
+	}
+
+	bool readMode(unsigned busIndex, uint32_t& sequence, uint8_t& stage, bool& sync) {
+		ExpanderSnapshot<kFieldCount>& target = bus(busIndex);
+		uint32_t before = target.heartbeat();
+		if (before == 0)
+			return false;
+		uint32_t fields[kFieldCount];
+		if (!target.read(fields))
+			return false;
+		uint32_t after = target.heartbeat();
+		if (before != after)
+			return false;
+		sequence = after;
+		stage = (uint8_t)fields[0];
+		sync = fields[1] != 0;
+		return true;
+	}
+
+private:
+	ExpanderSnapshot<kFieldCount>& bus(unsigned index) {
+		return buses_[index < kBusCount ? index : 0];
+	}
+	ExpanderSnapshot<kSelectionFieldCount>& selectionBus(unsigned index) {
+		return selectionBuses_[index < kBusCount ? index : 0];
+	}
+	ExpanderSnapshot<kFieldCount> buses_[kBusCount];
+	ExpanderSnapshot<kSelectionFieldCount> selectionBuses_[kBusCount];
+};
+
 // ---- Per-head MIDI CC + shared transport (Core -> HeadRemote, EB8) --------
 // VCV's Midi.cpp is the sole MIDI ingestion point and forwards per-head CC
 // plus the shared transport counters through the expander chain, addressed
@@ -587,7 +646,7 @@ private:
 // ---- Heads (HeadRemote, kHeadCount slots per instrument) -------------------
 
 struct MetaModuleHeadConfigBus {
-	static const unsigned kFieldCount = 8;        // HeadConfig's eight fields
+	static const unsigned kFieldCount = 9;        // HeadConfig's fields
 	static const unsigned kOutputFieldCount = 10; // HeadOut's ten fields
 
 	std::atomic<uint32_t> owner{0};
@@ -729,6 +788,7 @@ private:
 		fields[5] = config.clkDivIndex;
 		fields[6] = floatToBits(config.timeCvAmount);
 		fields[7] = config.loopMode;
+		fields[8] = config.clockSource;
 	}
 
 	static void unpackHeadConfig(const uint32_t (&fields)[MetaModuleHeadConfigBus::kFieldCount],
@@ -741,6 +801,7 @@ private:
 		config.clkDivIndex = (uint8_t)fields[5];
 		config.timeCvAmount = bitsToFloat(fields[6]);
 		config.loopMode = (uint8_t)fields[7];
+		config.clockSource = (uint8_t)fields[8];
 	}
 
 	static void packHeadOut(const HeadOut& out,

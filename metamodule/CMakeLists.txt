@@ -27,6 +27,7 @@ target_sources(SpaceTime PRIVATE
         src/RemoteBus.cpp
         src/Head.cpp
         src/Stage4.cpp
+        src/StageTime.cpp
         src/Midi.cpp
         src/Probe.cpp
         src/plugin.cpp)

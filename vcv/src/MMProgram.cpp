@@ -3,6 +3,7 @@
 #include "SpaceTimeEngine.hpp"
 #include "MMModuleContracts.hpp"
 #include "MMBus.hpp"
+#include "MMProgramModifierCatalog.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -82,6 +83,7 @@ struct SpaceTimeProgram : Module {
 	static_assert((int)STAGE_STEP_DOWN_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_DOWN_PARAM, "MMProgram stage-step ParamId drift");
 		static_assert((int)STAGE_STEP_UP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_UP_PARAM, "MMProgram stage-step UP ParamId drift");
 	static_assert((int)MODIFIER_PARAMS == (int)spacetime::MMProgramContract::MODIFIER_PARAMS, "MMProgram modifier ParamId drift");
+	static_assert((int)LTD_PARAMS - (int)MODIFIER_PARAMS == spacetime::kMMProgramModifierCount, "MMProgram modifier count drift");
 	static_assert((int)STAGE_BANKS_PARAM == (int)spacetime::MMProgramContract::STAGE_BANKS_PARAM, "MMProgram stage-count ParamId drift");
 	static_assert((int)PARAMS_LEN == (int)spacetime::MMProgramContract::PARAMS_LEN, "MMProgram ParamId count drift");
 	static_assert((int)EXT_INPUTS == (int)spacetime::MMProgramContract::EXT_INPUTS && (int)INPUTS_LEN == (int)spacetime::MMProgramContract::INPUTS_LEN, "MMProgram InputId drift");
@@ -112,32 +114,9 @@ struct SpaceTimeProgram : Module {
 		LIGHTS_LEN
 	};
 
-	// GESTURE_UP_PARAMS/GESTURE_DOWN_PARAMS index -> dsp/StageTable.hpp
-	// Field, same order as VCV Program.cpp's gestureMap (QUANTIZE/SLOPE/
-	// RANGE/VSOURCE/STOP/SUSTAIN/ENABLE/FIRST/LAST/TSOURCE/PULSE1/PULSE2).
-	static const int kModFieldCount = 12;
-	static constexpr spacetime::Field kModFields[kModFieldCount] = {
-		spacetime::Field::Quantize, spacetime::Field::Slew, spacetime::Field::Range,
-		spacetime::Field::VoltageSource, spacetime::Field::Stop, spacetime::Field::Sustain,
-		spacetime::Field::Enable, spacetime::Field::First, spacetime::Field::Last,
-		spacetime::Field::TimeSource, spacetime::Field::Pulse1, spacetime::Field::Pulse2,
-	};
-	static constexpr const char* kModFieldNames[kModFieldCount] = {
-		"Quantize", "Slew", "Range", "Voltage source", "Stop", "Sustain",
-		"Enable", "First", "Last", "Time source", "Pulse 1", "Pulse 2",
-	};
-	// Down/Up tooltip pairs, exactly matching VCV Program.cpp's spring3
-	// label text per field (vcv/src/Program.cpp's configSpring3 calls).
-	static constexpr const char* kModDownLabels[kModFieldCount] = {
-		"Continuous", "Reduce slew", "Half (0-5 V)", "Internal",
-		"Remove", "Remove", "Remove", "Remove", "Remove",
-		"Internal (slider + range)", "Remove from stage", "Remove from stage",
-	};
-	static constexpr const char* kModUpLabels[kModFieldCount] = {
-		"Quantize", "Add slew", "Full (0-10 V)", "External (slider selects A-D)",
-		"Add", "Add", "Add", "Set", "Set",
-		"External (A-D CV)", "Add to stage", "Add to stage",
-	};
+	// Modifier field and label metadata is shared with the standalone
+	// MetaModule implementation in dsp/MMProgramModifierCatalog.hpp.
+	enum { kModFieldCount = spacetime::kMMProgramModifierCount };
 
 	spacetime::SpaceTimeEngine engine;
 	midi::InputQueue midiInput;
@@ -225,7 +204,9 @@ struct SpaceTimeProgram : Module {
 			// compare in process() re-arms per press on both hosts.
 			configParam<SwitchQuantity>(MODIFIER_PARAMS + i, 0.f, 2.f, 1.f,
 				string::f("%s (down: %s / up: %s)",
-					kModFieldNames[i], kModDownLabels[i], kModUpLabels[i]),
+					spacetime::kMMProgramModifierNames[i],
+					spacetime::kMMProgramModifierDownLabels[i],
+					spacetime::kMMProgramModifierUpLabels[i]),
 				"off", 0.f, 1.f, 2.f);
 		}
 		{
@@ -363,7 +344,7 @@ struct SpaceTimeProgram : Module {
 			for (int i = 0; i < kModFieldCount; i++)
 				if (modTrigger[i].process(params[MODIFIER_PARAMS + i].getValue()))
 					applyOps(engine.program().emitStep(
-						kModFields[i], engine.table(), opsBuffer, kOpsBufferLen));
+						spacetime::kMMProgramModifierFields[i], engine.table(), opsBuffer, kOpsBufferLen));
 			for (int i = 0; i < 5; i++)
 				if (ltdTrigger[i].process(params[LTD_PARAMS + i].getValue()))
 					applyOps(engine.program().emitLimited(i, engine.table(), opsBuffer, kOpsBufferLen));
@@ -756,7 +737,7 @@ struct SpaceTimeProgram : Module {
 				table.time[stage] = clamp((float)json_number_value(value), 0.f, 1.f);
 			if (words && (value = json_array_get(words, stage))) {
 				uint32_t bits = (uint32_t)json_integer_value(value);
-				if (bits < (1u << 19))
+				if (bits < (1u << 20))
 					table.program[stage].bits = bits;
 			}
 		}

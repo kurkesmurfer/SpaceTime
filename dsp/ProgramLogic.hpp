@@ -180,6 +180,32 @@ public:
 		return n;
 	}
 
+	bool applyToAllStages() const {
+		return scrollActive() || selectHeld_ || bulkOnce_;
+	}
+
+	// Set a boolean/integer program field at the explicit selected stage, or
+	// across the whole table when the standard Program apply-all gesture is
+	// active. A one-shot bulk edit is consumed by this edit just like any other
+	// Program modifier.
+	int emitSetField(Field field, uint32_t value, const StageTable& t,
+			uint8_t selectedStage, EditOp* out, int maxOps) {
+		if (maxOps <= 0 || t.count == 0)
+			return 0;
+		bool all = applyToAllStages();
+		int n = 0;
+		for (int stage = 0; stage < t.count; ++stage) {
+			if (!all && stage != selectedStage)
+				continue;
+			uint32_t current = 0;
+			if (getProgramField(t.program[stage], field, current) && current != value && n < maxOps)
+				out[n++] = EditOp((uint8_t)stage, field, (float)value);
+		}
+		if (all && bulkOnce_)
+			bulkOnce_ = false;
+		return n;
+	}
+
 	// MMProgram momentary step buttons: every press = advance this field one
 	// step, wrapping at the top. Booleans toggle (on->off), 2-state fields
 	// flip, Slew cycles 0->1->2->0, Range flips FULL<->HALF. Mirror of

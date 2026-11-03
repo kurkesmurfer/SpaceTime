@@ -56,13 +56,35 @@ inline bool modelIs(rack::engine::Module* m, rack::plugin::Model* m1,
 		(m3 && m->model == m3));
 }
 
+// Stage Time is an out-of-band shared-state control surface. When placed in
+// the horizontal chain it must not terminate the expander topology, so chain
+// participants look through it to the next actual chain module.
+inline rack::engine::Module* chainNeighbor(rack::engine::Module* self, bool right) {
+	if (!self) return NULL;
+	rack::engine::Module* n = right ? self->rightExpander.module : self->leftExpander.module;
+	int guard = 0;
+	while (n && n->model == modelStageTime && guard++ < 16)
+		n = right ? n->rightExpander.module : n->leftExpander.module;
+	return n;
+}
+
+inline bool leftModelIs(rack::engine::Module* self, rack::plugin::Model* m1,
+		 rack::plugin::Model* m2 = NULL, rack::plugin::Model* m3 = NULL) {
+	return modelIs(chainNeighbor(self, false), m1, m2, m3);
+}
+
+inline bool rightModelIs(rack::engine::Module* self, rack::plugin::Model* m1,
+		  rack::plugin::Model* m2 = NULL, rack::plugin::Model* m3 = NULL) {
+	return modelIs(chainNeighbor(self, true), m1, m2, m3);
+}
+
 // Sender-side: producer buffer of the RIGHT neighbour (its leftExpander faces
 // us). Returns NULL if the neighbour is absent or not an expected model.
 template <typename T>
 T* rightNeighborProducer(rack::engine::Module* self, rack::plugin::Model* m1,
                          rack::plugin::Model* m2 = NULL,
                          rack::plugin::Model* m3 = NULL) {
-	rack::engine::Module* n = self->rightExpander.module;
+	rack::engine::Module* n = chainNeighbor(self, true);
 	if (!modelIs(n, m1, m2, m3))
 		return NULL;
 	return (T*)n->leftExpander.producerMessage;
@@ -72,20 +94,22 @@ template <typename T>
 T* leftNeighborProducer(rack::engine::Module* self, rack::plugin::Model* m1,
                         rack::plugin::Model* m2 = NULL,
                         rack::plugin::Model* m3 = NULL) {
-	rack::engine::Module* n = self->leftExpander.module;
+	rack::engine::Module* n = chainNeighbor(self, false);
 	if (!modelIs(n, m1, m2, m3))
 		return NULL;
 	return (T*)n->rightExpander.producerMessage;
 }
 
 inline void flipRightNeighbor(rack::engine::Module* self) {
-	if (self->rightExpander.module)
-		self->rightExpander.module->leftExpander.requestMessageFlip();
+	rack::engine::Module* n = chainNeighbor(self, true);
+	if (n)
+		n->leftExpander.requestMessageFlip();
 }
 
 inline void flipLeftNeighbor(rack::engine::Module* self) {
-	if (self->leftExpander.module)
-		self->leftExpander.module->rightExpander.requestMessageFlip();
+	rack::engine::Module* n = chainNeighbor(self, false);
+	if (n)
+		n->rightExpander.requestMessageFlip();
 }
 
 // ---- NeighborView over the live Rack module graph ---------------------------
@@ -124,8 +148,7 @@ struct RackNeighborView : NeighborView {
 	rack::engine::Module* next(rack::engine::Module* m, bool right) const {
 		if (!m)
 			return NULL;
-		rack::engine::Module* neighbor = right ? m->rightExpander.module :
-			m->leftExpander.module;
+		rack::engine::Module* neighbor = chainNeighbor(m, right);
 		if ((right && neighbor && neighbor->model == modelGlueRight) ||
 		    (!right && neighbor && neighbor->model == modelGlueLeft))
 			return gluePartnerOutward(neighbor);

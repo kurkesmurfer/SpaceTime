@@ -9,6 +9,7 @@ extern Model* modelSpaceTimeTimingMonitor;
 extern Model* modelSpaceTimeHead;
 extern Model* modelSpaceTimeStage4;
 extern Model* modelSpaceTimeMidi;
+extern Model* modelSpaceTimeStageTime;
 
 // METAMODULE_BUILTIN is set only by the simulator's ext-plugins.cmake, never
 // by the real hardware build (metamodule/CMakeLists.txt's own create_plugin()
@@ -36,6 +37,7 @@ extern "C" void init(Plugin* plugin) {
 	plugin->addModel(modelSpaceTimeHead);
 	plugin->addModel(modelSpaceTimeStage4);
 	plugin->addModel(modelSpaceTimeMidi);
+	plugin->addModel(modelSpaceTimeStageTime);
 	initProbeCore();
 	initProbeRemote();
 }

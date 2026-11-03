@@ -183,8 +183,8 @@ struct Midi : Module {
 		while (midiInput.tryPop(&msg, args.frame))
 			handleMessage(msg);
 
-		bool rightIsProgram = spacetime::modelIs(rightExpander.module, modelProgram, modelGlueRight);
-		bool leftIsHead = spacetime::modelIs(leftExpander.module, modelHead, modelGlueLeft);
+		bool rightIsProgram = spacetime::rightModelIs(this, modelProgram, modelGlueRight);
+		bool leftIsHead = spacetime::leftModelIs(this, modelHead, modelGlueLeft);
 
 		const spacetime::AnchorToHeadsMsg* fromProgram = rightPort.consume(rightExpander);
 		bool broadcastValid = rightIsProgram && fromProgram->valid;

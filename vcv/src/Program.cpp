@@ -5,6 +5,7 @@
 #include "ProgramLogic.hpp"
 #include "PresetRow.hpp"
 #include "NativeModuleContracts.hpp"
+#include "MMBus.hpp"
 
 // ============================================================================
 // PROGRAM — WP7 integrated.
@@ -145,6 +146,7 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 	spacetime::StageTable table;      // latest from the blocks
 	spacetime::Globals globals;       // context-menu globals
 	uint32_t opSeq = 0;
+	uint32_t lastStageTimeModeSeq[spacetime::kInstrumentIdCount] = {};
 
 	spacetime::MessagePort<spacetime::BlockToAnchorMsg> rightPort;
 	spacetime::MessagePort<spacetime::HeadsToAnchorMsg> leftPort;
@@ -315,8 +317,8 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 		midiKeyFeedback = std::fmax(0.f, midiKeyFeedback - dt);
 		midiScaleFeedback = std::fmax(0.f, midiScaleFeedback - dt);
 
-		bool rightIsBlock = modelIs(rightExpander.module, modelStage4, modelGlueRight);
-		bool leftIsStatusChain = modelIs(leftExpander.module, modelHead, modelMidi, modelGlueLeft);
+		bool rightIsBlock = rightModelIs(this, modelStage4, modelGlueRight);
+		bool leftIsStatusChain = leftModelIs(this, modelHead, modelMidi, modelGlueLeft);
 
 		// ---- Table in (from the block chain)
 		const BlockToAnchorMsg* tm = rightPort.consume(rightExpander);
@@ -547,6 +549,28 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 		}
 		syncRangeSelectors(om);
 		om.instrumentId = (uint8_t)spacetime::clampInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+		mmStageTimeRegistry.publishSelection(om.instrumentId, om.selectedStage,
+			table.program[om.selectedStage].timeSync());
+		uint32_t stageTimeSeq = 0;
+		uint8_t stageTimeStage = 0;
+		bool stageTimeSync = false;
+		if (mmStageTimeRegistry.readMode(om.instrumentId, stageTimeSeq, stageTimeStage, stageTimeSync) &&
+			stageTimeSeq != lastStageTimeModeSeq[om.instrumentId] && stageTimeStage < table.count) {
+			bool applyAll = logic.applyToAllStages();
+			int room = kMaxOpsPerTick - om.opCount;
+			// Do not consume a one-shot ALL gesture or acknowledge the sidecar
+			// command until there is room for the complete all-stage edit.
+			if ((!applyAll && room > 0) || (applyAll && room >= table.count)) {
+				EditOp timeSyncOps[kMaxStages];
+				int n = logic.emitSetField(Field::TimeSync, stageTimeSync ? 1u : 0u,
+					table, stageTimeStage, timeSyncOps, room);
+				for (int i = 0; i < n; ++i) {
+					pushOp(om, timeSyncOps[i]);
+					table.program[timeSyncOps[i].stageIndex].setTimeSync(stageTimeSync);
+				}
+				lastStageTimeModeSeq[om.instrumentId] = stageTimeSeq;
+			}
+		}
 		om.scaleKey = logic.scaleKey();
 		om.headCount = statusValid ? sm->headCount : 0;
 		for (int i = 0; i < om.headCount; i++)
@@ -733,7 +757,7 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 					s.table.time[st] = (float)json_real_value(json_array_get(jt, st));
 				if (jw && json_array_get(jw, st)) {
 					uint32_t bits = (uint32_t)json_integer_value(json_array_get(jw, st));
-					if (bits < (1u << 19))
+					if (bits < (1u << 20))
 						s.table.program[st].bits = bits;
 				}
 			}

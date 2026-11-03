@@ -10,8 +10,8 @@ using namespace spacetime;
 // ---------------------------------------------------------------------------
 // Layout freeze
 // ---------------------------------------------------------------------------
-TEST_CASE("program word layout is frozen (version 1)") {
-	CHECK(kProgramLayoutVersion == 1);
+TEST_CASE("program word layout is versioned (version 2)") {
+	CHECK(kProgramLayoutVersion == 2);
 	// Clear word: limited octave = 2 at bits 5-7, time range = 3 at bits 16-17.
 	CHECK(kClearWord == 0x30040u);
 	CHECK(sizeof(ProgramWord) == sizeof(uint32_t));

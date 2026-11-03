@@ -13,6 +13,7 @@
 
 extern spacetime::MetaModuleHeadRegistry headRegistry;
 extern spacetime::MetaModuleStageTableRegistry stageTableRegistry;
+extern spacetime::MetaModuleStageTimeRegistry stageTimeRegistry;
 extern spacetime::MetaModuleHeadMidiRegistry headMidiRegistry;
 extern spacetime::MetaModuleMidiStatusRegistry midiStatusRegistry;
 // EB3, wired to a real module 2026-08-09: Stage4 (MetaModule) publishes its

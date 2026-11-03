@@ -28,6 +28,11 @@
       "description": "MetaModule runtime for a VCV-authored four-stage bank, linked to Program"
     },
     {
+      "slug": "StageTime",
+      "name": "SpaceTime Stage Time",
+      "description": "Per-stage free or clock-division timing mode selector for a Program"
+    },
+    {
       "slug": "Midi",
       "name": "SpaceTime Midi",
       "description": "Read-only MIDI activity and channel monitor for a Program, matching VCV's separate Midi module's slug (mechanics differ: read-only, no device queues)"

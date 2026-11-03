@@ -210,13 +210,13 @@ struct Head : Module {
 		if (ctrl) {
 			float dt = args.sampleTime * divider.getDivision();
 			bool midiDisplayToggle = false;
-			bool leftIsStatusSource = modelIs(leftExpander.module, modelHead, modelHeadAll,
+			bool leftIsStatusSource = leftModelIs(this, modelHead, modelHeadAll,
 				modelGlueLeft);
 			const HeadsToAnchorMsg* lm = leftPort.consume(leftExpander);
 
 			// ---- Broadcast in (anchor side)
-			bool rightIsChain = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
-				modelIs(rightExpander.module, modelMidi);
+			bool rightIsChain = rightModelIs(this, modelHead, modelProgram, modelGlueRight) ||
+				rightModelIs(this, modelMidi);
 			const AnchorToHeadsMsg* bm = rightPort.consume(rightExpander);
 			chainOk = rightIsChain && bm->valid;
 			if (chainOk) {
@@ -285,7 +285,12 @@ struct Head : Module {
 					uint32_t seq = lm->headAll.controlSeq[c];
 					if (!lastHeadAllValid || seq != lastHeadAllCcSeq[c]) {
 						lastHeadAllCcSeq[c] = seq;
-						applyHeadCc(c, lm->headAll.controlValue[c]);
+						// A zero sequence is only the default snapshot, not a
+						// control change. In particular, don't manufacture startup
+						// button presses or overwrite per-Head settings from the
+						// saved HEAD ALL values. Real HEAD ALL changes increment seq.
+						if (seq != 0)
+							applyHeadCc(c, lm->headAll.controlValue[c]);
 					}
 				}
 				if (lm->headAll.externalClockSeq != lastHeadAllClockSeq) {
@@ -323,6 +328,7 @@ struct Head : Module {
 			cfg.addressKnob = params[ADDRESS_PARAM].getValue();
 			cfg.direction = (uint8_t)std::round(params[DIRECTION_PARAM].getValue());
 			int clockSource = clamp((int)std::round(params[CLK_SOURCE_PARAM].getValue()), 0, 3);
+			cfg.clockSource = (uint8_t)clockSource;
 			cfg.clkExt = clockSource != 0;
 			cfg.clkDivIndex = (uint8_t)std::round(params[CLK_DIV_PARAM].getValue());
 			cfg.timeCvAmount = params[TIMECV_PARAM].getValue();
@@ -335,7 +341,7 @@ struct Head : Module {
 				strobePending = true;
 
 			// ---- Relay the broadcast to the next head (leftward)
-			if (modelIs(leftExpander.module, modelHead, modelGlueLeft, modelHeadAll)) {
+			if (leftModelIs(this, modelHead, modelGlueLeft, modelHeadAll)) {
 				AnchorToHeadsMsg* lo = leftNeighborProducer<AnchorToHeadsMsg>(
 					this, modelHead, modelGlueLeft, modelHeadAll);
 				if (lo) {
@@ -348,8 +354,8 @@ struct Head : Module {
 			}
 
 			// ---- Status out (rightward, merged with further heads)
-			bool rightTakesStatus = modelIs(rightExpander.module, modelHead, modelProgram, modelGlueRight) ||
-				modelIs(rightExpander.module, modelMidi);
+			bool rightTakesStatus = rightModelIs(this, modelHead, modelProgram, modelGlueRight) ||
+				rightModelIs(this, modelMidi);
 			if (rightTakesStatus) {
 				HeadsToAnchorMsg* ro = rightNeighborProducer<HeadsToAnchorMsg>(
 					this, modelHead, modelProgram, modelGlueRight);

@@ -102,6 +102,7 @@ public:
 		signals.reset = signals.reset || runtime_.resetPending;
 		runtime_.resetPending = false;
 		runtime_.forceTick = false;
+		config_.clockSource = (uint8_t)runtime_.clockSource;
 		config_.clkExt = runtime_.clockSource != 0;
 
 		dsp_.tick(table, ext, g, sk, config_, signals, audioRate ? dt : runtime_.idleTime, out);

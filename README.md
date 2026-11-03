@@ -60,6 +60,7 @@ preview package with the same version number.
 |---|---|---|
 | **PROGRAM** | 18 | The programming section: stage select, voltage/time/mode modifiers, pulses, Clear, presets + key/scale, external inputs A–D, poly output |
 | **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 16 blocks (4–64 stages) |
+| **STAGE TIME** | 10 | Selects Free or Sync timing for the PROGRAM-selected stage; the STAGE4 time slider chooses its note division |
 | **HEAD** | 10 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
 | **HEAD ALL** | 10 | Common transport, playback modes and normalled CV inputs for every connected HEAD |
 | **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM |
@@ -72,6 +73,22 @@ upward leftward. Blocks own their stage data: reordering STAGE4 modules
 reorders the sequence, and a block carries its programming with it.
 PROGRAM's display shows the stage count and appends `!` when the chain looks
 broken.
+
+### Per-stage synchronized timing
+
+STAGE TIME sets the currently selected PROGRAM stage to **FREE** or **SYNC**.
+In SYNC mode, that stage's existing STAGE4 time slider selects one of nine
+divisions from `1/64` at the bottom through `4/1` at the top; its readout
+displays the selected division and note symbol in VCV Rack. The selected HEAD
+supplies the clock source. When a stage is FREE,
+the slider and the stage's time-range property retain their normal meaning.
+With an Internal-clock HEAD, SYNC scales the slider-derived free interval by
+the selected division factor. Addressing remains stage-for-stage and does not
+stretch the address range by note duration.
+
+Stage Time mode edits follow PROGRAM's normal apply-to-all behavior: arming
+**Apply next edit to ALL stages** (the count display shows `AL`) or holding
+MIDI CC 92 applies FREE/SYNC to all stages.
 
 ### Panel theme
 

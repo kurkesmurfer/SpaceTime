@@ -122,7 +122,7 @@ struct HeadAll : Module {
 	}
 
 	void consumeMidiAll() {
-		bool sourceValid = spacetime::modelIs(rightExpander.module, modelHead, modelGlueRight);
+		bool sourceValid = spacetime::rightModelIs(this, modelHead, modelGlueRight);
 		const spacetime::AnchorToHeadsMsg* in = rightPort.consume(rightExpander);
 		if (!sourceValid || !in->valid) {
 			lastMidiAllValid = false;
@@ -154,7 +154,14 @@ struct HeadAll : Module {
 		static const int ccs[8] = {5, 6, 7, 8, 9, 10, 11, 12};
 		for (int i = 0; i < 8; i++) {
 			float value = params[paramIds[i]].getValue();
-			if (!std::isfinite(lastPersistent[i]) || value != lastPersistent[i]) {
+			if (!std::isfinite(lastPersistent[i])) {
+				// Seed from the saved panel state without broadcasting it.
+				// Individual HEAD controls remain authoritative across patch
+				// reloads until the user changes this common control.
+				lastPersistent[i] = value;
+				continue;
+			}
+			if (value != lastPersistent[i]) {
 				lastPersistent[i] = value;
 				// Strobe is emitted by the audio-rate edge detector below. Its
 				// return to center still publishes Sequential normally.
@@ -199,9 +206,9 @@ struct HeadAll : Module {
 		float dt = args.sampleTime * divider.getDivision();
 		publishPersistentControls();
 
-		chainOk = spacetime::modelIs(rightExpander.module, modelHead) ||
-			(spacetime::modelIs(rightExpander.module, modelGlueRight) &&
-			 gluePartnerOutward(rightExpander.module));
+		chainOk = spacetime::rightModelIs(this, modelHead) ||
+			(spacetime::rightModelIs(this, modelGlueRight) &&
+			 gluePartnerOutward(spacetime::chainNeighbor(this, true)));
 		spacetime::HeadsToAnchorMsg* out =
 			spacetime::rightNeighborProducer<spacetime::HeadsToAnchorMsg>(
 				this, modelHead, modelGlueRight);

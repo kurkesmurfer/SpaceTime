@@ -10,6 +10,7 @@
 extern spacetime::MetaModuleTimingBusRegistry mmTimingBusRegistry;
 extern spacetime::MetaModuleHeadRegistry mmHeadRegistry;
 extern spacetime::MetaModuleStageTableRegistry mmStageTableRegistry;
+extern spacetime::MetaModuleStageTimeRegistry mmStageTimeRegistry;
 extern spacetime::MetaModuleHeadMidiRegistry mmHeadMidiRegistry;
 extern spacetime::MetaModuleMidiStatusRegistry mmMidiStatusRegistry;
 extern spacetime::MetaModuleStageBankRegistry mmStageBankRegistry;
@@ -20,6 +21,7 @@ extern spacetime::MetaModuleStageBankRegistry mmStageBankRegistry;
 #define timingBusRegistry mmTimingBusRegistry
 #define headRegistry mmHeadRegistry
 #define stageTableRegistry mmStageTableRegistry
+#define stageTimeRegistry mmStageTimeRegistry
 #define headMidiRegistry mmHeadMidiRegistry
 #define midiStatusRegistry mmMidiStatusRegistry
 #define stageBankRegistry mmStageBankRegistry

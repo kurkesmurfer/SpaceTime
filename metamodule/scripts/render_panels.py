@@ -25,6 +25,7 @@ PANELS = {
     "TimingMonitor": (114, 240),
     "Head": (95, 240),
     "Stage4": (95, 240),
+    "StageTime": (76, 240),
     "Midi": (114, 240),
     "ProbeCore": (76, 240),
     "ProbeRemote": (76, 240),

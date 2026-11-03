@@ -186,9 +186,10 @@ inline void addMicroLabel(ModuleWidget* w, float xmm, float ymm, const std::stri
 	addLabel(w, xmm, ymm, text, fontLabelSemiBold(), 5.5f, colorLabelCV(), 0.4f, colorLabelCVLight());
 }
 
-inline void addHeaderMark(ModuleWidget* w, float panelWidthMm, float titleWidthMm) {
-	constexpr float markHeightMm = 5.2f;
-	constexpr float markWidthMm = markHeightMm * (5.41f / 10.94f);
+inline void addHeaderMark(ModuleWidget* w, float panelWidthMm, float titleWidthMm,
+		float scale = 1.f) {
+	const float markHeightMm = 5.2f * scale;
+	const float markWidthMm = markHeightMm * (5.41f / 10.94f);
 	constexpr float gapMm = 1.2f;
 	float leftMm = (panelWidthMm - markWidthMm - gapMm - titleWidthMm) * 0.5f;
 	auto* mark = new SvgWidget;
@@ -200,9 +201,9 @@ inline void addHeaderMark(ModuleWidget* w, float panelWidthMm, float titleWidthM
 }
 
 inline void addHeaderLockup(ModuleWidget* w, float panelWidthMm,
-		const std::string& title, float titleWidthMm) {
-	constexpr float markHeightMm = 5.2f;
-	constexpr float markWidthMm = markHeightMm * (5.41f / 10.94f);
+		const std::string& title, float titleWidthMm, float markScale = 1.f) {
+	const float markHeightMm = 5.2f * markScale;
+	const float markWidthMm = markHeightMm * (5.41f / 10.94f);
 	constexpr float gapMm = 1.2f;
 	float leftMm = (panelWidthMm - markWidthMm - gapMm - titleWidthMm) * 0.5f;
 	addTitle(w, leftMm + markWidthMm + gapMm + titleWidthMm * 0.5f, 5.8f, title);

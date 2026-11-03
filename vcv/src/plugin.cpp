@@ -3,6 +3,7 @@
 #include <settings.hpp>
 
 Plugin* pluginInstance;
+extern Model* modelStageTime;
 
 namespace spacetime {
 
@@ -31,6 +32,7 @@ void init(Plugin* p) {
 	p->addModel(modelHead);
 	p->addModel(modelHeadAll);
 	p->addModel(modelMidi);
+	p->addModel(modelStageTime);
 	p->addModel(modelGlueLeft);
 	p->addModel(modelGlueRight);
 	p->addModel(modelWidgetTest);

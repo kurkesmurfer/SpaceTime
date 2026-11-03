@@ -104,8 +104,8 @@ struct Stage4 : Module {
 		float dt = args.sampleTime * divider.getDivision();
 		using namespace spacetime;
 
-		bool leftIsChain = modelIs(leftExpander.module, modelStage4, modelProgram, modelGlueLeft);
-		bool rightIsBlock = modelIs(rightExpander.module, modelStage4, modelGlueRight);
+		bool leftIsChain = leftModelIs(this, modelStage4, modelProgram, modelGlueLeft);
+		bool rightIsBlock = rightModelIs(this, modelStage4, modelGlueRight);
 
 		// ---- Consume the anchor-side message (ops, selection, statuses)
 		const AnchorToBlocksMsg* am = leftPort.consume(leftExpander);
@@ -256,7 +256,7 @@ struct Stage4 : Module {
 				json_t* w = json_array_get(words, s);
 				if (w) {
 					uint32_t bits = (uint32_t)json_integer_value(w);
-					if (bits < (1u << 19))
+					if (bits < (1u << 20))
 						program[s].bits = bits;
 				}
 			}
@@ -319,11 +319,58 @@ struct StageAnnotation : Widget {
 			nvgFontSize(args.vg, 6.f);
 			nvgText(args.vg, box.size.x / 2.f, mm2px(4.8f), annotation.cents.c_str(), NULL);
 		}
-		nvgFillColor(args.vg, secondary);
-		nvgFontFaceId(args.vg, pitchFont->handle);
-		nvgFontSize(args.vg, 9.f);
-		nvgText(args.vg, box.size.x / 2.f,
-			mm2px(Layout4::DURATION_Y - Layout4::ANNOTATION_Y), annotation.duration.c_str(), NULL);
+		float durationY = mm2px(Layout4::DURATION_Y - Layout4::ANNOTATION_Y);
+		if (module && module->program[stage].timeSync()) {
+			int division = (int)spacetime::timeDivisionIndex(module->effTime(stage));
+			float cx = box.size.x * 0.27f;
+			float cy = durationY;
+			float headX = cx - mm2px(0.8f);
+			float headY = cy + mm2px(0.3f);
+			bool hollow = division <= 3;
+			nvgBeginPath(args.vg);
+			nvgEllipse(args.vg, headX, headY, mm2px(1.15f), mm2px(0.68f));
+			if (hollow) {
+				nvgStrokeColor(args.vg, secondary);
+				nvgStrokeWidth(args.vg, mm2px(0.35f));
+				nvgStroke(args.vg);
+			}
+			else {
+				nvgFillColor(args.vg, secondary);
+				nvgFill(args.vg);
+			}
+			if (division >= 3) {
+				float stemX = headX + mm2px(1.05f);
+				float topY = cy - mm2px(2.7f);
+				nvgBeginPath(args.vg);
+				nvgMoveTo(args.vg, stemX, headY);
+				nvgLineTo(args.vg, stemX, topY);
+				nvgStrokeColor(args.vg, secondary);
+				nvgStrokeWidth(args.vg, mm2px(0.35f));
+				nvgStroke(args.vg);
+				int flags = division > 4 ? division - 4 : 0;
+				for (int i = 0; i < flags; ++i) {
+					float fy = topY + mm2px(0.35f * i);
+					nvgBeginPath(args.vg);
+					nvgMoveTo(args.vg, stemX, fy);
+					nvgBezierTo(args.vg, stemX + mm2px(1.3f), fy + mm2px(0.4f),
+						stemX + mm2px(1.1f), fy + mm2px(1.3f), stemX + mm2px(0.55f), fy + mm2px(1.7f));
+					nvgStrokeColor(args.vg, secondary);
+					nvgStrokeWidth(args.vg, mm2px(0.35f));
+					nvgStroke(args.vg);
+				}
+			}
+			nvgFillColor(args.vg, secondary);
+			nvgFontFaceId(args.vg, pitchFont->handle);
+			nvgFontSize(args.vg, 7.f);
+			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+			nvgText(args.vg, box.size.x * 0.52f, durationY, annotation.duration.c_str(), NULL);
+		}
+		else {
+			nvgFillColor(args.vg, secondary);
+			nvgFontFaceId(args.vg, pitchFont->handle);
+			nvgFontSize(args.vg, 9.f);
+			nvgText(args.vg, box.size.x / 2.f, durationY, annotation.duration.c_str(), NULL);
+		}
 	}
 };
 #endif

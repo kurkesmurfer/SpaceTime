@@ -49,8 +49,11 @@ inline std::string annotationNominalTime(float normalized, uint8_t range) {
 inline StageAnnotation makeStageAnnotation(float voltage, float time,
 		const ProgramWord& word, const ScaleKey& scaleKey, bool musicalContextValid) {
 	StageAnnotation out;
-	out.duration = word.timeSource() == SOURCE_EXTERNAL
-		? "EXT TIME" : annotationNominalTime(time, word.timeRange());
+	if (word.timeSync())
+		out.duration = kTimeDivisionLabels[timeDivisionIndex(time)];
+	else
+		out.duration = word.timeSource() == SOURCE_EXTERNAL
+			? "EXT TIME" : annotationNominalTime(time, word.timeRange());
 	if (word.voltageSource() == SOURCE_EXTERNAL) {
 		out.pitch = "EXT CV";
 		return out;

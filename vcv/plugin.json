@@ -26,6 +26,12 @@
       "tags": ["Sequencer", "Expander"]
     },
     {
+      "slug": "StageTime",
+      "name": "STAGE TIME",
+      "description": "Selects Free or Sync timing for the PROGRAM-selected stage",
+      "tags": ["Sequencer", "Utility"]
+    },
+    {
       "slug": "Head",
       "name": "HEAD",
       "description": "Function Generator playhead, chainable left of PROGRAM",

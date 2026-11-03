@@ -4,10 +4,9 @@
 //
 // This header is the shared contract between the expander protocol (WP4),
 // the head DSP (WP5) and the program-section logic (WP6).
-// The program-word bit layout and the Field enumeration are FROZEN as of
-// layout version 1: fields may be appended, but existing bit positions and
-// Field values must never change (they travel over the expander wire and
-// live in patch JSON).
+// The program-word bit layout is versioned; existing bit positions and
+// Field values must never change as fields are appended (they travel over
+// the expander wire and live in patch JSON).
 //
 // Per-stage program word (uint32_t), LSB first:
 //   bit  0     quantize        0 = continuous (default), 1 = quantized
@@ -24,7 +23,8 @@
 //   bit  15    pulse 2
 //   bits 16-17 time range      0..3, index into kTimeRange* (default 3 = 2-30 s)
 //   bit  18    time source     0 = internal (default), 1 = external A-D CV
-//   bits 19-31 reserved, must stay 0
+//   bit  19    time sync      0 = free time (default), 1 = clock division
+//   bits 20-31 reserved, must stay 0
 //
 // Clear state (hardware manual): pulses off, Continuous, Full Range,
 // Internal sources, mode flags off, time range 2-30 s.
@@ -41,7 +41,7 @@ static const int kMaxBlocks = 16;
 static const int kMaxStages = kStagesPerBlock * kMaxBlocks;  // 64
 static const int kMaxHeads = 8;
 
-static const uint32_t kProgramLayoutVersion = 1;
+static const uint32_t kProgramLayoutVersion = 2;
 
 // ---- Value enumerations ----------------------------------------------------
 enum SlewLevel { SLEW_STEPPED = 0, SLEW_1 = 1, SLEW_2 = 2 };
@@ -53,6 +53,28 @@ enum SourceMode { SOURCE_INTERNAL = 0, SOURCE_EXTERNAL = 1 };
 static const float kTimeRangeMin[4] = {0.002f, 0.02f, 0.2f, 2.f};
 static const float kTimeRangeMax[4] = {0.03f, 0.3f, 3.f, 30.f};
 static const int kDefaultTimeRange = 3;
+
+// Sync-mode TIME slider positions quantize to the same nine divisions as a
+// Head's CLK DIV/MULT selector. Each clock input's pulse is the reference beat.
+static const char* const kTimeDivisionLabels[9] = {
+	"4/1", "2/1", "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64"
+};
+
+inline uint8_t timeDivisionIndex(float normalized) {
+	if (normalized < 0.f) normalized = 0.f;
+	if (normalized > 1.f) normalized = 1.f;
+	int index = (int)(normalized * 9.f);
+	if (index > 8) index = 8;
+	// Like the existing free-time scale, moving the slider upward increases
+	// the interval: low positions select short divisions, high positions long.
+	return (uint8_t)(8 - index);
+}
+
+inline float timeDivisionFactor(uint8_t index) {
+	if (index > 8) index = 4;
+	return index <= 4 ? (float)(1u << (4 - index))
+	                   : 1.f / (float)(1u << (index - 4));
+}
 
 // Slider value ranges (VCV scaling).
 static const float kVoltageMin = 0.f, kVoltageMax = 10.f;
@@ -78,8 +100,9 @@ enum class Field : uint8_t {
 	Time = 15,     // float slider, 0..1 normalized
 	// Appended for WP6 (Clear and preset load; append-only rule respected):
 	ClearWord = 16,    // reset the stage's program word to kClearWord (value 0)
-	ProgramWord = 17,  // set the raw program word (value = bits, < 2^19)
-	Count_ = 18
+	ProgramWord = 17,  // set the raw program word (value = bits, < 2^20)
+	TimeSync = 18,
+	Count_ = 19
 };
 
 // ---- Program word ----------------------------------------------------------
@@ -136,6 +159,9 @@ struct ProgramWord {
 	bool timeSource() const { return (bits >> 18) & 1u; }     // SourceMode
 	void setTimeSource(bool v) { setBits(18, 1, v ? 1u : 0u); }
 
+	bool timeSync() const { return (bits >> 19) & 1u; }
+	void setTimeSync(bool v) { setBits(19, 1, v ? 1u : 0u); }
+
 private:
 	bool setBits(int shift, int width, uint32_t v) {
 		uint32_t mask = ((1u << width) - 1u) << shift;
@@ -169,12 +195,13 @@ inline bool setProgramField(ProgramWord& w, Field f, uint32_t v) {
 		case Field::Pulse2:        if (v > 1) return false; w.setPulse2(v); return true;
 		case Field::TimeRange:     return w.setTimeRange((uint8_t)(v > 255 ? 255 : v));
 		case Field::TimeSource:    if (v > 1) return false; w.setTimeSource(v); return true;
+		case Field::TimeSync:      if (v > 1) return false; w.setTimeSync(v); return true;
 		case Field::ClearWord:
 			if (v != 0) return false;
 			w.bits = kClearWord;
 			return true;
 		case Field::ProgramWord:
-			if (v >= (1u << 19)) return false;  // reserved bits must stay 0
+			if (v >= (1u << 20)) return false;  // reserved bits must stay 0
 			w.bits = v;
 			return true;
 		default:                   return false;
@@ -197,6 +224,7 @@ inline bool getProgramField(const ProgramWord& w, Field f, uint32_t& out) {
 		case Field::Pulse2:        out = w.pulse2(); return true;
 		case Field::TimeRange:     out = w.timeRange(); return true;
 		case Field::TimeSource:    out = w.timeSource(); return true;
+		case Field::TimeSync:      out = w.timeSync(); return true;
 		case Field::ProgramWord:   out = w.bits; return true;
 		default:                   return false;  // ClearWord is write-only
 	}

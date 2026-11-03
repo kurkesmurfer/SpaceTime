@@ -6,6 +6,7 @@
 #include "PresetRow.hpp"
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
+#include "MMProgramModifierCatalog.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -145,16 +146,9 @@ namespace {
 		LIGHTS_LEN
 	};
 
-	// MODIFIER_PARAMS index -> dsp/StageTable.hpp
-	// Field, same order as VCV Program.cpp's gestureMap (QUANTIZE/SLOPE/
-	// RANGE/VSOURCE/STOP/SUSTAIN/ENABLE/FIRST/LAST/TSOURCE/PULSE1/PULSE2).
-	static const int kModFieldCount = 12;
-	static constexpr spacetime::Field kModFields[kModFieldCount] = {
-		spacetime::Field::Quantize, spacetime::Field::Slew, spacetime::Field::Range,
-		spacetime::Field::VoltageSource, spacetime::Field::Stop, spacetime::Field::Sustain,
-		spacetime::Field::Enable, spacetime::Field::First, spacetime::Field::Last,
-		spacetime::Field::TimeSource, spacetime::Field::Pulse1, spacetime::Field::Pulse2,
-	};
+	// Parameter IDs are backend-specific; field order, names and labels come
+	// from the shared catalog in dsp/MMProgramModifierCatalog.hpp.
+	enum { kModFieldCount = spacetime::kMMProgramModifierCount };
 	static constexpr int kModDownParams[kModFieldCount] = {
 		QUANTIZE_DOWN_PARAM, SLOPE_DOWN_PARAM, RANGE_DOWN_PARAM, VSOURCE_DOWN_PARAM,
 		STOP_DOWN_PARAM, SUSTAIN_DOWN_PARAM, ENABLE_DOWN_PARAM, FIRST_DOWN_PARAM, LAST_DOWN_PARAM,
@@ -165,23 +159,6 @@ namespace {
 		STOP_UP_PARAM, SUSTAIN_UP_PARAM, ENABLE_UP_PARAM, FIRST_UP_PARAM, LAST_UP_PARAM,
 		TSOURCE_UP_PARAM, PULSE1_UP_PARAM, PULSE2_UP_PARAM,
 	};
-	static constexpr const char* kModFieldNames[kModFieldCount] = {
-		"Quantize", "Slew", "Range", "Voltage source", "Stop", "Sustain",
-		"Enable", "First", "Last", "Time source", "Pulse 1", "Pulse 2",
-	};
-	// Down/Up tooltip pairs, exactly matching VCV Program.cpp's spring3
-	// label text per field (vcv/src/Program.cpp's configSpring3 calls).
-	static constexpr const char* kModDownLabels[kModFieldCount] = {
-		"Continuous", "Reduce slew", "Half (0-5 V)", "Internal",
-		"Remove", "Remove", "Remove", "Remove", "Remove",
-		"Internal (slider + range)", "Remove from stage", "Remove from stage",
-	};
-	static constexpr const char* kModUpLabels[kModFieldCount] = {
-		"Quantize", "Add slew", "Full (0-10 V)", "External (slider selects A-D)",
-		"Add", "Add", "Add", "Set", "Set",
-		"External (A-D CV)", "Add to stage", "Add to stage",
-	};
-
 	spacetime::SpaceTimeEngine engine;
 	midi::InputQueue midiInput;
 	midi::Output midiOutput;
@@ -209,6 +186,7 @@ namespace {
 	uint32_t midiInSeq = 0;
 	uint32_t midiClkSeq = 0;
 	uint32_t midiOutSeq = 0;
+	uint32_t lastStageTimeModeSeq[spacetime::kInstrumentIdCount] = {};
 	uint32_t busToken = timingBusRegistry.makeToken();
 	int instrumentId = 0;
 	bool ownsTimingBus = false;
@@ -275,9 +253,11 @@ namespace {
 		// them at the end for compatibility with the shared modifier mapping.
 		auto configModifier = [&](int field) {
 			configButton(kModUpParams[field],
-				string::f("%s up: %s", kModFieldNames[field], kModUpLabels[field]));
+				string::f("%s up: %s", spacetime::kMMProgramModifierNames[field],
+					spacetime::kMMProgramModifierUpLabels[field]));
 			configButton(kModDownParams[field],
-				string::f("%s down: %s", kModFieldNames[field], kModDownLabels[field]));
+				string::f("%s down: %s", spacetime::kMMProgramModifierNames[field],
+					spacetime::kMMProgramModifierDownLabels[field]));
 		};
 		configModifier(10); // Pulse 1, top row
 		configModifier(11); // Pulse 2, top row
@@ -385,6 +365,19 @@ namespace {
 				params[INSTRUMENT_PARAM].setValue((float)((id + 1) % spacetime::kInstrumentIdCount));
 			}
 			setInstrumentId((int)std::round(params[INSTRUMENT_PARAM].getValue()));
+			int selected = engine.program().selectedStage();
+			stageTimeRegistry.publishSelection(instrumentId, (uint8_t)selected,
+				engine.table().program[selected].timeSync());
+			uint32_t modeSeq = 0;
+			uint8_t modeStage = 0;
+			bool syncMode = false;
+			if (stageTimeRegistry.readMode(instrumentId, modeSeq, modeStage, syncMode) &&
+				modeSeq != lastStageTimeModeSeq[instrumentId] && modeStage < engine.stageCount()) {
+				int count = engine.program().emitSetField(spacetime::Field::TimeSync,
+					syncMode ? 1u : 0u, engine.table(), modeStage, opsBuffer, kOpsBufferLen);
+				applyOps(count);
+				lastStageTimeModeSeq[instrumentId] = modeSeq;
+			}
 			int controlChannel = clamp((int)std::round(params[CONTROL_CHANNEL_PARAM].getValue()), 0, 15);
 			int sliderChannel = clamp((int)std::round(params[SLIDER_CHANNEL_PARAM].getValue()), 0, 15);
 			if (sliderChannel == controlChannel) {
@@ -416,10 +409,10 @@ namespace {
 			}
 			for (int i = 0; i < kModFieldCount; i++) {
 				if (modDownTrigger[i].process(params[kModDownParams[i]].getValue()))
-					applyOps(engine.program().emitModifier(kModFields[i], -1,
+					applyOps(engine.program().emitModifier(spacetime::kMMProgramModifierFields[i], -1,
 						engine.table(), opsBuffer, kOpsBufferLen));
 				if (modUpTrigger[i].process(params[kModUpParams[i]].getValue()))
-					applyOps(engine.program().emitModifier(kModFields[i], +1,
+					applyOps(engine.program().emitModifier(spacetime::kMMProgramModifierFields[i], +1,
 						engine.table(), opsBuffer, kOpsBufferLen));
 			}
 			static const spacetime::PresetMode presetModes[4] = {
@@ -817,7 +810,7 @@ namespace {
 				table.time[stage] = clamp((float)json_number_value(value), 0.f, 1.f);
 			if (words && (value = json_array_get(words, stage))) {
 				uint32_t bits = (uint32_t)json_integer_value(value);
-				if (bits < (1u << 19))
+				if (bits < (1u << 20))
 					table.program[stage].bits = bits;
 			}
 		}
@@ -835,7 +828,7 @@ namespace {
 				table.time[stage] = clamp((float)json_number_value(value), 0.f, 1.f);
 			if (words && (value = json_array_get(words, stage))) {
 				uint32_t bits = (uint32_t)json_integer_value(value);
-				if (bits < (1u << 19))
+				if (bits < (1u << 20))
 					table.program[stage].bits = bits;
 			}
 		}

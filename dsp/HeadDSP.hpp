@@ -117,13 +117,14 @@ struct HeadConfig {          // panel controls
 	float addressKnob;       // 0..10 V
 	uint8_t direction;       // Direction
 	bool clkExt;             // clock source
+	uint8_t clockSource;     // 0 Internal, 1 External, 2 MIDI, 3 Virtual
 	uint8_t clkDivIndex;     // 0..8 -> /16 /8 /4 /2 x1 x2 x4 x8 x16 (4 = x1)
 	float timeCvAmount;      // -1..1 attenuverter
 	uint8_t loopMode;        // LoopMode
 
 	HeadConfig()
 		: continuous(false), addrExt(false), addressKnob(0.f),
-		  direction(DIR_FORWARD), clkExt(false), clkDivIndex(4),
+		  direction(DIR_FORWARD), clkExt(false), clockSource(0), clkDivIndex(4),
 		  timeCvAmount(0.f), loopMode(LOOP_FIRST_LAST) {}
 };
 
@@ -181,6 +182,9 @@ public:
 		clockTimer_ = 0.f;
 		subTimer_ = 0.f;
 		edgeCount_ = 0;
+		clockStage_ = -1;
+		clockDivision_ = 0xFF;
+		clockSync_ = false;
 		allTimer_ = eocTimer_ = 0.f;
 		retrig1_ = retrig2_ = 0.f;
 		prevContStage_ = -1;
@@ -356,6 +360,9 @@ private:
 	bool prevStart_, prevStop_, prevAdvance_, prevStrobe_, prevClock_;
 	float clockPeriod_, clockTimer_, subTimer_;
 	int edgeCount_;
+	int clockStage_;
+	uint8_t clockDivision_;
+	bool clockSync_;
 	float allTimer_, eocTimer_;
 	float retrig1_, retrig2_;
 	int prevContStage_;
@@ -549,10 +556,47 @@ private:
 	                      const HeadConfig& cfg, bool clockEdge, float dt) {
 		clockTimer_ += dt;
 		subTimer_ += dt;
-		int idx = cfg.clkDivIndex <= 8 ? cfg.clkDivIndex : 4;
+		const ProgramWord& word = t.program[stage_];
+		bool stageSync = word.timeSync();
+		int idx = stageSync ? (int)timeDivisionIndex(t.time[stage_])
+			: (cfg.clkDivIndex <= 8 ? cfg.clkDivIndex : 4);
+		if (clockStage_ != stage_ || clockSync_ != stageSync || clockDivision_ != idx) {
+			clockStage_ = stage_;
+			clockSync_ = stageSync;
+			clockDivision_ = (uint8_t)idx;
+			edgeCount_ = 0;
+			subTimer_ = 0.f;
+		}
 		if (clockEdge) {
 			clockPeriod_ = clockTimer_;
 			clockTimer_ = 0.f;
+		}
+		if (stageSync) {
+			static const float quarterNotes[9] = {
+				16.f, 8.f, 4.f, 2.f, 1.f, 0.5f, 0.25f, 0.125f, 0.0625f
+			};
+			float sourcePulsesPerQuarter = cfg.clockSource == 2 ? 24.f : 1.f;
+			float pulses = quarterNotes[idx] * sourcePulsesPerQuarter;
+			if (pulses >= 1.f && pulses == std::floor(pulses)) {
+				if (clockEdge && ++edgeCount_ >= (int)pulses) {
+					edgeCount_ = 0;
+					endOfStage(t, in, cfg.direction, cfg.loopMode);
+					phase_ = 0.f;
+				}
+				if (clockPeriod_ > 0.f)
+					phase_ = std::fmin(1.f, ((float)edgeCount_ * clockPeriod_ + clockTimer_) /
+						(pulses * clockPeriod_));
+			}
+			else if (clockPeriod_ > 0.f) {
+				float duration = pulses * clockPeriod_;
+				int guard = 0;
+				while (subTimer_ >= duration && running_ && !holding_ && guard++ <= 256) {
+					subTimer_ -= duration;
+					endOfStage(t, in, cfg.direction, cfg.loopMode);
+				}
+				phase_ = std::fmin(1.f, subTimer_ / duration);
+			}
+			return;
 		}
 		if (idx <= 4) {
 			int divide = 1 << (4 - idx);  // 16,8,4,2,1
@@ -611,6 +655,8 @@ private:
 		else {
 			T = kTimeRangeMin[r] + t.time[s] * (kTimeRangeMax[r] - kTimeRangeMin[r]);
 		}
+		if (!cfg.clkExt && w.timeSync())
+			T *= timeDivisionFactor(timeDivisionIndex(t.time[s]));
 		// Head-level time CV: exponential; +2.5 V at amount 1 halves the time.
 		if (cfg.timeCvAmount != 0.f && in.timeCv != 0.f)
 			T *= std::exp2(-(in.timeCv * cfg.timeCvAmount) / 2.5f);

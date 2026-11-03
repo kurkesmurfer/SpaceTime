@@ -25,7 +25,7 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 8;
+static const uint32_t kChainProtocolVersion = 9;
 static const int kMidiHeadControls = 14;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
