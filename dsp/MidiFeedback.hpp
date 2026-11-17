@@ -3,7 +3,7 @@
 // Platform-neutral MIDI controller feedback engine.
 //
 // Adapters translate host state into MidiFeedbackState and provide MIDI I/O.
-// This core owns protocol-v1 request decoding, snapshot framing, semantic
+// This core owns controller request decoding, snapshot framing, semantic
 // change detection, acknowledgement pulses, and coalesced stage deltas.
 
 #include <cmath>
@@ -12,10 +12,7 @@
 
 namespace spacetime {
 
-static const uint8_t kFeedbackProtocolVersion = 1;
-static const uint8_t kFeedbackProtocolChannel = 9;  // displayed MIDI channel 10
-static const uint8_t kFeedbackStageChannel = 14;    // displayed MIDI channel 15
-static const uint8_t kFeedbackProgramChannel = 15;  // displayed MIDI channel 16
+static const uint8_t kFeedbackDevelopmentVersion = 2;
 static const float kFeedbackStageInterval = 0.003f;
 
 enum FeedbackArea {
@@ -48,6 +45,7 @@ struct HeadFeedbackState {
 	uint8_t clockSource;
 	uint8_t clockDivIndex;
 	float timeCvAmount;
+	float timeMultiplier;
 	uint8_t loopMode;
 	bool followMidiTransport;
 	uint32_t advanceSeq;
@@ -56,7 +54,7 @@ struct HeadFeedbackState {
 	HeadFeedbackState()
 		: present(false), runState(RUN_STOPPED), currentStage(0), display(false),
 		  address(0.f), addressExternal(false), addressMode(1), direction(0),
-		  clockSource(0), clockDivIndex(4), timeCvAmount(0.f), loopMode(1),
+		  clockSource(0), clockDivIndex(4), timeCvAmount(0.f), timeMultiplier(1.f), loopMode(1),
 		  followMidiTransport(false), advanceSeq(0), resetSeq(0) {}
 };
 
@@ -65,9 +63,10 @@ struct ProgramFeedbackState {
 	ScaleKey scaleKey;
 	bool pulseRetrig;
 	bool bulkArmed;
+	float pulseTime;
 
 	ProgramFeedbackState()
-		: selectedStage(0), pulseRetrig(true), bulkArmed(false) {}
+		: selectedStage(0), pulseRetrig(true), bulkArmed(false), pulseTime(0.001f) {}
 };
 
 struct MidiFeedbackState {
@@ -101,6 +100,7 @@ inline void collectHeadFeedbackState(const HeadsToAnchorMsg* status,
 		target.clockSource = source.clockSource;
 		target.clockDivIndex = source.clockDivIndex;
 		target.timeCvAmount = source.timeCvAmount;
+		target.timeMultiplier = source.timeMultiplier;
 		target.loopMode = source.loopMode;
 		target.followMidiTransport = source.followMidiTransport != 0;
 		target.advanceSeq = source.advanceSeq;
@@ -123,11 +123,20 @@ inline void collectProgramFeedbackState(const AnchorToHeadsMsg* broadcast,
 	state.program.scaleKey = broadcast->scaleKey;
 	state.program.pulseRetrig = broadcast->globals.pulseRetrig;
 	state.program.bulkArmed = broadcast->bulkArmed;
+	state.program.pulseTime = broadcast->globals.pulseTime;
 }
 
 class MidiFeedbackCore {
 public:
-	MidiFeedbackCore() { reset(); }
+	MidiFeedbackCore()
+		: controlChannel_(15), stageChannel_(14), headChannelStart_(0), activeHeadCount_(8) { reset(); }
+
+	void setRoutingChannels(int controlChannel, int stageChannel, int headChannelStart, int activeHeadCount = 8) {
+		controlChannel_ = controlChannel < 0 ? 0 : (controlChannel > 15 ? 15 : controlChannel);
+		stageChannel_ = stageChannel < 0 ? 0 : (stageChannel > 15 ? 15 : stageChannel);
+		headChannelStart_ = headChannelStart < 0 ? 0 : (headChannelStart > 15 ? 15 : headChannelStart);
+		activeHeadCount_ = activeHeadCount < 0 ? 0 : (activeHeadCount > kMaxHeads ? kMaxHeads : activeHeadCount);
+	}
 
 	void reset() {
 		initialized_ = false;
@@ -161,12 +170,14 @@ public:
 	// values. The caller may use this to keep requests out of normal CC routing.
 	bool handleMessage(uint8_t statusByte, uint8_t data1, uint8_t data2,
 	                   uint8_t capabilities = FEEDBACK_CAP_ALL) {
-		if (((statusByte >> 4) & 0xF) != 0xB || (statusByte & 0xF) != kFeedbackProtocolChannel)
+		if (((statusByte >> 4) & 0xF) != 0xB || (statusByte & 0xF) != controlChannel_)
 			return false;
 		data1 &= 0x7F;
 		data2 &= 0x7F;
+		if (data1 < 50 || data1 > 53)
+			return false;
 		switch (data1) {
-			case 0:
+			case 50:
 				if (!(capabilities & FEEDBACK_CAP_HEADS))
 					break;
 				if (data2 < kMaxHeads)
@@ -174,15 +185,15 @@ public:
 				else if (data2 == kMaxHeads)
 					pendingAllHeads_ = true;
 				break;
-			case 1:
+			case 51:
 				if ((capabilities & FEEDBACK_CAP_PROGRAM) && data2 >= 64)
 					pendingProgram_ = true;
 				break;
-			case 2:
+			case 52:
 				if ((capabilities & FEEDBACK_CAP_STAGES) && data2 < 8)
 					pendingStageMask_ |= (uint8_t)(1u << data2);
 				break;
-			case 3:
+			case 53:
 				if (data2 >= 64)
 					pendingVersion_ = true;
 				break;
@@ -198,7 +209,7 @@ public:
 			seedCaches(state);
 
 		if (pendingVersion_) {
-			sendCc(sink, kFeedbackProtocolChannel, 3, kFeedbackProtocolVersion);
+			sendCc(sink, (uint8_t)controlChannel_, 117, kFeedbackDevelopmentVersion);
 			pendingVersion_ = false;
 		}
 
@@ -257,8 +268,8 @@ public:
 	}
 
 private:
-	static const int kHeadValueCount = 18;
-	static const int kProgramValueCount = 30;
+	static const int kHeadValueCount = 19;
+	static const int kProgramValueCount = 31;
 	static const int kStageValueCount = 128;
 
 	bool initialized_;
@@ -280,6 +291,10 @@ private:
 	uint8_t stagePendingValue_[kStageValueCount];
 	float stageTimer_;
 	int stageCursor_;
+	int controlChannel_;
+	int stageChannel_;
+	int headChannelStart_;
+	int activeHeadCount_;
 
 	static uint8_t clampByte(int value) {
 		return (uint8_t)(value < 0 ? 0 : (value > 127 ? 127 : value));
@@ -297,8 +312,8 @@ private:
 		sink.send(0xB, channel, cc, value);
 	}
 
-	static void sendFrame(MidiFeedbackSink& sink, uint8_t cc, uint8_t area) {
-		sendCc(sink, kFeedbackProtocolChannel, cc, area);
+	void sendFrame(MidiFeedbackSink& sink, uint8_t cc, uint8_t area) {
+		sendCc(sink, (uint8_t)controlChannel_, cc, area);
 	}
 
 	static void encodeHead(const HeadFeedbackState& head, uint8_t out[kHeadValueCount],
@@ -313,7 +328,7 @@ private:
 			return;
 		valid[1] = valid[2] = valid[5] = valid[6] = valid[7] = true;
 		valid[8] = valid[9] = valid[10] = valid[11] = valid[12] = true;
-		valid[13] = valid[14] = valid[15] = valid[17] = true;
+		valid[13] = valid[14] = valid[15] = valid[17] = valid[18] = true;
 		out[1] = head.runState == RUN_RUNNING ? 127 : 0;
 		out[2] = head.runState == RUN_STOPPED ? 127 : 0;
 		out[5] = encodeRange(head.address, 0.f, 10.f);
@@ -328,6 +343,7 @@ private:
 		out[14] = head.runState == RUN_HOLDING ? 127 : 0;
 		out[15] = clampByte(head.currentStage > 63 ? 63 : head.currentStage);
 		out[17] = head.followMidiTransport ? 127 : 0;
+		out[18] = clampByte((int)std::round(timeMultiplierControlFromFactor(head.timeMultiplier) * 127.f));
 	}
 
 	static ProgramWord selectedWord(const MidiFeedbackState& state) {
@@ -350,6 +366,7 @@ private:
 			valid[cc] = true;
 		for (int cc = 16; cc <= 29; cc++)
 			valid[cc] = true;
+		valid[30] = true;
 		out[0] = clampByte(state.program.selectedStage > 63 ? 63 : state.program.selectedStage);
 		out[1] = clampByte(state.program.scaleKey.key > 11 ? 11 : state.program.scaleKey.key);
 		out[2] = clampByte(state.program.scaleKey.scale > 2 ? 2 : state.program.scaleKey.scale);
@@ -370,6 +387,18 @@ private:
 		out[27] = word.timeSource() ? 127 : 0;
 		out[28] = word.pulse1() ? 127 : 0;
 		out[29] = word.pulse2() ? 127 : 0;
+		float pulseControl = pulseControlFromTime(state.program.pulseTime);
+		out[30] = clampByte((int)std::floor(pulseControl * 127.f + 0.5f));
+	}
+
+	static int programOutputCc(int index) {
+		if (index >= 0 && index <= 4)
+			return 94 + index;
+		if (index >= 16 && index <= 29)
+			return 99 + index - 16;
+		if (index == 30)
+			return 113;
+		return -1;
 	}
 
 	static uint8_t encodeStage(const MidiFeedbackState& state, int cc) {
@@ -408,12 +437,15 @@ private:
 	}
 
 	void sendHeadSnapshot(const HeadFeedbackState& head, int index, MidiFeedbackSink& sink) {
+		int channel = headChannelStart_ + index;
+		if (index >= activeHeadCount_ || channel < 0 || channel > 15)
+			return;
 		uint8_t values[kHeadValueCount];
 		bool valid[kHeadValueCount];
 		encodeHead(head, values, valid);
 		for (int cc = 0; cc < kHeadValueCount; cc++) {
 			if (valid[cc])
-				sendCc(sink, (uint8_t)index, (uint8_t)cc, values[cc]);
+				sendCc(sink, (uint8_t)channel, (uint8_t)cc, values[cc]);
 		}
 	}
 
@@ -422,8 +454,9 @@ private:
 		bool valid[kProgramValueCount];
 		encodeProgram(state, values, valid);
 		for (int cc = 0; cc < kProgramValueCount; cc++) {
-			if (valid[cc])
-				sendCc(sink, kFeedbackProgramChannel, (uint8_t)cc, values[cc]);
+			int outputCc = programOutputCc(cc);
+			if (valid[cc] && outputCc >= 0)
+				sendCc(sink, (uint8_t)controlChannel_, (uint8_t)outputCc, values[cc]);
 		}
 	}
 
@@ -432,14 +465,14 @@ private:
 		for (int offset = 0; offset < 8; offset++) {
 			int cc = first + offset;
 			uint8_t value = encodeStage(state, cc);
-			sendCc(sink, kFeedbackStageChannel, (uint8_t)cc, value);
+			sendCc(sink, (uint8_t)stageChannel_, (uint8_t)cc, value);
 			stageCache_[cc] = value;
 			stagePending_[cc] = false;
 		}
 		for (int offset = 0; offset < 8; offset++) {
 			int cc = 64 + first + offset;
 			uint8_t value = encodeStage(state, cc);
-			sendCc(sink, kFeedbackStageChannel, (uint8_t)cc, value);
+			sendCc(sink, (uint8_t)stageChannel_, (uint8_t)cc, value);
 			stageCache_[cc] = value;
 			stagePending_[cc] = false;
 		}
@@ -447,12 +480,15 @@ private:
 
 	void emitHeadDeltas(const HeadFeedbackState& head, int index, float dt,
 	                    MidiFeedbackSink& sink) {
+		int channel = headChannelStart_ + index;
+		if (index >= activeHeadCount_ || channel < 0 || channel > 15)
+			return;
 		uint8_t values[kHeadValueCount];
 		bool valid[kHeadValueCount];
 		encodeHead(head, values, valid);
 		bool presenceChanged = values[16] != headCache_[index][16];
 		if (presenceChanged && !head.present) {
-			sendCc(sink, (uint8_t)index, 16, 0);
+			sendCc(sink, (uint8_t)channel, 16, 0);
 			cacheHead(head, index);
 			return;
 		}
@@ -474,14 +510,14 @@ private:
 		if (advanceOffPending_[index]) {
 			advanceOffTimer_[index] -= dt;
 			if (advanceOffTimer_[index] <= 0.f) {
-				sendCc(sink, (uint8_t)index, 3, 0);
+				sendCc(sink, (uint8_t)channel, 3, 0);
 				advanceOffPending_[index] = false;
 			}
 		}
 		if (resetOffPending_[index]) {
 			resetOffTimer_[index] -= dt;
 			if (resetOffTimer_[index] <= 0.f) {
-				sendCc(sink, (uint8_t)index, 4, 0);
+				sendCc(sink, (uint8_t)channel, 4, 0);
 				resetOffPending_[index] = false;
 			}
 		}
@@ -489,9 +525,9 @@ private:
 		bool runChanged = values[1] != headCache_[index][1] ||
 			values[2] != headCache_[index][2] || values[14] != headCache_[index][14];
 		if (runChanged) {
-			sendCc(sink, (uint8_t)index, 1, values[1]);
-			sendCc(sink, (uint8_t)index, 2, values[2]);
-			sendCc(sink, (uint8_t)index, 14, values[14]);
+			sendCc(sink, (uint8_t)channel, 1, values[1]);
+			sendCc(sink, (uint8_t)channel, 2, values[2]);
+			sendCc(sink, (uint8_t)channel, 14, values[14]);
 			headCache_[index][1] = values[1];
 			headCache_[index][2] = values[2];
 			headCache_[index][14] = values[14];
@@ -500,18 +536,18 @@ private:
 			if (!valid[cc] || cc == 1 || cc == 2 || cc == 14)
 				continue;
 			if (values[cc] != headCache_[index][cc]) {
-				sendCc(sink, (uint8_t)index, (uint8_t)cc, values[cc]);
+				sendCc(sink, (uint8_t)channel, (uint8_t)cc, values[cc]);
 				headCache_[index][cc] = values[cc];
 			}
 		}
 		if (head.advanceSeq != lastAdvanceSeq_[index]) {
-			sendCc(sink, (uint8_t)index, 3, 127);
+			sendCc(sink, (uint8_t)channel, 3, 127);
 			advanceOffPending_[index] = true;
 			advanceOffTimer_[index] = 0.05f;
 			lastAdvanceSeq_[index] = head.advanceSeq;
 		}
 		if (head.resetSeq != lastResetSeq_[index]) {
-			sendCc(sink, (uint8_t)index, 4, 127);
+			sendCc(sink, (uint8_t)channel, 4, 127);
 			resetOffPending_[index] = true;
 			resetOffTimer_[index] = 0.05f;
 			lastResetSeq_[index] = head.resetSeq;
@@ -524,10 +560,10 @@ private:
 		encodeProgram(state, values, valid);
 		bool selectionChanged = values[0] != programCache_[0];
 		if (selectionChanged) {
-			sendCc(sink, kFeedbackProgramChannel, 0, values[0]);
+			sendCc(sink, (uint8_t)controlChannel_, 94, values[0]);
 			programCache_[0] = values[0];
 			for (int cc = 16; cc <= 29; cc++) {
-				sendCc(sink, kFeedbackProgramChannel, (uint8_t)cc, values[cc]);
+				sendCc(sink, (uint8_t)controlChannel_, (uint8_t)programOutputCc(cc), values[cc]);
 				programCache_[cc] = values[cc];
 			}
 		}
@@ -535,7 +571,9 @@ private:
 			if (!valid[cc] || cc == 0 || (selectionChanged && cc >= 16))
 				continue;
 			if (values[cc] != programCache_[cc]) {
-				sendCc(sink, kFeedbackProgramChannel, (uint8_t)cc, values[cc]);
+				int outputCc = programOutputCc(cc);
+				if (outputCc >= 0)
+					sendCc(sink, (uint8_t)controlChannel_, (uint8_t)outputCc, values[cc]);
 				programCache_[cc] = values[cc];
 			}
 		}
@@ -573,7 +611,7 @@ private:
 			int cc = (stageCursor_ + offset) % kStageValueCount;
 			if (!stagePending_[cc])
 				continue;
-			sendCc(sink, kFeedbackStageChannel, (uint8_t)cc, stagePendingValue_[cc]);
+			sendCc(sink, (uint8_t)stageChannel_, (uint8_t)cc, stagePendingValue_[cc]);
 			stagePending_[cc] = false;
 			stageCursor_ = (cc + 1) % kStageValueCount;
 			stageTimer_ = 0.f;

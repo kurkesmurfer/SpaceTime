@@ -4,6 +4,7 @@
 #include "MMBus.hpp"
 #include "HeadRemoteController.hpp"
 #include "MMModuleContracts.hpp"
+#include "TimeMultiplierQuantity.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -21,7 +22,7 @@ constexpr float TR_LABEL_Y = 62.0f, TR_BTN_Y = 68.2f;
 constexpr float TR_X0 = 13.f, TR_PITCH = 22.f;
 constexpr float DIV3_Y = 74.2f;
 constexpr float CFG_LABEL_Y = 78.0f, CFG_CTRL_Y = 83.8f;
-constexpr float CFG_X0 = 6.5f, CFG_PITCH = 11.2f;
+constexpr float CFG_X0 = 6.5f, CFG_PITCH = 9.8f;
 constexpr float DIV4_Y = 90.2f;
 constexpr float IN_HDR_Y = 94.4f, IN_LABEL_Y = 97.1f, IN_JACK_Y = 102.2f;
 constexpr float IN_X0 = 6.5f, IN_PITCH = 11.2f;
@@ -82,6 +83,7 @@ struct SpaceTimeHead : Module {
 		CLK_DIV_PARAM,
 		TIMECV_PARAM,
 		LOOP_PARAM,
+		TIME_MULT_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -152,6 +154,7 @@ struct SpaceTimeHead : Module {
 	float shadowClkSource = 0.f;
 	float shadowClkDiv = 4.f;
 	float shadowTimeCv = 0.f;
+	float shadowTimeMultiplier = 0.5f;
 	float shadowLoop = 1.f;
 
 	SpaceTimeHead() {
@@ -178,6 +181,8 @@ struct SpaceTimeHead : Module {
 		configParam(TIMECV_PARAM, -1.f, 1.f, 0.f, "Time CV amount", "%", 0.f, 100.f);
 		configSwitch(LOOP_PARAM, 0.f, 2.f, 1.f, "Loop mode",
 			{"One-shot", "Cycle first-last", "Full chain"});
+		configParam<TimeMultiplierQuantity>(TIME_MULT_PARAM, 0.f, 1.f, 0.5f,
+			"Time multiplier", "x");
 		configInput(START_INPUT, "Start (pulse; Sustain gate / Enable >5 V)");
 		configInput(STOP_INPUT, "Stop (pulse)");
 		configInput(ADVANCE_INPUT, "Advance (pulse)");
@@ -288,6 +293,7 @@ struct SpaceTimeHead : Module {
 		mirrorClockSource();
 		mirrorDiscrete(CLK_DIV_PARAM, cfg.clkDivIndex, shadowClkDiv, 8);
 		mirrorContinuous(TIMECV_PARAM, cfg.timeCvAmount, shadowTimeCv);
+		mirrorTimeMultiplier(cfg.timeMultiplier);
 		mirrorDiscrete(LOOP_PARAM, cfg.loopMode, shadowLoop, 2);
 
 		// Claiming stays at control rate. The audio-rate process publishes the
@@ -314,6 +320,21 @@ struct SpaceTimeHead : Module {
 			if (knob != shadow) {
 				target = knob;
 				shadow = knob;
+			}
+		}
+	}
+
+	void mirrorTimeMultiplier(float& target) {
+		float factorAtShadow = spacetime::timeMultiplierFromControl(shadowTimeMultiplier);
+		if (target != factorAtShadow) {
+			float control = spacetime::timeMultiplierControlFromFactor(target);
+			params[TIME_MULT_PARAM].setValue(control);
+			shadowTimeMultiplier = control;
+		} else {
+			float control = params[TIME_MULT_PARAM].getValue();
+			if (control != shadowTimeMultiplier) {
+				target = spacetime::timeMultiplierFromControl(control);
+				shadowTimeMultiplier = control;
 			}
 		}
 	}
@@ -505,9 +526,9 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 				spacetime::fontLabelSemiBold(), 5.5f, spacetime::colorLabelIO(),
 				0.4f, spacetime::colorLabelIO());
 
-		static const char* configNames[8] = {
-			"ADDR", "SRC", "MODE", "DIR", "CLK", "DIV", "TIME", "LOOP"};
-		for (int i = 0; i < 8; i++)
+		static const char* configNames[9] = {
+			"ADDR", "SRC", "MODE", "DIR", "CLK", "DIV", "TIME", "LOOP", "MULT"};
+		for (int i = 0; i < 9; i++)
 			spacetime::addKnobLabel(this, CFG_X0 + i * CFG_PITCH, CFG_LABEL_Y, configNames[i]);
 		spacetime::addSectionHeading(this, 45.72f, IN_HDR_Y, "INPUTS");
 		static const char* inputNames[8] = {
@@ -546,6 +567,7 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 5 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::CLK_DIV_PARAM));
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 6 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::TIMECV_PARAM));
 		addParam(createParamCentered<CKSSThree>(mm2px(Vec(CFG_X0 + 7 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::LOOP_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(CFG_X0 + 8 * CFG_PITCH, CFG_CTRL_Y)), module, SpaceTimeHead::TIME_MULT_PARAM));
 
 		static const int inputIds[8] = {
 			SpaceTimeHead::START_INPUT, SpaceTimeHead::STOP_INPUT,

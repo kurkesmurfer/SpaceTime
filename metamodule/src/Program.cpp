@@ -7,6 +7,7 @@
 #include "TimingBus.hpp"
 #include "RemoteBus.hpp"
 #include "MMProgramModifierCatalog.hpp"
+#include "../../vcv/src/PulseTimeQuantity.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -83,6 +84,7 @@ namespace {
 		TRANGE_SELECTOR_PARAM,
 		INSTRUMENT_DOWN_PARAM,
 		INSTRUMENT_UP_PARAM,
+		PULSE_TIME_PARAM,
 		// MetaModule UI conveniences are appended after the complete native
 		// Program contract and are never required by an exported VCV patch.
 		INTERNAL_STAGE_PARAM,
@@ -112,7 +114,7 @@ namespace {
 		// active-head selection, just a fixed 4-channel window onto heads 1-4.
 		OUTPUTS_LEN
 	};
-	static_assert((int)INSTRUMENT_UP_PARAM + 1 == (int)spacetime::NativeProgramContract::NATIVE_PARAMS_LEN, "Program ParamId drift");
+	static_assert((int)PULSE_TIME_PARAM + 1 == (int)spacetime::NativeProgramContract::NATIVE_PARAMS_LEN, "Program ParamId drift");
 	static_assert((int)EXT_INPUTS == (int)spacetime::NativeProgramContract::EXT_INPUTS, "Program InputId drift");
 	static_assert((int)POLY_OUTPUT == (int)spacetime::NativeProgramContract::POLY_OUTPUT, "Program OutputId drift");
 	enum LightId {
@@ -237,6 +239,8 @@ namespace {
 		configButton(CLEAR_PARAM, "Clear all stage program words");
 		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f, "Pulse retrigger",
 			{"Continuous", "Hardware-compatible notch"});
+		configParam<PulseTimeQuantity>(PULSE_TIME_PARAM, 0.f, 1.f, 0.5f,
+			"Pulse/retrigger time", " ms")->displayPrecision = 2;
 		configParam(INTERNAL_KEY_PARAM, 0.f, 11.f, 0.f, "Key", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configSwitch(INTERNAL_SCALE_PARAM, 0.f, 2.f, 0.f, "Scale", {"Major", "Minor", "Chromatic"});
 		for (int i = 0; i < 12; i++)
@@ -347,6 +351,9 @@ namespace {
 				params[INTERNAL_STAGE_PARAM].setValue((float)engine.program().selectedStage());
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_PULSE_RETRIG)
 				params[PULSE_RETRIG_PARAM].setValue(engine.globals().pulseRetrig ? 1.f : 0.f);
+			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_PULSE_TIME)
+				params[PULSE_TIME_PARAM].setValue(
+					spacetime::pulseControlFromTime(engine.globals().pulseTime));
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_KEY)
 				params[INTERNAL_KEY_PARAM].setValue((float)engine.program().scaleKey().key);
 			if (engine.lastAppliedMidiType() == spacetime::MIDI_PROG_SET_SCALE)
@@ -384,6 +391,7 @@ namespace {
 				sliderChannel = controlChannel == 15 ? 14 : 15;
 				params[SLIDER_CHANNEL_PARAM].setValue((float)sliderChannel);
 			}
+			engine.midi().setActiveHeadCount(spacetime::kMaxHeads);
 			engine.midi().controlChannel = controlChannel;
 			engine.midi().sliderChannel = sliderChannel;
 			int selectedStage = clamp((int)std::round(params[INTERNAL_STAGE_PARAM].getValue()),
@@ -391,6 +399,7 @@ namespace {
 			engine.program().setSelected(selectedStage);
 			params[INTERNAL_STAGE_PARAM].setValue((float)selectedStage);
 			engine.globals().pulseRetrig = params[PULSE_RETRIG_PARAM].getValue() > 0.5f;
+			engine.globals().pulseTime = spacetime::pulseTimeFromControl(params[PULSE_TIME_PARAM].getValue());
 			spacetime::ScaleKey scaleKey = engine.program().scaleKey();
 			scaleKey.key = (uint8_t)clamp((int)std::round(params[INTERNAL_KEY_PARAM].getValue()), 0, 11);
 			scaleKey.scale = (uint8_t)clamp((int)std::round(params[INTERNAL_SCALE_PARAM].getValue()), 0, 2);
@@ -703,6 +712,7 @@ namespace {
 			json_object_set_new(head, "clockSource", json_integer(engine.headClockSource(h)));
 			json_object_set_new(head, "clockDivision", json_integer(config.clkDivIndex));
 			json_object_set_new(head, "timeAmount", json_real(config.timeCvAmount));
+			json_object_set_new(head, "timeMultiplier", json_real(config.timeMultiplier));
 			json_object_set_new(head, "loopMode", json_integer(config.loopMode));
 			json_object_set_new(head, "followTransport", json_boolean(engine.headFollowsMidiTransport(h)));
 			json_array_append_new(heads, head);
@@ -781,6 +791,7 @@ namespace {
 			if ((value = json_object_get(head, "clockSource"))) engine.setHeadClockSource(h, (int)json_integer_value(value));
 			if ((value = json_object_get(head, "clockDivision"))) config.clkDivIndex = (uint8_t)clamp((int)json_integer_value(value), 0, 8);
 			if ((value = json_object_get(head, "timeAmount"))) config.timeCvAmount = clamp((float)json_number_value(value), -1.f, 1.f);
+			if ((value = json_object_get(head, "timeMultiplier"))) config.timeMultiplier = clamp((float)json_number_value(value), 0.5f, 4.f);
 			if ((value = json_object_get(head, "loopMode"))) config.loopMode = (uint8_t)clamp((int)json_integer_value(value), 0, 2);
 			if ((value = json_object_get(head, "followTransport"))) engine.setHeadFollowsMidiTransport(h, json_boolean_value(value));
 		}
@@ -981,7 +992,8 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 
 		for (int i = 0; i < 4; i++)
 			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(84.f, 20.f + 9.5f * i)), module, SpaceTimeProgram::EXT_INPUTS + i));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(84.f, 73.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(84.f, 67.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(84.f, 79.5f)), module, SpaceTimeProgram::PULSE_TIME_PARAM));
 		auto idDisplay = createWidget<MetaModule::VCVTextDisplay>(mm2px(Vec(74.5f, 91.f)));
 		idDisplay->box.size = mm2px(Vec(8.f, 8.f));
 		idDisplay->firstLightId = SpaceTimeProgram::INSTRUMENT_DISPLAY;

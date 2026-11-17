@@ -13,8 +13,8 @@
 // this call.
 //
 // Also deliberately does not carry MidiCore's headEventSeq[h] fast-path
-// skip ("nothing changed for this head at all, skip the 14-CC scan") --
-// the bus payload this is fed from doesn't carry that field, and 14
+// skip ("nothing changed for this head at all, skip the sparse 19-lane scan") --
+// the bus payload this is fed from doesn't carry that field, and the 19-lane
 // uint32_t comparisons per control tick is not a cost worth a second bus
 // field to avoid.
 
@@ -207,6 +207,7 @@ private:
 			case 10: config_.clkDivIndex = (uint8_t)clampInt((int)std::round(value), 0, 8); break;
 			case 11: config_.timeCvAmount = value < -1.f ? -1.f : (value > 1.f ? 1.f : value); break;
 			case 12: config_.loopMode = (uint8_t)clampInt((int)std::round(value), 0, 2); break;
+			case 18: config_.timeMultiplier = timeMultiplierFromControl(value); break;
 			default: break;
 		}
 	}

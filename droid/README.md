@@ -3,7 +3,7 @@
 ## Stage feedback monitor
 
 `SpaceTimeStageFeedbackTest.ini` is the first hardware test vehicle for
-protocol-v1 Stage feedback. It targets the hardware declaration used by the
+development protocol-v2 Stage feedback. It targets the hardware declaration used by the
 existing MARFremote patch:
 
 ```text
@@ -39,9 +39,9 @@ patches retain auto-detection so they also remain usable with firmware versions
 where the selectors behave as documented. Outgoing MIDI continues to use
 `usb = 1`, which works correctly on the same hardware.
 
-- DROID to SpaceTime: channel 10 CC2, value 0-7 requests a page snapshot.
-- SpaceTime to DROID: channel 15 CC0-63 carries voltage and CC64-127 carries
-  time.
+- DROID to SpaceTime: default PROGRAM channel 16, CC52, value 0-7 requests a Stage page snapshot.
+- SpaceTime to DROID: default Stage channel 15, CC0-63 carries voltage and
+  CC64-127 carries time.
 
 In the SpaceTime MIDI context menu, select the DROID USB destination under
 `Controller feedback output`. Do not route that output back into SpaceTime's
@@ -91,7 +91,7 @@ encoders or participate in MIDI output.
 |---|---|
 | S1.1 | Stage page 1-8, eight stages per page |
 | S1.2 | Feedback/display HEAD 1-8 |
-| S1.3 up | Override commands to HEAD ALL (MIDI channel 9) |
+| S1.3 up | Override commands to HEAD ALL (PROGRAM channel 16, CC32-44) |
 | E2, E3 | Eight Stage voltage values |
 | E4, E5 | Eight Stage time values |
 | Master R17-R24 | Selected page voltage feedback diagnostics |

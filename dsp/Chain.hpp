@@ -25,10 +25,47 @@
 
 namespace spacetime {
 
-static const uint32_t kChainProtocolVersion = 9;
-static const int kMidiHeadControls = 14;
+static const uint32_t kChainProtocolVersion = 10;
+static const int kMidiHeadControls = 19;
 static const int kHeadAllControls = 13;  // HEAD CC map without exclusive Display
 static const int kMaxMidiProgramEvents = 64;
+
+// Pulse timing control: 0.1 ms at minimum, 1 ms at midpoint, 15 ms at max.
+// The two logarithmic segments keep 1 ms centered on the panel control.
+inline float pulseTimeFromControl(float control) {
+	if (control < 0.f) control = 0.f;
+	if (control > 1.f) control = 1.f;
+	if (control <= 0.5f)
+		return 0.0001f * std::pow(10.f, control * 2.f);
+	return 0.001f * std::pow(15.f, (control - 0.5f) * 2.f);
+}
+
+inline float pulseControlFromTime(float seconds) {
+	if (seconds < 0.0001f) seconds = 0.0001f;
+	if (seconds > 0.015f) seconds = 0.015f;
+	if (seconds <= 0.001f)
+		return 0.5f * std::log10(seconds / 0.0001f);
+	return 0.5f + 0.5f * std::log(seconds / 0.001f) / std::log(15.f);
+}
+
+// Hardware-style per-Head TIME MULT control. The normalized half-way point
+// is unity, so users can return to ×1 without hunting for a narrow region.
+// The endpoints match the 248t MARF multiplier range: half-time to 4x longer.
+inline float timeMultiplierFromControl(float control) {
+	if (control < 0.f) control = 0.f;
+	if (control > 1.f) control = 1.f;
+	if (control <= 0.5f)
+		return 0.5f * std::pow(2.f, control * 2.f);
+	return std::pow(2.f, (control - 0.5f) * 4.f);
+}
+
+inline float timeMultiplierControlFromFactor(float factor) {
+	if (factor < 0.5f) factor = 0.5f;
+	if (factor > 4.f) factor = 4.f;
+	if (factor <= 1.f)
+		return 0.5f * std::log2(factor / 0.5f);
+	return 0.5f + 0.25f * std::log2(factor);
+}
 
 // ---- Globals travelling with the anchor broadcast ---------------------------
 // Context-menu globals (owned by PROGRAM). Slew fractions are the Q1
@@ -39,10 +76,11 @@ struct Globals {
 	uint8_t slopeLaw;     // 0 = linear, 1 = exponential
 	uint8_t addressScale; // 0 = self-normalizing 0-10 V, 1 = fixed 0.5 V/stage
 	bool pulseRetrig;     // hardware-compatible P1/P2 low notch at stage boundaries
+	float pulseTime;      // ALL/EOC high time and P1/P2 retrigger low time, seconds
 
 	Globals()
 		: slewFrac1(0.25f), slewFrac2(0.5f), slopeLaw(0), addressScale(0),
-		  pulseRetrig(true) {}
+	  pulseRetrig(true), pulseTime(0.001f) {}
 };
 
 struct ScaleKey {
@@ -73,6 +111,7 @@ struct HeadStatus {
 	uint8_t quantized;     // current stage is quantized; note output uses this
 	float address;         // panel Address, 0..10 V
 	float timeCvAmount;    // TIME CV attenuverter, -1..1
+	float timeMultiplier;  // continuous Head scale, 0.5..4; 1 = unity
 	float phase;           // 0..1 position within the stage interval
 	float cv;              // head CV output (WP7: POLY OUT channel payload)
 	uint32_t advanceSeq;   // increments for every accepted Advance edge
@@ -83,7 +122,7 @@ struct HeadStatus {
 		  addressExternal(0), addressMode(1), direction(0), clockSource(0),
 		  clockDivIndex(4), loopMode(1), followMidiTransport(0),
 		  pulse1(0), pulse2(0), allPulse(0), quantized(0),
-		  address(0.f), timeCvAmount(0.f), phase(0.f), cv(0.f),
+		  address(0.f), timeCvAmount(0.f), timeMultiplier(1.f), phase(0.f), cv(0.f),
 		  advanceSeq(0), resetSeq(0) {}
 };
 
@@ -101,7 +140,8 @@ enum MidiProgramEventType {
 	MIDI_PROG_SET_KEY = 10,
 	MIDI_PROG_SET_SCALE = 11,
 	MIDI_PROG_SET_PULSE_RETRIG = 12,
-	MIDI_PROG_SELECT_HOLD = 13
+	MIDI_PROG_SELECT_HOLD = 13,
+	MIDI_PROG_SET_PULSE_TIME = 14
 };
 
 struct MidiProgramEvent {
@@ -109,7 +149,7 @@ struct MidiProgramEvent {
 	uint8_t type;    // MidiProgramEventType
 	uint8_t index;   // field/button/stage/slot index, depending on type
 	uint8_t value;   // raw MIDI value or small enum
-	float fvalue;    // scaled slider value when type == MIDI_PROG_SLIDER
+	float fvalue;    // scaled slider value or normalized Pulse Time when applicable
 	uint8_t flags;   // EDIT_OP_* presentation/takeover behavior for slider events
 
 	MidiProgramEvent()

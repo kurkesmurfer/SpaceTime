@@ -4,6 +4,7 @@
 #include "MMModuleContracts.hpp"
 #include "MMBus.hpp"
 #include "MMProgramModifierCatalog.hpp"
+#include "PulseTimeQuantity.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -62,6 +63,7 @@ struct SpaceTimeProgram : Module {
 		TRANGE_SELECTOR_PARAM,
 		// Appended last (option A): index stable across the update.
 		STAGE_STEP_UP_PARAM,
+		PULSE_TIME_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -82,6 +84,7 @@ struct SpaceTimeProgram : Module {
 	static_assert((int)STAGE_PARAM == (int)spacetime::MMProgramContract::STAGE_PARAM, "MMProgram ParamId drift");
 	static_assert((int)STAGE_STEP_DOWN_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_DOWN_PARAM, "MMProgram stage-step ParamId drift");
 		static_assert((int)STAGE_STEP_UP_PARAM == (int)spacetime::MMProgramContract::STAGE_STEP_UP_PARAM, "MMProgram stage-step UP ParamId drift");
+	static_assert((int)PULSE_TIME_PARAM == (int)spacetime::MMProgramContract::PULSE_TIME_PARAM, "MMProgram pulse-time ParamId drift");
 	static_assert((int)MODIFIER_PARAMS == (int)spacetime::MMProgramContract::MODIFIER_PARAMS, "MMProgram modifier ParamId drift");
 	static_assert((int)LTD_PARAMS - (int)MODIFIER_PARAMS == spacetime::kMMProgramModifierCount, "MMProgram modifier count drift");
 	static_assert((int)STAGE_BANKS_PARAM == (int)spacetime::MMProgramContract::STAGE_BANKS_PARAM, "MMProgram stage-count ParamId drift");
@@ -193,6 +196,8 @@ struct SpaceTimeProgram : Module {
 		configButton(CLEAR_PARAM, "Clear all stage program words");
 		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f, "Pulse retrigger",
 			{"Continuous", "Hardware-compatible notch"});
+		configParam<PulseTimeQuantity>(PULSE_TIME_PARAM, 0.f, 1.f, 0.5f,
+			"Pulse/retrigger time", " ms")->displayPrecision = 2;
 		configParam(KEY_PARAM, 0.f, 11.f, 0.f, "Key", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configSwitch(SCALE_PARAM, 0.f, 2.f, 0.f, "Scale", {"Major", "Minor", "Chromatic"});
 		configButton(BULK_PARAM, "Arm bulk edit (next modifier applies to all stages)");
@@ -308,6 +313,7 @@ struct SpaceTimeProgram : Module {
 			engine.program().setSelected(selectedStage);
 			params[STAGE_PARAM].setValue((float)selectedStage);
 			engine.globals().pulseRetrig = params[PULSE_RETRIG_PARAM].getValue() > 0.5f;
+			engine.globals().pulseTime = spacetime::pulseTimeFromControl(params[PULSE_TIME_PARAM].getValue());
 			spacetime::ScaleKey scaleKey = engine.program().scaleKey();
 			scaleKey.key = (uint8_t)clamp((int)std::round(params[KEY_PARAM].getValue()), 0, 11);
 			scaleKey.scale = (uint8_t)clamp((int)std::round(params[SCALE_PARAM].getValue()), 0, 2);
@@ -638,6 +644,7 @@ struct SpaceTimeProgram : Module {
 			json_object_set_new(head, "clockSource", json_integer(engine.headClockSource(h)));
 			json_object_set_new(head, "clockDivision", json_integer(config.clkDivIndex));
 			json_object_set_new(head, "timeAmount", json_real(config.timeCvAmount));
+			json_object_set_new(head, "timeMultiplier", json_real(config.timeMultiplier));
 			json_object_set_new(head, "loopMode", json_integer(config.loopMode));
 			json_object_set_new(head, "followTransport", json_boolean(engine.headFollowsMidiTransport(h)));
 			json_array_append_new(heads, head);
@@ -708,6 +715,7 @@ struct SpaceTimeProgram : Module {
 			if ((value = json_object_get(head, "clockSource"))) engine.setHeadClockSource(h, (int)json_integer_value(value));
 			if ((value = json_object_get(head, "clockDivision"))) config.clkDivIndex = (uint8_t)clamp((int)json_integer_value(value), 0, 8);
 			if ((value = json_object_get(head, "timeAmount"))) config.timeCvAmount = clamp((float)json_number_value(value), -1.f, 1.f);
+			if ((value = json_object_get(head, "timeMultiplier"))) config.timeMultiplier = clamp((float)json_number_value(value), 0.5f, 4.f);
 			if ((value = json_object_get(head, "loopMode"))) config.loopMode = (uint8_t)clamp((int)json_integer_value(value), 0, 2);
 			if ((value = json_object_get(head, "followTransport"))) engine.setHeadFollowsMidiTransport(h, json_boolean_value(value));
 		}
@@ -908,6 +916,7 @@ struct SpaceTimeProgramWidget : ModuleWidget {
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 15.f)), module, SpaceTimeProgram::CONTROL_CHANNEL_PARAM));
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(98.f, 29.f)), module, SpaceTimeProgram::SLIDER_CHANNEL_PARAM));
 		addParam(createParamCentered<CKSS>(mm2px(Vec(114.f, 20.f)), module, SpaceTimeProgram::PULSE_RETRIG_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(124.f, 20.f)), module, SpaceTimeProgram::PULSE_TIME_PARAM));
 		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(110.f, 33.f)), module, SpaceTimeProgram::MIDI_IN_LIGHT));
 		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(114.5f, 33.f)), module, SpaceTimeProgram::MIDI_CLOCK_LIGHT));
 		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(119.f, 33.f)), module, SpaceTimeProgram::MIDI_OUT_LIGHT));

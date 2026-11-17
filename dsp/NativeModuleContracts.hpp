@@ -51,6 +51,7 @@ struct NativeProgramContract {
 		TRANGE_SELECTOR_PARAM,
 		INSTRUMENT_DOWN_PARAM,
 		INSTRUMENT_UP_PARAM,
+		PULSE_TIME_PARAM,
 		NATIVE_PARAMS_LEN
 	};
 	enum InputId { EXT_INPUTS, INPUTS_LEN = EXT_INPUTS + 4 };
@@ -90,6 +91,7 @@ struct NativeHeadContract {
 		DISPLAY_PARAM,
 		INSTRUMENT_PARAM,
 		HEAD_PARAM,
+		TIME_MULT_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {

@@ -133,6 +133,7 @@ public:
 			target.allPulse = source.allPulse ? 1 : 0;
 			target.quantized = source.currentStage < table_.count &&
 				table_.program[source.currentStage].quantize() ? 1 : 0;
+			target.timeMultiplier = headController_[h].config().timeMultiplier;
 			target.phase = source.phase;
 			target.cv = source.cv;
 		}
@@ -266,6 +267,9 @@ private:
 			}
 			case MIDI_PROG_SET_PULSE_RETRIG:
 				globals_.pulseRetrig = event.index != 0;
+				break;
+			case MIDI_PROG_SET_PULSE_TIME:
+				globals_.pulseTime = pulseTimeFromControl(event.fvalue);
 				break;
 			case MIDI_PROG_SLIDER:
 				if (event.index < table_.count)

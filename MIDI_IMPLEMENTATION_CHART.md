@@ -1,6 +1,7 @@
 # SpaceTime MIDI implementation chart
 
-**Implementation snapshot:** 2026-07-31
+**Implementation snapshot:** 2026-11-12
+**Protocol:** Development revision 2 (release version byte remains undecided)
 **Purpose:** authoritative controller mapping, feedback protocol, and manual MIDI test reference.
 **Numbering:** MIDI channels are shown as users see them (1-16). CC and Program
 Change data bytes are shown as raw MIDI values (0-127).
@@ -15,17 +16,24 @@ Change data bytes are shown as raw MIDI values (0-127).
 | Output device | Selected independently in MIDI module context menu |
 | PROGRAM controls channel | Configurable 1-16; default channel 16 |
 | Stage sliders channel | Configurable 1-16; default channel 15 |
-| HEAD input channels | Fixed: HEAD 1-8 use channels 1-8 |
-| HEAD ALL input channel | Fixed: channel 9; CC 0-12 broadcast to all HEADs |
+| HEAD input channels | Configurable contiguous range; default HEAD 1-8 use channels 1-8 |
+| HEAD ALL input route | PROGRAM channel CC 32-44; default channel 16 |
 | Head numbering | HEAD 1 is immediately left of MIDI; numbers increase leftward |
 | Input map | Fixed CC map; no base-CC offset and no MIDI learn |
-| Persistence | Input, performance-output, and feedback-output devices, both input channels, the live-stage option, and all output-lane settings are saved in the Rack patch |
+| Persistence | Input, performance-output, and feedback-output devices, PROGRAM/Stage/HEAD-start channels, live-stage option, and output lanes are saved in the Rack patch |
 
-The PROGRAM-controls and stage-slider channels must differ, and channel 10 is
-reserved for feedback-protocol requests. The context menu rejects either
-conflict. Keep both outside channels 1-10 unless combined routing to a HEAD is
-intentional. The defaults, channels 16 and 15 respectively, avoid all fixed
-routes. The panel readout shows `P16` and `S15` for these defaults.
+The PROGRAM-controls channel may share a channel with one of its HEADs; their
+CC ranges are distinct. The Stage channel must differ from the PROGRAM channel
+and every active HEAD channel. The MIDI module menu enforces these conflicts and
+provides a contiguous HEAD channel start (default 1). The default routes are
+HEAD 1-8, Stage 15, and PROGRAM 16, leaving channels 9-14 free. Its readout
+shows the PROGRAM, HEAD-start, and Stage channels.
+
+The HEAD-start menu is limited so the active contiguous range never wraps past
+channel 16. For example, an instance with two Heads can start at channel 13,
+share PROGRAM on channel 13, and use Stage channel 12. Channel assignments
+across separate MIDI modules are not coordinated automatically: give each
+instance a distinct HEAD range, PROGRAM route, and Stage route.
 
 ## 2. Message value conventions
 
@@ -40,9 +48,9 @@ routes. The panel readout shows `P16` and `S15` for these defaults.
 
 ## 3. Incoming PROGRAM and stage MIDI
 
-Stage-slider messages use the configurable stage-slider channel, default MIDI
-channel 15. PROGRAM commands, gestures, global controls and Program Change use
-the configurable PROGRAM-controls channel, default MIDI channel 16.
+Stage-slider messages use the configurable Stage channel, default MIDI channel
+15. PROGRAM commands, gestures, global controls, requests, HEAD ALL, and Program
+Change use the configurable PROGRAM channel, default MIDI channel 16.
 
 ### 3.1 Stage sliders
 
@@ -58,6 +66,9 @@ control resumes when it crosses the MIDI value. Preset recall always uses
 takeover and never moves the handles.
 
 ### 3.2 PROGRAM commands
+
+PROGRAM CC 93 sets Pulse/retrigger time continuously: 0-127 maps to the panel
+control scale (0.1 ms minimum, 1 ms midpoint, 15 ms maximum).
 
 These messages use the PROGRAM-controls channel.
 
@@ -132,6 +143,7 @@ range through the normal PROGRAM edit logic.
 | 89 | Key | 12 equal bins over 0-127: C through B | `0,12,23,35,46,58,69,81,92,104,115,127` |
 | 90 | Scale | 3 equal bins: Major, Minor, Chromatic | `0,64,127` |
 | 91 | Pulse Retrig | `<64` Off, `>=64` On | `0,127` |
+| 93 | Pulse/retrigger time | Continuous 0-127, panel scale | Absolute `0-127` |
 
 Key and Scale directly update the current PROGRAM musical state; they do not
 simulate the modal panel button sequence. Pulse Retrig directly moves the
@@ -157,20 +169,19 @@ the same 3-state bins documented for HEAD selectors: `0-42`, `43-84`, and
 
 ## 4. Incoming HEAD CC map
 
-The same CC 0-13 map is reused on channels 1-8. The channel selects the HEAD.
-Channel 9 broadcasts the same map through CC 12; Display CC 13 is ignored.
+The CC 0-13 map and per-Head CC 18 TIME MULT are available on the configured
+contiguous HEAD channels. CC 18 is intentionally excluded from HEAD ALL because
+tempo trim is a per-Head setting. The channel selects the HEAD; default start
+channel is 1. PROGRAM-channel CC 32-44
+broadcast HEAD CC 0-12 to all Heads. CC 45 (HEAD Display) is ignored.
 
 | MIDI channel | Target |
 |---:|---|
-| 1 | HEAD 1, immediately left of MIDI |
-| 2 | HEAD 2 |
-| 3 | HEAD 3 |
-| 4 | HEAD 4 |
-| 5 | HEAD 5 |
-| 6 | HEAD 6 |
-| 7 | HEAD 7 |
-| 8 | HEAD 8, furthest left |
-| 9 | HEAD ALL: broadcast CC 0-12 to every HEAD; CC 13 ignored |
+| `headStart + 1` | HEAD 1, immediately left of MIDI |
+| `headStart + 2` | HEAD 2 |
+| … | … |
+| `headStart + N` | HEAD N, furthest left |
+| PROGRAM channel, CC 32-44 | HEAD ALL: broadcast CC 0-12 to every HEAD |
 
 ### 4.1 HEAD controls
 
@@ -190,6 +201,7 @@ Channel 9 broadcasts the same map through CC 12; Display CC 13 is ignored.
 | 11 | Time CV amount | `value / 127 * 2 - 1` | `0` = -100%, `64` about +0.8%, `127` = +100% |
 | 12 | Loop mode | 3 equal bins | `0` One-shot, `64` First/Last, `127` Full chain |
 | 13 | Display | Each value `64-127` toggles latch; low ignored | Press `127`, release `0` |
+| 18 | Time multiplier | `0-127` maps logarithmically from `×0.5` through `×1` at midpoint to `×4` | Absolute `0-127`; midpoint `64` is approximately `×1` |
 
 CC 11 has no exact zero in the present 7-bit formula: raw 63 is about -0.8%
 and raw 64 is about +0.8%. Use 64 for the nearest positive center value.
@@ -215,12 +227,12 @@ CC 10 state order is `/16, /8, /4, /2, x1, x2, x4, x8, x16`.
 - The four continuous/discrete controls reported as flipping between 0 and 127
   on the partial DROID patch are CC 8, 9, 10, and 12; configure them with the
   discrete value sets above.
-- Channel 9 reuses the same CC values and does not require a HEAD ALL panel
-  module. When installed, HEAD ALL mirrors persistent channel-9 controls on its
-  panel while the direct broadcast still reaches every HEAD. CC 13 is
-  deliberately ignored because only one HEAD may own Display.
-- The mapping therefore consumes one additional MIDI channel, not another set
-  of CC numbers. Channels 10-14 remain unassigned by the fixed HEAD map.
+- PROGRAM-channel CC 32-44 reuses HEAD CC 0-12 and does not require a HEAD ALL
+  panel module. When installed, HEAD ALL mirrors persistent broadcast controls
+  on its panel while the direct broadcast still reaches every connected HEAD.
+  CC 45 is deliberately ignored because only one HEAD may own Display.
+- The mapping adds CC assignments on the PROGRAM route without consuming a
+  dedicated MIDI channel.
 
 ## 5. Incoming MIDI System Realtime
 
@@ -340,24 +352,25 @@ Do not reserve DROID controls or fixed CC pairs for 14-bit output yet. The
 MSB/LSB numbering, lane mode, update ordering, and throttle should be specified
 when that work starts.
 
-## 8. Controller feedback protocol v1 (frozen)
+## 8. Controller feedback protocol (development revision 2)
 
-Protocol v1 gives stateful controllers an authoritative view of SpaceTime after
+The controller feedback protocol gives stateful surfaces an authoritative view of SpaceTime after
 panel edits, MIDI edits, patch reloads, and controller page changes. It is a
 controller-independent CC protocol: Midilize, DROID, or another adapter maps
 these semantic messages onto the controls and LEDs of a particular surface.
 
-This section freezes the wire format. HEAD/HEAD ALL, PROGRAM, and Stage
-feedback, protocol probing, the separate VCV output, snapshots, and sparse
-semantic deltas are implemented.
+This development revision maps requests, framing, and HEAD ALL onto the
+configurable PROGRAM channel; feedback follows the configured PROGRAM, Stage,
+and contiguous HEAD routes. The first-release protocol version byte remains
+undecided.
 
 ### 8.1 Transport and device rules
 
-| Rule | Protocol v1 decision |
+| Rule | Current development decision |
 |---|---|
 | Feedback device | A separate MIDI output selected in the MIDI module context menu; Off by default |
 | Input device | Snapshot requests arrive through the existing SpaceTime MIDI input |
-| Feedback channels | Fixed and independent of the configurable PROGRAM-controls and stage-slider input channels |
+| Feedback channels | PROGRAM, Stage, and contiguous HEAD feedback follow their configured routes |
 | Message type | Ordinary MIDI CC only; no SysEx, NRPN, notes, or Program Change |
 | Live updates | Sparse state deltas, emitted only when a semantic value changes |
 | Resynchronization | Controller sends an explicit, stateless snapshot request for the area/page it is showing |
@@ -371,27 +384,24 @@ controller is attached. Performance output lanes continue to use the existing
 MIDI output. Keeping feedback on its own device prevents LED/status traffic
 from entering a synthesizer or colliding with per-head note and CV lanes.
 
-### 8.2 Fixed channel allocation
+### 8.2 Channel allocation
 
 | MIDI channel | Feedback role |
 |---:|---|
-| 1-8 | HEAD 1-8 state; channel number equals visible HEAD number |
-| 9 | Reserved for a future aggregate HEAD ALL status; no v1 state is emitted here |
-| 10 | Protocol requests, version response, and snapshot framing |
-| 11-14 | Reserved for future SpaceTime feedback areas |
-| 15 | Stage voltage/time values |
-| 16 | PROGRAM and selected-stage programming state |
+| Configured HEAD range | HEAD state; contiguous from the MIDI module HEAD channel start (default 1) |
+| Configured Stage channel | Stage voltage/time values (default 15) |
+| Configured PROGRAM channel | PROGRAM state, requests, version response, and snapshot framing (default 16) |
+| 9-14 | Free in the default single-instance layout |
 
 HEAD ALL is a command target, not a ninth head with one authoritative state.
 After a broadcast, heads may diverge through local panel, CV, or MIDI control.
-Its snapshot request therefore returns individual HEAD messages on channels
-1-8. Controller adapters may show an ALL layer while deriving its LEDs from
-those eight truthful states.
+Its snapshot request therefore returns individual HEAD messages on the
+configured HEAD channels. Controller adapters may show an ALL layer while
+deriving its LEDs from those truthful states. The HEAD-start range must keep
+all connected Heads within MIDI channels 1-16; the PROGRAM channel may coincide
+with a HEAD channel, while the Stage channel may not.
 
-Channel 10 is reserved at the VCV input adapter. It cannot simultaneously be
-selected as the configurable PROGRAM-controls or stage-slider channel.
-
-### 8.3 Snapshot requests and framing (channel 10)
+### 8.3 Snapshot requests and framing (PROGRAM channel)
 
 Requests use the existing MIDI input. Values below 64 are ignored for the
 PROGRAM request; HEAD and Stage page values are exact indices and must not be
@@ -399,12 +409,12 @@ followed by an automatic release message.
 
 | CC | Direction | Value | Meaning |
 |---:|---|---:|---|
-| 0 | Controller -> SpaceTime | `0-7` | Request one HEAD snapshot; value 0 means HEAD 1 |
-| 0 | Controller -> SpaceTime | `8` | Request all eight HEAD snapshots (HEAD ALL view) |
-| 1 | Controller -> SpaceTime | `64-127` | Request PROGRAM snapshot |
-| 2 | Controller -> SpaceTime | `0-7` | Request one eight-stage page; page 0 is stages 1-8 |
-| 3 | Controller -> SpaceTime | `64-127` | Protocol probe/version request |
-| 3 | SpaceTime -> Controller | `1` | Protocol major version 1 |
+| 50 | Controller -> SpaceTime | `0-7` | Request one HEAD snapshot; value 0 means HEAD 1 |
+| 50 | Controller -> SpaceTime | `8` | Request all eight HEAD snapshots (HEAD ALL view) |
+| 51 | Controller -> SpaceTime | `64-127` | Request PROGRAM snapshot |
+| 52 | Controller -> SpaceTime | `0-7` | Request one eight-stage page; page 0 is stages 1-8 |
+| 53 | Controller -> SpaceTime | `64-127` | Protocol probe/version request |
+| 117 | SpaceTime -> Controller | `2` (development) | Protocol version byte; release value TBD |
 | 118 | SpaceTime -> Controller | area code | Snapshot begins |
 | 119 | SpaceTime -> Controller | same area code | Snapshot ends |
 
@@ -422,7 +432,7 @@ subject to the same queue and therefore preserve message ordering.
 The request is stateless: the desired head or stage page is carried in every
 message. SpaceTime does not remember which page any controller is displaying.
 
-### 8.4 HEAD state and acknowledgements (channels 1-8)
+### 8.4 HEAD state and acknowledgements (configured HEAD range)
 
 Where practical, feedback reuses the incoming HEAD CC number. Start and Stop
 are represented as mutually exclusive status LEDs rather than command echoes.
@@ -446,41 +456,44 @@ are represented as mutually exclusive status LEDs rather than command echoes.
 | 15 | Current stage: exact zero-based index `0-63` |
 | 16 | HEAD present: `127`; an absent requested head reports `0` |
 | 17 | Follow MIDI transport: `0` Off, `127` On |
+| 18 | Time multiplier, same logarithmic scale as incoming CC 18 |
 
 CC 0 is deliberately unused: echoing clock ticks would turn feedback into a
 high-rate clock stream. Snapshot order is ascending CC number. A change of run
 state emits CC 1, 2, and 14 together so a controller cannot retain a stale
 RUN/STOP/HOLD LED combination.
 
-### 8.5 PROGRAM state (channel 16)
+### 8.5 PROGRAM state (configured PROGRAM channel)
 
 | CC | Feedback value |
 |---:|---|
-| 0 | Selected stage: exact zero-based index `0-63` |
-| 1 | Key: exact index `0-11` for C-B |
-| 2 | Scale: `0` Major, `1` Minor, `2` Chromatic |
-| 3 | Pulse Retrig: `0` Off, `127` On |
-| 4 | Bulk arm active: `0` Off, `127` On |
-| 16 | Selected-stage Quantize: `0` Continuous, `127` Quantized |
-| 17 | Selected-stage slope: `0` Stepped, `1` Slew 1, `2` Slew 2 |
-| 18 | Selected-stage voltage range: `0` Full, `1` Half, `2` Limited |
-| 19 | Selected-stage Limited octave: exact index `0-4` for -2 through +2 |
-| 20 | Selected-stage voltage source: `0` Internal, `127` External |
-| 21 | Selected-stage Stop flag: `0` Off, `127` On |
-| 22 | Selected-stage Sustain flag: `0` Off, `127` On |
-| 23 | Selected-stage Enable flag: `0` Off, `127` On |
-| 24 | Selected-stage First flag: `0` Off, `127` On |
-| 25 | Selected-stage Last flag: `0` Off, `127` On |
-| 26 | Selected-stage time range: exact index `0-3` |
-| 27 | Selected-stage time source: `0` Internal, `127` External |
-| 28 | Selected-stage Pulse 1 flag: `0` Off, `127` On |
-| 29 | Selected-stage Pulse 2 flag: `0` Off, `127` On |
+| 94 | Selected stage: exact zero-based index `0-63` |
+| 95 | Key: exact index `0-11` for C-B |
+| 96 | Scale: `0` Major, `1` Minor, `2` Chromatic |
+| 97 | Pulse Retrig: `0` Off, `127` On |
+| 98 | Bulk arm active: `0` Off, `127` On |
+| 99 | Selected-stage Quantize: `0` Continuous, `127` Quantized |
+| 100 | Selected-stage slope: `0` Stepped, `1` Slew 1, `2` Slew 2 |
+| 101 | Selected-stage voltage range: `0` Full, `1` Half, `2` Limited |
+| 102 | Selected-stage Limited octave: exact index `0-4` for -2 through +2 |
+| 103 | Selected-stage voltage source: `0` Internal, `127` External |
+| 104 | Selected-stage Stop flag: `0` Off, `127` On |
+| 105 | Selected-stage Sustain flag: `0` Off, `127` On |
+| 106 | Selected-stage Enable flag: `0` Off, `127` On |
+| 107 | Selected-stage First flag: `0` Off, `127` On |
+| 108 | Selected-stage Last flag: `0` Off, `127` On |
+| 109 | Selected-stage time range: exact index `0-3` |
+| 110 | Selected-stage time source: `0` Internal, `127` External |
+| 111 | Selected-stage Pulse 1 flag: `0` Off, `127` On |
+| 112 | Selected-stage Pulse 2 flag: `0` Off, `127` On |
+| 113 | Pulse/retrigger time: normalized panel scale `0-127` |
 
-Changing selected stage emits CC 0 followed by CC 16-29 for the newly selected
-stage. This is one bounded semantic refresh, not a full 64-stage dump. PROGRAM
-snapshot order is CC 0-4 followed by CC 16-29.
+PROGRAM feedback remaps old logical CC 0-4 to output CC 94-98, and old CC
+16-29 to output CC 99-112. Pulse Time is output CC 113. Changing selected
+stage emits CC 94 followed by CC 99-112 for the newly selected stage. PROGRAM
+snapshots include CC 94-98 and CC 99-113.
 
-### 8.6 Stage values (channel 15)
+### 8.6 Stage values (configured Stage channel; default 15)
 
 Stage feedback mirrors the slider map exactly:
 
@@ -516,10 +529,18 @@ stage-delta setting.
 
 ### 8.8 Reserved and deferred feedback
 
-Protocol v1 does not report audio-rate phase/CV, raw clock ticks, per-stage
-program bitfields, preset contents, note-lane state, or 14-bit values. Channels
-9 and 11-14, protocol CC 4-117, and unused area codes remain reserved; future
-versions must not reinterpret any v1 assignment.
+This protocol does not report audio-rate phase/CV, raw clock ticks, per-stage
+program bitfields, preset contents, note-lane state, or 14-bit values. In the
+default single-instance layout, channels 9-14 are unused by SpaceTime and are
+available for other equipment; a custom SpaceTime route may use them. They are
+not globally reserved, and multi-instance routing must avoid channel conflicts.
+
+On the PROGRAM input channel, CC 46-49 and 54-63 are reserved for future
+commands. CC 32-44 carry HEAD ALL, CC 50-53 carry requests, and CC 64-93 carry
+PROGRAM controls. On PROGRAM feedback output, CC 94-113 carry PROGRAM state,
+CC 117 carries the version reply, and CC 118-119 frame snapshots; CC 114-116
+are reserved. These assignments describe the development protocol; release
+versioning and any future extensions remain to be decided.
 
 ## 9. Activity and diagnostics
 
@@ -531,10 +552,10 @@ versions must not reinterpret any v1 assignment.
 | MIDI context `Last` | Last decoded status/channel/number/value and route |
 | Route `program` | Message matched PROGRAM-controls channel |
 | Route `stage` | Message matched stage-slider channel |
-| Route `head` | CC matched HEAD channel 1-8 |
-| Route `head all` | CC matched fixed HEAD ALL channel 9 |
+| Route `head` | CC matched the configured contiguous HEAD range |
+| Route `head all` | PROGRAM CC 32-44 matched HEAD ALL |
 | Route `program+head` | PROGRAM channel overlaps a HEAD channel |
-| Route `stage+head` | Stage-slider channel overlaps a HEAD channel |
+| Route `stage+head` | Invalid; Stage may not overlap active HEAD channels |
 | HEAD context diagnostic | Last applied HEAD CC, scaled value, and sequence |
 | PROGRAM context diagnostic | Last consumed PROGRAM MIDI event and op count |
 
@@ -549,7 +570,7 @@ transport or CC interleaving.
 - [ ] Use PROGRAM-controls channel 16 and stage-slider channel 15 unless
       deliberately testing HEAD overlap.
 - [ ] Use channels 1-8 for HEAD 1-8.
-- [ ] Use channel 9 for HEAD ALL CC 0-12; confirm CC 13 has no effect.
+- [ ] Use PROGRAM-channel CC 32-44 for HEAD ALL; confirm CC 45 has no effect.
 - [ ] Configure PROGRAM gesture controls as two-direction actions, not ordinary
       press/release buttons.
 - [ ] Configure CC 8, 9, 10, and 12 as discrete E4 encoder ranges.
@@ -588,7 +609,7 @@ transport or CC interleaving.
 |---|---|
 | PROGRAM/stage CC input | Implemented through CC 91; slider/modifier tests and CC 89/90/91 VCV visual feedback passed; DROID integration pending |
 | Per-head CC input | Implemented; Start/Stop and basic routing passed |
-| HEAD ALL CC input | Implemented on fixed channel 9 for CC 0-12; Display excluded |
+| HEAD ALL CC input | Implemented on PROGRAM channel CC 32-44; Display excluded |
 | MIDI Clock input | Implemented; DROID USB clock reaches CLK indicator |
 | MIDI realtime transport | Implemented; Start/Stop working, stale-event synchronization fixed; comprehensive retest pending |
 | Virtual clock input | Implemented; tick-for-tick secondary verification pending |
@@ -597,7 +618,7 @@ transport or CC interleaving.
 | 14-bit CV/CC output | Explicitly deferred |
 | NRPN | Deferred |
 | MIDI Clock output | Deferred |
-| Controller feedback protocol v1 | VCV HEAD/HEAD ALL, PROGRAM, and Stage snapshots, sparse deltas, probe reply, separate output selection, persistence, and diagnostics implemented |
+| Controller feedback protocol v2 development map | VCV HEAD/HEAD ALL, PROGRAM, and Stage snapshots, sparse deltas, probe reply, configurable channels, separate output selection, persistence, and diagnostics implemented |
 
 ## 12. Shared implementation ownership
 
@@ -616,7 +637,7 @@ Controller feedback likewise belongs in a platform-neutral shared core. VCV
 and MetaModule adapters own only feedback MIDI device I/O, menus, persistence,
 and host-specific reconnect detection.
 
-`dsp/MidiFeedback.hpp` implements protocol-v1 request decoding, snapshot
+`dsp/MidiFeedback.hpp` implements development protocol-v2 request decoding, snapshot
 framing, semantic Head/PROGRAM deltas, acknowledgement pulses, and coalesced
 stage-value deltas. It consumes a fixed-size `MidiFeedbackState`; adapters are
 responsible for populating that state from their local module topology.

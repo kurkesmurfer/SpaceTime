@@ -106,7 +106,7 @@ public:
 	// cares about one of the two (unlikely, but cheap to allow) isn't forced
 	// to pay for both on every read, and so neither payload's field count
 	// has to change if the other one ever does.
-	static const unsigned kContextFieldCount = 8 + 5 + 2 + 1;  // ExtInputs, Globals, ScaleKey, selection
+	static const unsigned kContextFieldCount = 8 + 6 + 2 + 1;  // ExtInputs, Globals, ScaleKey, selection
 
 	void publishContext(unsigned busIndex, const ExtInputs& ext, const Globals& globals,
 			const ScaleKey& scaleKey, uint8_t selectedStage) {
@@ -170,9 +170,10 @@ private:
 		fields[10] = globals.slopeLaw;
 		fields[11] = globals.addressScale;
 		fields[12] = globals.pulseRetrig ? 1u : 0u;
-		fields[13] = scaleKey.key;
-		fields[14] = scaleKey.scale;
-		fields[15] = selectedStage;
+		fields[13] = floatToBits(globals.pulseTime);
+		fields[14] = scaleKey.key;
+		fields[15] = scaleKey.scale;
+		fields[16] = selectedStage;
 	}
 
 	static void unpackContext(const uint32_t (&fields)[kContextFieldCount], ExtInputs& ext,
@@ -186,10 +187,11 @@ private:
 		globals.slopeLaw = (uint8_t)fields[10];
 		globals.addressScale = (uint8_t)fields[11];
 		globals.pulseRetrig = fields[12] != 0;
-		scaleKey.key = (uint8_t)fields[13];
-		scaleKey.scale = (uint8_t)fields[14];
+		globals.pulseTime = bitsToFloat(fields[13]);
+		scaleKey.key = (uint8_t)fields[14];
+		scaleKey.scale = (uint8_t)fields[15];
 		if (selectedStage)
-			*selectedStage = (uint8_t)fields[15];
+			*selectedStage = (uint8_t)fields[16];
 	}
 
 	static void pack(const StageTable& table, uint32_t (&fields)[kFieldCount]) {
@@ -646,7 +648,7 @@ private:
 // ---- Heads (HeadRemote, kHeadCount slots per instrument) -------------------
 
 struct MetaModuleHeadConfigBus {
-	static const unsigned kFieldCount = 9;        // HeadConfig's fields
+	static const unsigned kFieldCount = 10;       // HeadConfig's fields
 	static const unsigned kOutputFieldCount = 10; // HeadOut's ten fields
 
 	std::atomic<uint32_t> owner{0};
@@ -789,6 +791,7 @@ private:
 		fields[6] = floatToBits(config.timeCvAmount);
 		fields[7] = config.loopMode;
 		fields[8] = config.clockSource;
+		fields[9] = floatToBits(config.timeMultiplier);
 	}
 
 	static void unpackHeadConfig(const uint32_t (&fields)[MetaModuleHeadConfigBus::kFieldCount],
@@ -802,6 +805,7 @@ private:
 		config.timeCvAmount = bitsToFloat(fields[6]);
 		config.loopMode = (uint8_t)fields[7];
 		config.clockSource = (uint8_t)fields[8];
+		config.timeMultiplier = bitsToFloat(fields[9]);
 	}
 
 	static void packHeadOut(const HeadOut& out,

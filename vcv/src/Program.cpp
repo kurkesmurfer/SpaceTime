@@ -6,6 +6,7 @@
 #include "PresetRow.hpp"
 #include "NativeModuleContracts.hpp"
 #include "MMBus.hpp"
+#include "PulseTimeQuantity.hpp"
 
 // ============================================================================
 // PROGRAM — WP7 integrated.
@@ -45,7 +46,8 @@ constexpr float PROW2_Y = 116.8f;
 constexpr float LOAD_X = 14.f, SAVE_X = 28.f, KEY_X = 42.f, SCALE_X = 56.f;
 constexpr float EXT_X = 84.f;
 constexpr float EXT_Y0 = 20.f, EXT_PITCH = 9.5f;
-constexpr float PULSE_RETRIG_X = 84.f, PULSE_RETRIG_Y = 73.f;
+constexpr float PULSE_RETRIG_X = 84.f, PULSE_RETRIG_Y = 67.f;
+constexpr float PULSE_TIME_X = 84.f, PULSE_TIME_Y = 79.5f;
 constexpr float LTD_SELECTOR_X = 65.f, LTD_SELECTOR_Y = LTD_Y;
 constexpr float TRANGE_SELECTOR_X = 52.f, TRANGE_SELECTOR_Y = TIME_Y;
 constexpr float INSTRUMENT_DISPLAY_X = 78.5f, INSTRUMENT_STEP_X = 88.f;
@@ -95,6 +97,7 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 		TRANGE_SELECTOR_PARAM,
 		INSTRUMENT_DOWN_PARAM,
 		INSTRUMENT_UP_PARAM,
+		PULSE_TIME_PARAM,
 		PARAMS_LEN
 	};
 	static_assert((int)PARAMS_LEN == (int)spacetime::NativeProgramContract::NATIVE_PARAMS_LEN,
@@ -231,6 +234,8 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 		configSwitch(PULSE_RETRIG_PARAM, 0.f, 1.f, 1.f,
 			"Pulse retrigger", {"Continuous across adjacent pulse stages",
 			"Hardware-compatible retrigger notch"});
+		configParam<PulseTimeQuantity>(PULSE_TIME_PARAM, 0.f, 1.f, 0.5f,
+			"Pulse/retrigger time", " ms")->displayPrecision = 2;
 		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configSwitch(LTD_SELECTOR_PARAM, 0.f, 4.f, 2.f, "Limited octave",
 			{"-2", "-1", "0", "+1", "+2"});
@@ -314,6 +319,7 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 		float dt = args.sampleTime * divider.getDivision();
 		using namespace spacetime;
 		globals.pulseRetrig = params[PULSE_RETRIG_PARAM].getValue() > 0.5f;
+		globals.pulseTime = pulseTimeFromControl(params[PULSE_TIME_PARAM].getValue());
 		midiKeyFeedback = std::fmax(0.f, midiKeyFeedback - dt);
 		midiScaleFeedback = std::fmax(0.f, midiScaleFeedback - dt);
 
@@ -484,6 +490,9 @@ constexpr float POLY_X = 84.f, POLY_Y = 112.5f;
 				}
 				else if (ev.type == MIDI_PROG_SET_PULSE_RETRIG) {
 					params[PULSE_RETRIG_PARAM].setValue(ev.index ? 1.f : 0.f);
+				}
+				else if (ev.type == MIDI_PROG_SET_PULSE_TIME) {
+					params[PULSE_TIME_PARAM].setValue(clamp(ev.fvalue, 0.f, 1.f));
 				}
 				else if (ev.type == MIDI_PROG_SLIDER) {
 					if (ev.index < kMaxStages)
@@ -905,10 +914,11 @@ struct ProgramWidget : ModuleWidget {
 			static const char* extNames[4] = {"A", "B", "C", "D"};
 			spacetime::addIoLabel(this, EXT_X - 5.7f, EXT_Y0 + EXT_PITCH * i, extNames[i]);
 		}
-		spacetime::addIoLabel(this, PULSE_RETRIG_X, 58.f, "PULSE");
-		spacetime::addIoLabel(this, PULSE_RETRIG_X, 62.f, "RETRIG");
-		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 69.f, "ON");
-		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 77.f, "OFF");
+		spacetime::addIoLabel(this, PULSE_RETRIG_X, 57.5f, "PULSE");
+		spacetime::addIoLabel(this, PULSE_RETRIG_X, 61.5f, "RETRIG");
+		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 63.f, "ON");
+		spacetime::addMicroLabel(this, PULSE_RETRIG_X - 5.f, 71.f, "OFF");
+		spacetime::addMicroLabel(this, PULSE_TIME_X, 85.f, "TIME");
 		spacetime::addMicroLabel(this, LTD_SELECTOR_X, 64.f, "SELECT");
 		spacetime::addMicroLabel(this, TRANGE_SELECTOR_X, 101.f, "SELECT");
 		spacetime::addIoLabel(this, INSTRUMENT_DISPLAY_X + 5.f, 87.8f, "ID");
@@ -979,6 +989,8 @@ struct ProgramWidget : ModuleWidget {
 			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(EXT_X, EXT_Y0 + EXT_PITCH * i)), module, Program::EXT_INPUTS + i));
 		addParam(createParamCentered<CKSS>(mm2px(Vec(PULSE_RETRIG_X, PULSE_RETRIG_Y)),
 			module, Program::PULSE_RETRIG_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(PULSE_TIME_X, PULSE_TIME_Y)),
+			module, Program::PULSE_TIME_PARAM));
 		auto* instrumentDisplay = createWidget<InstrumentIdDisplay>(
 			mm2px(Vec(INSTRUMENT_DISPLAY_X - 4.f, INSTRUMENT_Y - 4.f)));
 		instrumentDisplay->box.size = mm2px(Vec(8.f, 8.f));

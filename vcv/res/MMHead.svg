@@ -43,20 +43,21 @@
     <text x="79" y="62.0">RST</text>
   </g>
 
-  <!-- Full HeadConfig parity, one row of 8 (pitch 10.4mm)  -  ADDRESS,
-       ADDR SOURCE, ADDR MODE, DIRECTION, CLK SOURCE, CLK DIV, TIME CV, LOOP.
+  <!-- Full HeadConfig parity, one row of 9 (pitch 9.8mm)  -  ADDRESS,
+       ADDR SOURCE, ADDR MODE, DIRECTION, CLK SOURCE, CLK DIV, TIME CV, LOOP, TIME MULT.
        Short labels are the compromise this pitch allows; the digital
        STATUS_DISPLAY spells full state out (source/division/direction/loop
        names) for anyone who needs the unabbreviated reading. -->
   <g fill="#b7ac9d" font-family="Barlow Condensed" font-weight="600" font-size="2.1" text-anchor="middle">
     <text x="6.5" y="78.0">ADDR</text>
-    <text x="17.7" y="78.0">SRC</text>
-    <text x="28.9" y="78.0">MODE</text>
-    <text x="40.1" y="78.0">DIR</text>
-    <text x="51.3" y="78.0">CLK</text>
-    <text x="62.5" y="78.0">DIV</text>
-    <text x="73.7" y="78.0">TIME</text>
-    <text x="84.9" y="78.0">LOOP</text>
+    <text x="16.3" y="78.0">SRC</text>
+    <text x="26.1" y="78.0">MODE</text>
+    <text x="35.9" y="78.0">DIR</text>
+    <text x="45.7" y="78.0">CLK</text>
+    <text x="55.5" y="78.0">DIV</text>
+    <text x="65.3" y="78.0">TIME</text>
+    <text x="75.1" y="78.0">LOOP</text>
+    <text x="84.9" y="78.0">MULT</text>
   </g>
 
   <text x="45.72" y="94.4" fill="#7b6f62" font-family="Barlow Condensed" font-weight="600" font-size="2.8" text-anchor="middle">INPUTS</text>

@@ -21,7 +21,7 @@ constexpr float DIR_X = 10.f, CLKSRC_X = 25.4f, CLKDIV_X = 41.f;
 constexpr float PLAY2_Y = 78.f;
 constexpr float TIMECV_X = 10.f, LOOP_X = 25.4f, LINK_X = 41.f;
 constexpr float JACK_X0 = 9.4f, JACK_PITCH = 11.f;
-constexpr float IN1_Y = 92.f, IN2_Y = 100.f;
+constexpr float IN1_Y = 93.5f, IN2_Y = 107.5f;
 } // namespace LayoutHA
 
 struct HeadAll : Module {
@@ -264,10 +264,10 @@ struct HeadAllWidget : ModuleWidget {
 		static const char* in1[4] = {"START", "STOP", "ADV", "STRB"};
 		static const char* in2[4] = {"ADDR", "CLK", "TIME", "RST"};
 		for (int i = 0; i < 4; i++) {
-			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 4.1f, in1[i]);
-			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.1f, in2[i]);
+			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 6.7f, in1[i]);
+			spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 6.7f, in2[i]);
 		}
-		spacetime::addSectionHeading(this, CX, 108.f, "COMMON HEAD BUS");
+		spacetime::addSectionHeading(this, CX, 119.7f, "COMMON HEAD BUS");
 		spacetime::addManufacturerWordmark(this, 50.8f);
 #endif
 

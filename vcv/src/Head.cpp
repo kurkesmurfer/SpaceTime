@@ -4,6 +4,7 @@
 #include "ChainAdapter.hpp"
 #include "HeadDSP.hpp"
 #include "NativeModuleContracts.hpp"
+#include "TimeMultiplierQuantity.hpp"
 
 // ============================================================================
 // HEAD — WP7 integrated.
@@ -11,22 +12,8 @@
 // (slew, REF ramp and pulses are sample-accurate, per spec); expander
 // traffic and lights run at control rate (÷16).
 //
-// All positions in mm; MUST match res/Head.svg.
+// The 12HP widget positions below match Panels/Head.panelgen.
 // ============================================================================
-
-namespace LayoutH {
-constexpr float CX = 25.4f;
-constexpr float BTN_X0 = 9.4f, BTN_PITCH = 11.f, BTN_Y = 21.5f;
-constexpr float STATUS_X0 = 17.4f, STATUS_PITCH = 8.f, STATUS_Y = 30.5f;
-constexpr float ADDR_Y = 45.f;
-constexpr float ADDR_KNOB_X = 10.f, ADDR_SRC_X = 25.4f, ADDR_MODE_X = 41.f;
-constexpr float PLAY_Y = 64.5f;
-constexpr float DIR_X = 10.f, CLKSRC_X = 25.4f, CLKDIV_X = 41.f;
-constexpr float PLAY2_Y = 78.f;
-constexpr float TIMECV_X = 10.f, LOOP_X = 25.4f, HEADID_X = 41.f;
-constexpr float JACK_X0 = 9.4f, JACK_PITCH = 11.f;
-constexpr float IN1_Y = 92.f, IN2_Y = 100.4f, OUT1_Y = 108.8f, OUT2_Y = 117.2f;
-} // namespace LayoutH
 
 struct Head : Module {
 	enum ParamId {
@@ -44,6 +31,7 @@ struct Head : Module {
 		TIMECV_PARAM,
 		LOOP_PARAM,
 		DISPLAY_PARAM,  // appended (patch compatibility)
+		TIME_MULT_PARAM, // appended (patch compatibility)
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -136,6 +124,8 @@ struct Head : Module {
 			{"One-shot", "Cycle First–Last", "Full chain"});
 		configButton(DISPLAY_PARAM,
 			"Display (programming LEDs follow this head; press again or scroll to release)");
+		configParam<TimeMultiplierQuantity>(TIME_MULT_PARAM, 0.f, 1.f, 0.5f,
+			"Time multiplier", "x");
 
 		configInput(START_INPUT, "Start (pulse; Sustain gate / Enable >5 V)");
 		configInput(STOP_INPUT, "Stop (pulse)");
@@ -200,6 +190,7 @@ struct Head : Module {
 			case 11: params[TIMECV_PARAM].setValue(clamp(value, -1.f, 1.f)); break;
 			case 12: params[LOOP_PARAM].setValue((float)clamp((int)std::round(value), 0, 2)); break;
 			case 13: displayLatch = !displayLatch; break;
+			case 18: params[TIME_MULT_PARAM].setValue(clamp(value, 0.f, 1.f)); break;
 		}
 	}
 
@@ -332,6 +323,7 @@ struct Head : Module {
 			cfg.clkExt = clockSource != 0;
 			cfg.clkDivIndex = (uint8_t)std::round(params[CLK_DIV_PARAM].getValue());
 			cfg.timeCvAmount = params[TIMECV_PARAM].getValue();
+			cfg.timeMultiplier = spacetime::timeMultiplierFromControl(params[TIME_MULT_PARAM].getValue());
 			cfg.loopMode = (uint8_t)std::round(params[LOOP_PARAM].getValue());
 
 			if (resetTrigger.process(params[RESET_PARAM].getValue() > 0.5f))
@@ -381,6 +373,7 @@ struct Head : Module {
 						table.program[out.currentStage].quantize()) ? 1 : 0;
 					own.address = cfg.addressKnob;
 					own.timeCvAmount = cfg.timeCvAmount;
+					own.timeMultiplier = cfg.timeMultiplier;
 					own.phase = out.phase;
 					own.cv = out.cv;
 					own.advanceSeq = feedbackAdvanceSeq;
@@ -473,106 +466,52 @@ struct Head : Module {
 };
 
 struct HeadWidget : ModuleWidget {
-	HeadWidget(Head* module) {
-		using namespace LayoutH;
+	explicit HeadWidget(Head* module) {
 		setModule(module);
 		setPanel(spacetime::createThemedPanel(
 			asset::plugin(pluginInstance, "res/Head-light.svg"),
 			asset::plugin(pluginInstance, "res/Head.svg")));
 
-#ifndef METAMODULE
-		spacetime::addHeaderLockup(this, 50.8f, "Head", 14.20f);
-		spacetime::addSubtitle(this, CX, 10.2f, "FUNCTION GENERATOR");
+		addParam(createParamCentered<VCVButton>(mm2px(Vec(11.081f, 19.681f)), module, Head::START_PARAM));
+		addParam(createParamCentered<VCVButton>(mm2px(Vec(24.281f, 19.681f)), module, Head::STOP_PARAM));
+		addParam(createParamCentered<VCVButton>(mm2px(Vec(37.481f, 19.681f)), module, Head::ADVANCE_PARAM));
+		addParam(createParamCentered<VCVButton>(mm2px(Vec(50.681f, 19.681f)), module, Head::RESET_PARAM));
+		// Keep the live controls aligned with the current PanelGenerator layout:
+		// the head identity light now shares the status row, and DISPLAY sits at
+		// the far right beside its label.
+		addChild(createLightCentered<MediumLight<GreenLight>>(mm2px(Vec(11.036f, 27.536f)), module, Head::RUN_LIGHT));
+		addChild(createLightCentered<MediumLight<YellowLight>>(mm2px(Vec(20.927f, 27.536f)), module, Head::HOLD_LIGHT));
+		addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(30.817f, 27.536f)), module, Head::STOPPED_LIGHT));
+		addChild(createLightCentered<MediumLight<RedGreenBlueLight>>(mm2px(Vec(40.708f, 27.536f)), module, Head::HEADID_LIGHT));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(50.599f, 27.769f)), module, Head::DISPLAY_PARAM));
+		addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(50.599f, 27.536f)), module, Head::DISPLAY_LIGHT));
 
-		spacetime::addSectionHeading(this, CX, 14.7f, "TRANSPORT");
-		{
-			static const char* btnNames[4] = {"START", "STOP", "ADV", "RST"};
-			for (int i = 0; i < 4; i++)
-				spacetime::addCvLabel(this, BTN_X0 + BTN_PITCH * i, 26.5f, btnNames[i]);
-		}
-		{
-			static const char* statusNames[3] = {"RUN", "HOLD", "STOP"};
-			for (int i = 0; i < 3; i++)
-				spacetime::addMicroLabel(this, STATUS_X0 + STATUS_PITCH * i, 33.8f, statusNames[i]);
-		}
-		spacetime::addMicroLabel(this, 41.f, 33.8f, "DISP");
-
-		spacetime::addSectionHeading(this, 9.f, 37.7f, "ADDRESS");
-		spacetime::addCvLabel(this, ADDR_KNOB_X, 53.f, "ADDRESS");
-		spacetime::addMicroLabel(this, ADDR_SRC_X, 40.f, "EXT");
-		spacetime::addMicroLabel(this, ADDR_SRC_X, 50.6f, "INT");
-		spacetime::addMicroLabel(this, ADDR_MODE_X + 5.f, 41.f, "CONT");
-		spacetime::addMicroLabel(this, ADDR_MODE_X + 5.f, 45.f, "SEQ");
-		spacetime::addMicroLabel(this, ADDR_MODE_X + 5.f, 49.f, "STRB");
-
-		spacetime::addSectionHeading(this, 9.f, 57.0f, "PLAYBACK");
-		spacetime::addCvLabel(this, DIR_X, 71.8f, "DIRECTION");
-		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 58.6f, "VCLK");
-		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 62.0f, "MIDI");
-		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 65.4f, "CV");
-		spacetime::addMicroLabel(this, CLKSRC_X + 5.4f, 68.8f, "INT");
-		spacetime::addCvLabel(this, CLKDIV_X, 71.8f, "DIV / MULT");
-		spacetime::addCvLabel(this, TIMECV_X, 83.8f, "TIME CV");
-		spacetime::addMicroLabel(this, LOOP_X + 5.6f, 74.f, "ALL");
-		spacetime::addMicroLabel(this, LOOP_X + 5.6f, 78.f, "F-L");
-		spacetime::addMicroLabel(this, LOOP_X + 5.6f, 82.f, "1-SHOT");
-		spacetime::addMicroLabel(this, HEADID_X, 83.8f, "HEAD");
-
-		spacetime::addMicroLabel(this, 8.f, 86.8f, "SIGNALS");
-		{
-			static const char* in1[4] = {"START", "STOP", "ADV", "STRB"};
-			static const char* in2[4] = {"ADDR", "CLK", "TIME", "RST"};
-			static const char* out1[4] = {"CV", "TIME", "REF", "ALL"};
-			static const char* out2[3] = {"P1", "P2", "EOC"};
-			for (int i = 0; i < 4; i++)
-				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN1_Y + 4.f, in1[i]);
-			for (int i = 0; i < 4; i++)
-				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, IN2_Y + 4.f, in2[i]);
-			for (int i = 0; i < 4; i++)
-				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, OUT1_Y + 4.f, out1[i]);
-			for (int i = 0; i < 3; i++)
-				spacetime::addIoLabel(this, JACK_X0 + JACK_PITCH * i, OUT2_Y + 4.f, out2[i]);
-		}
-#endif
-
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(BTN_X0, BTN_Y)), module, Head::START_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(BTN_X0 + BTN_PITCH, BTN_Y)), module, Head::STOP_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(BTN_X0 + 2 * BTN_PITCH, BTN_Y)), module, Head::ADVANCE_PARAM));
-		addParam(createParamCentered<VCVButton>(mm2px(Vec(BTN_X0 + 3 * BTN_PITCH, BTN_Y)), module, Head::RESET_PARAM));
-		addChild(createLightCentered<MediumLight<GreenLight>>(mm2px(Vec(STATUS_X0, STATUS_Y)), module, Head::RUN_LIGHT));
-		addChild(createLightCentered<MediumLight<YellowLight>>(mm2px(Vec(STATUS_X0 + STATUS_PITCH, STATUS_Y)), module, Head::HOLD_LIGHT));
-		addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(STATUS_X0 + 2 * STATUS_PITCH, STATUS_Y)), module, Head::STOPPED_LIGHT));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(41.f, STATUS_Y)), module, Head::DISPLAY_PARAM));
-		addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec(41.f, STATUS_Y)), module, Head::DISPLAY_LIGHT));
-
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(ADDR_KNOB_X, ADDR_Y)), module, Head::ADDRESS_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(Vec(ADDR_SRC_X, ADDR_Y)), module, Head::ADDR_SOURCE_PARAM));
-		spacetime::addDualLatchSpring3(this, module, mm2px(Vec(ADDR_MODE_X, ADDR_Y)),
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(11.883f, 44.904f)), module, Head::ADDRESS_PARAM));
+		addParam(createParamCentered<CKSS>(mm2px(Vec(30.363f, 44.904f)), module, Head::ADDR_SOURCE_PARAM));
+		spacetime::addDualLatchSpring3(this, module, mm2px(Vec(45.570f, 44.995f)),
 			Head::ADDR_CONTINUOUS_PARAM, Head::ADDR_STROBE_PARAM);
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(12.f, 61.358f)), module, Head::DIRECTION_PARAM));
+		addParam(createParamCentered<spacetime::Switch4>(mm2px(Vec(30.48f, 64.5f)), module, Head::CLK_SOURCE_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(49.16f, 61.358f)), module, Head::CLK_DIV_PARAM));
+		addParam(createParamCentered<Trimpot>(mm2px(Vec(12.f, 75.67f)), module, Head::TIMECV_PARAM));
+		addParam(createParamCentered<CKSSThree>(mm2px(Vec(30.48f, 78.f)), module, Head::LOOP_PARAM));
+		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(49.609f, 74.955f)), module, Head::TIME_MULT_PARAM));
 
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(DIR_X, PLAY_Y)), module, Head::DIRECTION_PARAM));
-		addParam(createParamCentered<spacetime::Switch4>(mm2px(Vec(CLKSRC_X, PLAY_Y)), module, Head::CLK_SOURCE_PARAM));
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec(CLKDIV_X, PLAY_Y)), module, Head::CLK_DIV_PARAM));
-		addParam(createParamCentered<Trimpot>(mm2px(Vec(TIMECV_X, PLAY2_Y)), module, Head::TIMECV_PARAM));
-		addParam(createParamCentered<CKSSThree>(mm2px(Vec(LOOP_X, PLAY2_Y)), module, Head::LOOP_PARAM));
-		addChild(createLightCentered<MediumLight<RedGreenBlueLight>>(mm2px(Vec(HEADID_X, PLAY2_Y)), module, Head::HEADID_LIGHT));
-
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, IN1_Y)), module, Head::START_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, IN1_Y)), module, Head::STOP_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 2 * JACK_PITCH, IN1_Y)), module, Head::ADVANCE_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 3 * JACK_PITCH, IN1_Y)), module, Head::STROBE_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, IN2_Y)), module, Head::ADDRESS_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, IN2_Y)), module, Head::CLK_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 2 * JACK_PITCH, IN2_Y)), module, Head::TIMECV_INPUT));
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 3 * JACK_PITCH, IN2_Y)), module, Head::RESET_INPUT));
-
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, OUT1_Y)), module, Head::CV_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, OUT1_Y)), module, Head::TIME_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 2 * JACK_PITCH, OUT1_Y)), module, Head::REF_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 3 * JACK_PITCH, OUT1_Y)), module, Head::ALL_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0, OUT2_Y)), module, Head::PULSE1_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + JACK_PITCH, OUT2_Y)), module, Head::PULSE2_OUTPUT));
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(JACK_X0 + 2 * JACK_PITCH, OUT2_Y)), module, Head::EOC_OUTPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(8.142f, 91.942f)), module, Head::START_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(19.282f, 91.942f)), module, Head::STOP_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(30.421f, 91.942f)), module, Head::ADVANCE_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(41.561f, 91.942f)), module, Head::STROBE_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(52.7f, 91.942f)), module, Head::ADDRESS_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(8.142f, 104.572f)), module, Head::CLK_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(19.282f, 104.572f)), module, Head::TIMECV_INPUT));
+		addInput(createInputCentered<PJ301MPort>(mm2px(Vec(30.421f, 104.572f)), module, Head::RESET_INPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(41.561f, 104.572f)), module, Head::CV_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(52.7f, 104.572f)), module, Head::TIME_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(8.142f, 114.992f)), module, Head::REF_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(19.282f, 114.992f)), module, Head::ALL_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(30.421f, 114.992f)), module, Head::PULSE1_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(41.561f, 114.992f)), module, Head::PULSE2_OUTPUT));
+		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(52.7f, 114.992f)), module, Head::EOC_OUTPUT));
 	}
 
 	void appendContextMenu(Menu* menu) override {
@@ -585,14 +524,10 @@ struct HeadWidget : ModuleWidget {
 			menu->addChild(createMenuLabel("Settings appear when module exists"));
 			return;
 		}
-		menu->addChild(createMenuLabel(string::f("Head id/channel: %d",
-			module->headId + 1)));
+		menu->addChild(createMenuLabel(string::f("Head id/channel: %d", module->headId + 1)));
 		menu->addChild(createMenuLabel(string::f("Last head CC: %d value %.3f seq %u",
-			module->lastMidiCc,
-			module->lastMidiCcValue,
-			module->lastAppliedHeadCcSeq)));
-		menu->addChild(createCheckMenuItem("Follow MIDI transport",
-			"global Start/Stop/Continue",
+			module->lastMidiCc, module->lastMidiCcValue, module->lastAppliedHeadCcSeq)));
+		menu->addChild(createCheckMenuItem("Follow MIDI transport", "global Start/Stop/Continue",
 			[=]() { return module->followMidiTransport; },
 			[=]() { module->followMidiTransport = !module->followMidiTransport; }));
 	}

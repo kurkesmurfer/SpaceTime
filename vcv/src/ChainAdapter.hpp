@@ -52,8 +52,11 @@ struct MessagePort {
 inline bool modelIs(rack::engine::Module* m, rack::plugin::Model* m1,
                     rack::plugin::Model* m2 = NULL,
                     rack::plugin::Model* m3 = NULL) {
-	return m && (m->model == m1 || (m2 && m->model == m2) ||
-		(m3 && m->model == m3));
+	if (!m)
+		return false;
+	bool isRequested = m->model == m1 || (m2 && m->model == m2) ||
+		(m3 && m->model == m3);
+	return isRequested;
 }
 
 // Stage Time is an out-of-band shared-state control surface. When placed in

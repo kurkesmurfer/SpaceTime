@@ -56,7 +56,7 @@
     <text x="72"   y="27.4">ID</text>
     <text x="93.6" y="13.4">PROG CH</text>
     <text x="93.6" y="27.4">SLIDER CH</text>
-    <text x="124.2" y="14.4" text-anchor="middle">RETRIG</text>
+    <text x="124.2" y="14.4" text-anchor="middle">RETRIG</text><text x="124.2" y="29" text-anchor="middle">TIME</text>
   </g>
   <g fill="#9a8f80" font-family="Barlow Condensed" font-weight="600" font-size="2.0">
     <text x="108.2" y="38" >IN</text>

@@ -32,6 +32,7 @@ enum MidiRoute {
 	MIDI_ROUTE_HEAD,
 	MIDI_ROUTE_HEAD_ALL,
 	MIDI_ROUTE_PROGRAM_HEAD,
+	MIDI_ROUTE_PROGRAM_HEAD_ALL,
 	MIDI_ROUTE_STAGE_HEAD
 };
 
@@ -54,6 +55,8 @@ class MidiCore {
 public:
 	int controlChannel;
 	int sliderChannel;
+	int headChannelStart;
+	int activeHeadCount;
 	bool moveStageSliders;
 
 	uint32_t midiClockSeq, midiStartSeq, midiStopSeq, midiContinueSeq;
@@ -75,7 +78,8 @@ public:
 	uint32_t outNoteCount, outCcCount;
 
 	MidiCore()
-		: controlChannel(15), sliderChannel(14), moveStageSliders(true),
+		: controlChannel(15), sliderChannel(14), headChannelStart(0),
+		  activeHeadCount(1), moveStageSliders(true),
 		  midiClockSeq(0), midiStartSeq(0), midiStopSeq(0), midiContinueSeq(0),
 		  programEventCount(0), programEventSeq(0), selectHeld_(false),
 		  lastStatus(-1), lastChannel(-1), lastNumber(-1), lastValue(-1),
@@ -120,6 +124,7 @@ public:
 			case MIDI_ROUTE_HEAD: return "head";
 			case MIDI_ROUTE_HEAD_ALL: return "head all";
 			case MIDI_ROUTE_PROGRAM_HEAD: return "program+head";
+			case MIDI_ROUTE_PROGRAM_HEAD_ALL: return "program+head all";
 			case MIDI_ROUTE_STAGE_HEAD: return "stage+head";
 			default: return "none";
 		}
@@ -163,23 +168,26 @@ public:
 			lastValue = data2;
 			bool toProgram = channel == controlChannel;
 			bool toStage = channel == sliderChannel;
-			bool toHead = channel < kMaxHeads;
-			bool toAllHeads = channel == kMaxHeads;
-			if (toProgram)
+			int headIndex = (int)channel - headChannelStart;
+			bool toHead = headIndex >= 0 && headIndex < activeHeadCount;
+			bool toAllHeads = toProgram && data1 >= 32 && data1 <= 44;
+			if (toProgram) {
 				handleProgramCc(data1, data2);
+				if (toAllHeads)
+					handleAllHeadsCc((uint8_t)(data1 - 32), data2);
+			}
 			if (toStage)
 				handleSliderCc(data1, data2);
 			if (toHead)
-				handleHeadCc(channel, data1, data2);
-			if (toAllHeads)
-				handleAllHeadsCc(data1, data2);
+				handleHeadCc((uint8_t)headIndex, data1, data2);
 			bool toAnyHead = toHead || toAllHeads;
-			lastRoute = toProgram && toAnyHead ? MIDI_ROUTE_PROGRAM_HEAD :
+			lastRoute = toProgram && toAllHeads ? MIDI_ROUTE_PROGRAM_HEAD_ALL :
+				(toProgram && toHead ? MIDI_ROUTE_PROGRAM_HEAD :
 				(toStage && toAnyHead ? MIDI_ROUTE_STAGE_HEAD :
 				 (toProgram ? MIDI_ROUTE_PROGRAM :
 				  (toStage ? MIDI_ROUTE_STAGE :
 				   (toHead ? MIDI_ROUTE_HEAD :
-				    (toAllHeads ? MIDI_ROUTE_HEAD_ALL : MIDI_ROUTE_IGNORED)))));
+				    (toAllHeads ? MIDI_ROUTE_HEAD_ALL : MIDI_ROUTE_IGNORED))))));
 		}
 		else if (status == 0xC && channel == controlChannel) {
 			lastNumber = data1;
@@ -192,6 +200,45 @@ public:
 				pushProgramEvent(MIDI_PROG_PRESET_LOAD, (uint8_t)slot, data1);
 				lastRoute = MIDI_ROUTE_PROGRAM;
 			}
+		}
+	}
+
+	void setActiveHeadCount(int count) {
+		if (count < 1) count = 1;
+		if (count > kMaxHeads) count = kMaxHeads;
+		activeHeadCount = count;
+		normalizeChannels();
+	}
+
+	int maxHeadChannelStart() const {
+		return 16 - activeHeadCount;
+	}
+
+	bool isHeadChannel(int channel) const {
+		return channel >= headChannelStart &&
+			channel < headChannelStart + activeHeadCount;
+	}
+
+	void normalizeChannels() {
+		if (controlChannel < 0) controlChannel = 0;
+		if (controlChannel > 15) controlChannel = 15;
+		if (sliderChannel < 0) sliderChannel = 0;
+		if (sliderChannel > 15) sliderChannel = 15;
+		if (headChannelStart < 0) headChannelStart = 0;
+		if (headChannelStart > maxHeadChannelStart())
+			headChannelStart = maxHeadChannelStart();
+		if (sliderChannel == controlChannel || isHeadChannel(sliderChannel)) {
+			int best = -1;
+			for (int distance = 1; distance <= 16 && best < 0; distance++) {
+				int lower = sliderChannel - distance;
+				int upper = sliderChannel + distance;
+				if (lower >= 0 && lower != controlChannel && !isHeadChannel(lower))
+					best = lower;
+				else if (upper <= 15 && upper != controlChannel && !isHeadChannel(upper))
+					best = upper;
+			}
+			if (best >= 0)
+				sliderChannel = best;
 		}
 	}
 
@@ -348,6 +395,8 @@ private:
 				pushProgramEvent(MIDI_PROG_SELECT_HOLD, 0, value);
 			}
 		}
+		else if (cc == 93)
+			pushProgramEvent(MIDI_PROG_SET_PULSE_TIME, 0, value, (float)value / 127.f);
 	}
 
 	void handleHeadCc(uint8_t channel, uint8_t cc, uint8_t value) {
@@ -373,6 +422,7 @@ private:
 			case 10: scaled = (float)scaleIndex(value, 8); break;
 			case 11: scaled = ((float)value / 127.f) * 2.f - 1.f; break;
 			case 12: scaled = (float)scaleIndex(value, 2); break;
+			case 18: scaled = timeMultiplierFromControl((float)value / 127.f); break;
 		}
 		headCcValue[channel][cc] = scaled;
 		headCcSeq[channel][cc]++;

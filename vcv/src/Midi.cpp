@@ -44,6 +44,8 @@ struct Midi : Module {
 	spacetime::MidiFeedbackState feedbackState;
 	bool liveStageFeedback = false;
 	int lastFeedbackDriver = -2, lastFeedbackDevice = -2;
+	int lastFeedbackControlChannel = -1, lastFeedbackStageChannel = -1;
+	int lastFeedbackHeadChannelStart = -1;
 	uint32_t feedbackMessageCount = 0;
 
 	struct PendingFeedbackMessage {
@@ -75,7 +77,7 @@ struct Midi : Module {
 		configLight(OUT_LIGHT, "MIDI output or controller feedback activity");
 		midiInput.channel = -1;  // channel routing is SpaceTime-specific
 		midiOutput.channel = -1; // SpaceTime routes per-head output channels
-		feedbackOutput.channel = -1; // feedback protocol uses fixed channels
+		feedbackOutput.channel = -1; // SpaceTime routes feedback by configured channels
 		rightPort.attach(rightExpander);
 		leftPort.attach(leftExpander);
 		feedbackDivider.setDivision(16);
@@ -174,11 +176,27 @@ struct Midi : Module {
 		feedbackCore.reset();
 	}
 
+	void updateFeedbackRouting() {
+		core.normalizeChannels();
+		if (lastFeedbackControlChannel != core.controlChannel ||
+			lastFeedbackStageChannel != core.sliderChannel ||
+			lastFeedbackHeadChannelStart != core.headChannelStart) {
+			clearFeedbackQueue();
+			feedbackCore.reset();
+			lastFeedbackControlChannel = core.controlChannel;
+			lastFeedbackStageChannel = core.sliderChannel;
+			lastFeedbackHeadChannelStart = core.headChannelStart;
+		}
+		feedbackCore.setRoutingChannels(core.controlChannel, core.sliderChannel,
+			core.headChannelStart, core.activeHeadCount);
+	}
+
 	void process(const ProcessArgs& args) override {
 		midiInput.channel = -1;  // SpaceTime routes channels internally
 		midiOutput.channel = -1;
 		feedbackOutput.channel = -1;
 		updateFeedbackDevice();
+		updateFeedbackRouting();
 		midi::Message msg;
 		while (midiInput.tryPop(&msg, args.frame))
 			handleMessage(msg);
@@ -214,6 +232,8 @@ struct Midi : Module {
 			if (toProgram) {
 				const spacetime::HeadsToAnchorMsg* fromHead = leftPort.consume(leftExpander);
 				bool statusValid = leftIsHead && fromHead->valid;
+				core.setActiveHeadCount(statusValid ? fromHead->headCount : 1);
+				updateFeedbackRouting();
 				spacetime::collectHeadFeedbackState(statusValid ? fromHead : NULL,
 					feedbackState);
 				feedbackStateUpdated = true;
@@ -255,6 +275,7 @@ struct Midi : Module {
 		json_t* root = json_object();
 		json_object_set_new(root, "controlChannel", json_integer(core.controlChannel));
 		json_object_set_new(root, "sliderChannel", json_integer(core.sliderChannel));
+		json_object_set_new(root, "headChannelStart", json_integer(core.headChannelStart));
 		json_object_set_new(root, "moveStageSliders", json_boolean(core.moveStageSliders));
 		json_object_set_new(root, "midiInput", midiInput.toJson());
 		json_object_set_new(root, "midiOutput", midiOutput.toJson());
@@ -279,12 +300,9 @@ struct Midi : Module {
 			core.controlChannel = clamp((int)json_integer_value(j), 0, 15);
 		if ((j = json_object_get(root, "sliderChannel")))
 			core.sliderChannel = clamp((int)json_integer_value(j), 0, 15);
-		if (core.controlChannel == spacetime::kFeedbackProtocolChannel)
-			core.controlChannel = 15;
-		if (core.sliderChannel == spacetime::kFeedbackProtocolChannel)
-			core.sliderChannel = 14;
-		if (core.sliderChannel == core.controlChannel)
-			core.sliderChannel = core.controlChannel == 15 ? 14 : 15;
+		if ((j = json_object_get(root, "headChannelStart")))
+			core.headChannelStart = clamp((int)json_integer_value(j), 0, 15);
+		core.normalizeChannels();
 		if ((j = json_object_get(root, "moveStageSliders")))
 			core.moveStageSliders = json_boolean_value(j);
 		if ((j = json_object_get(root, "midiInput")))
@@ -329,13 +347,15 @@ struct MidiReadout : Widget {
 		if (!font)
 			return;
 		std::string program = module ? string::f("P%02d", module->core.controlChannel + 1) : "P16";
+		std::string heads = module ? string::f("H%02d", module->core.headChannelStart + 1) : "H01";
 		std::string sliders = module ? string::f("S%02d", module->core.sliderChannel + 1) : "S15";
 		nvgFontFaceId(args.vg, font->handle);
-		nvgFontSize(args.vg, 9.f);
+		nvgFontSize(args.vg, 8.f);
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgFillColor(args.vg, nvgRGB(0xc1, 0x3c, 0x36));
-		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.32f, program.c_str(), NULL);
-		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.72f, sliders.c_str(), NULL);
+		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.18f, program.c_str(), NULL);
+		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.50f, heads.c_str(), NULL);
+		nvgText(args.vg, box.size.x / 2.f, box.size.y * 0.82f, sliders.c_str(), NULL);
 	}
 };
 #endif
@@ -366,7 +386,7 @@ struct MidiWidget : ModuleWidget {
 		ch->box.pos = mm2px(Vec(2.7f, 82.0f));
 		ch->box.size = mm2px(Vec(14.9f, 12.0f));
 		addChild(ch);
-		spacetime::addMicroLabel(this, CX, 103.5f, "CH 1-8");
+		spacetime::addMicroLabel(this, CX, 103.5f, "MIDI ROUTING");
 #endif
 
 		addChild(createLightCentered<MediumLight<GreenLight>>(mm2px(Vec(CX - 3.7f, ACT_Y0)), module, Midi::IN_LIGHT));
@@ -398,26 +418,39 @@ struct MidiWidget : ModuleWidget {
 			chLabels,
 			[=]() { return module->core.controlChannel; },
 			[=](int i) {
-				if (i != module->core.sliderChannel &&
-					i != spacetime::kFeedbackProtocolChannel)
+				if (i != module->core.sliderChannel) {
 					module->core.controlChannel = i;
+					module->core.normalizeChannels();
+				}
 			}));
 		menu->addChild(createIndexSubmenuItem("Stage sliders channel",
 			chLabels,
 			[=]() { return module->core.sliderChannel; },
 			[=](int i) {
-				if (i != module->core.controlChannel &&
-					i != spacetime::kFeedbackProtocolChannel)
+				if (i != module->core.controlChannel && !module->core.isHeadChannel(i)) {
 					module->core.sliderChannel = i;
+					module->core.normalizeChannels();
+				}
+			}));
+		menu->addChild(createIndexSubmenuItem("HEAD channel start",
+			chLabels,
+			[=]() { return module->core.headChannelStart; },
+			[=](int i) {
+				if (i <= module->core.maxHeadChannelStart()) {
+					module->core.headChannelStart = i;
+					module->core.normalizeChannels();
+				}
 			}));
 		menu->addChild(createBoolPtrMenuItem("Move stage sliders with CC", "",
 			&module->core.moveStageSliders));
 
-		menu->addChild(createMenuLabel("HEAD channels fixed: 1-8"));
-		menu->addChild(createMenuLabel("HEAD ALL channel fixed: 9 (CC 0-12)"));
-		menu->addChild(createMenuLabel("Feedback requests fixed: channel 10"));
-		menu->addChild(createMenuLabel("PROGRAM and stage channels must differ"));
-		menu->addChild(createMenuLabel("CC maps fixed; no base offset"));
+		menu->addChild(createMenuLabel(string::f("HEAD range: %d-%d (%d active)",
+			module->core.headChannelStart + 1,
+			module->core.headChannelStart + module->core.activeHeadCount,
+			module->core.activeHeadCount)));
+		menu->addChild(createMenuLabel("PROGRAM may share a channel with a HEAD"));
+		menu->addChild(createMenuLabel("Stage channel must differ from PROGRAM and HEADs"));
+		menu->addChild(createMenuLabel("All channel values are MIDI 1-16"));
 		if (module->core.lastStatus >= 0) {
 			std::string last = module->core.lastChannel >= 0 ?
 				string::f("Last: ch %d, %s %d, value %d -> %s",

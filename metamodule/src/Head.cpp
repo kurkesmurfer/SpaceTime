@@ -86,6 +86,7 @@ struct SpaceTimeHead : Module {
 		DISPLAY_PARAM,
 		INSTRUMENT_PARAM,
 		HEAD_PARAM,
+		TIME_MULT_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -118,6 +119,7 @@ struct SpaceTimeHead : Module {
 		RUN_LIGHT,
 		HOLD_LIGHT,
 		STOPPED_LIGHT,
+		ENUMS(HEADID_LIGHT, 3),
 		LINK_LIGHT,
 		LIGHTS_LEN
 	};
@@ -156,12 +158,14 @@ struct SpaceTimeHead : Module {
 	float shadowClkSource = 0.f;
 	float shadowClkDiv = 4.f;
 	float shadowTimeCv = 0.f;
+	float shadowTimeMultiplier = 0.5f;
 	float shadowLoop = 1.f;
 
 	SpaceTimeHead() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(INSTRUMENT_PARAM, 0.f, 15.f, 0.f, "Instrument ID", "", 0.f, 1.f, 1.f)->snapEnabled = true;
 		configParam(HEAD_PARAM, 0.f, 7.f, 0.f, "Head index", "", 0.f, 1.f, 1.f)->snapEnabled = true;
+		configParam(TIME_MULT_PARAM, 0.f, 1.f, 0.5f, "Time multiplier", "x");
 		configButton(START_PARAM, "Start");
 		configButton(STOP_PARAM, "Stop");
 		configButton(ADVANCE_PARAM, "Advance (force next stage)");
@@ -200,6 +204,7 @@ struct SpaceTimeHead : Module {
 		configLight(RUN_LIGHT, "Run");
 		configLight(HOLD_LIGHT, "Hold (Sustain/Enable waiting)");
 		configLight(STOPPED_LIGHT, "Stopped");
+		configLight(HEADID_LIGHT, "Head index colour (lit while linked)");
 		configLight(LINK_LIGHT, "Linked to Core, no conflicts");
 		controlDivider.setDivision(16);
 		ownsHead = headRegistry.registerHead(instrumentId, headIndex, busToken);
@@ -247,8 +252,15 @@ struct SpaceTimeHead : Module {
 		lights[RUN_LIGHT].setBrightnessSmooth(out.runState == spacetime::RUN_RUNNING ? 1.f : 0.f, args.sampleTime);
 		lights[HOLD_LIGHT].setBrightnessSmooth(out.runState == spacetime::RUN_HOLDING ? 1.f : 0.f, args.sampleTime);
 		lights[STOPPED_LIGHT].setBrightnessSmooth(out.runState == spacetime::RUN_STOPPED ? 1.f : 0.f, args.sampleTime);
-		lights[LINK_LIGHT].setBrightnessSmooth(
-			coreLink == CoreLink::Linked && !headConflict ? 1.f : 0.f, args.sampleTime);
+		float headBrightness = coreLink == CoreLink::Linked && !headConflict ? 1.f : 0.f;
+		static const float headColors[8][3] = {
+			{1.f, 0.12f, 0.10f}, {0.15f, 0.90f, 0.15f}, {0.15f, 0.35f, 1.f},
+			{1.f, 0.55f, 0.08f}, {0.95f, 0.15f, 0.9f}, {0.08f, 0.85f, 0.85f},
+			{0.95f, 0.85f, 0.12f}, {0.85f, 0.85f, 0.85f}
+		};
+		for (int c = 0; c < 3; c++)
+			lights[HEADID_LIGHT + c].setBrightnessSmooth(headColors[headIndex][c] * headBrightness, args.sampleTime);
+		lights[LINK_LIGHT].setBrightnessSmooth(headBrightness, args.sampleTime);
 	}
 
 	void processControl(float dt) {
@@ -292,6 +304,7 @@ struct SpaceTimeHead : Module {
 		mirrorClockSource();
 		mirrorDiscrete(CLK_DIV_PARAM, cfg.clkDivIndex, shadowClkDiv, 8);
 		mirrorContinuous(TIMECV_PARAM, cfg.timeCvAmount, shadowTimeCv);
+		mirrorTimeMultiplier(cfg.timeMultiplier);
 		mirrorDiscrete(LOOP_PARAM, cfg.loopMode, shadowLoop, 2);
 
 		// Claiming stays at control rate. The audio-rate process publishes the
@@ -318,6 +331,21 @@ struct SpaceTimeHead : Module {
 			if (knob != shadow) {
 				target = knob;
 				shadow = knob;
+			}
+		}
+	}
+
+	void mirrorTimeMultiplier(float& target) {
+		float factorAtShadow = spacetime::timeMultiplierFromControl(shadowTimeMultiplier);
+		if (target != factorAtShadow) {
+			float control = spacetime::timeMultiplierControlFromFactor(target);
+			params[TIME_MULT_PARAM].setValue(control);
+			shadowTimeMultiplier = control;
+		} else {
+			float control = params[TIME_MULT_PARAM].getValue();
+			if (control != shadowTimeMultiplier) {
+				target = spacetime::timeMultiplierFromControl(control);
+				shadowTimeMultiplier = control;
 			}
 		}
 	}
@@ -390,6 +418,7 @@ struct SpaceTimeHead : Module {
 		// different head.
 		shadowAddress = shadowAddrSource = shadowDirection = shadowClkSource =
 			shadowClkDiv = shadowTimeCv = shadowLoop = shadowAddrContinuous = -1000.f;
+		shadowTimeMultiplier = -1000.f;
 	}
 
 	// Every field except followMidiTransport is now a real Param (Rack
@@ -428,10 +457,10 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 		for (int i = 0; i < 4; i++)
 			addParam(createParamCentered<LEDButton>(mm2px(Vec(bx + i * pitch, 21.5f)), module,
 				SpaceTimeHead::START_PARAM + i));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(16.4f, 30.5f)), module, SpaceTimeHead::RUN_LIGHT));
-		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(24.4f, 30.5f)), module, SpaceTimeHead::HOLD_LIGHT));
-		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(32.4f, 30.5f)), module, SpaceTimeHead::STOPPED_LIGHT));
-		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(41.f, 30.5f)), module, SpaceTimeHead::LINK_LIGHT));
+		addChild(createLightCentered<SmallLight<GreenLight>>(mm2px(Vec(9.4f, 30.5f)), module, SpaceTimeHead::RUN_LIGHT));
+		addChild(createLightCentered<SmallLight<YellowLight>>(mm2px(Vec(17.4f, 30.5f)), module, SpaceTimeHead::HOLD_LIGHT));
+		addChild(createLightCentered<SmallLight<RedLight>>(mm2px(Vec(25.4f, 30.5f)), module, SpaceTimeHead::STOPPED_LIGHT));
+		addChild(createLightCentered<SmallLight<RedGreenBlueLight>>(mm2px(Vec(33.4f, 30.5f)), module, SpaceTimeHead::HEADID_LIGHT));
 
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(10.f, 45.f)), module, SpaceTimeHead::ADDRESS_PARAM));
 		addParam(createParamCentered<CKSS>(mm2px(Vec(25.4f, 45.f)), module, SpaceTimeHead::ADDR_SOURCE_PARAM));
@@ -442,7 +471,8 @@ struct SpaceTimeHeadWidget : ModuleWidget {
 		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(41.f, 64.5f)), module, SpaceTimeHead::CLK_DIV_PARAM));
 		addParam(createParamCentered<Trimpot>(mm2px(Vec(10.f, 78.f)), module, SpaceTimeHead::TIMECV_PARAM));
 		addParam(createParamCentered<CKSSThree>(mm2px(Vec(25.4f, 78.f)), module, SpaceTimeHead::LOOP_PARAM));
-		addParam(createParamCentered<LEDButton>(mm2px(Vec(41.f, 78.f)), module, SpaceTimeHead::DISPLAY_PARAM));
+		addParam(createParamCentered<LEDButton>(mm2px(Vec(42.4f, 30.5f)), module, SpaceTimeHead::DISPLAY_PARAM));
+		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(Vec(41.f, 78.f)), module, SpaceTimeHead::TIME_MULT_PARAM));
 
 		static const int inputIds[8] = {
 			SpaceTimeHead::START_INPUT, SpaceTimeHead::STOP_INPUT,

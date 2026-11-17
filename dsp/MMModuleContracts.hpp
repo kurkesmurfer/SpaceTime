@@ -60,6 +60,7 @@ struct MMProgramContract {
 		TRANGE_SELECTOR_PARAM,
 		// 1:1 up button (new, appended).
 		STAGE_STEP_UP_PARAM,
+		PULSE_TIME_PARAM,
 		PARAMS_LEN
 	};
 
@@ -110,6 +111,7 @@ struct MMHeadContract {
 		CLK_DIV_PARAM,
 		TIMECV_PARAM,
 		LOOP_PARAM,
+		TIME_MULT_PARAM,
 		PARAMS_LEN
 	};
 

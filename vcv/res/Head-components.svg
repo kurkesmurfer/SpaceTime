@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PanelGenerator components layer for "Head".
+     helper.py createmodule Head <this file> <YourModule.cpp>
+     Positions only; the panel artwork is in the companion SVG. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="60.96mm" height="128.69mm" viewBox="0 0 180.00 380.00">
+<g id="components">
+<circle cx="32.72" cy="58.11" r="9.00" fill="#ff0000" data-name="START#VCVButton"/>
+<circle cx="71.70" cy="58.11" r="9.00" fill="#ff0000" data-name="STOP#VCVButton"/>
+<circle cx="110.67" cy="58.11" r="9.00" fill="#ff0000" data-name="ADVANCE#VCVButton"/>
+<circle cx="149.65" cy="58.11" r="9.00" fill="#ff0000" data-name="RESET#VCVButton"/>
+<circle cx="32.59" cy="81.31" r="4.69" fill="#ff00ff" data-name="RUN#MediumLight&lt;GreenLight&gt;"/>
+<circle cx="61.79" cy="81.31" r="4.69" fill="#ff00ff" data-name="HOLD#MediumLight&lt;YellowLight&gt;"/>
+<circle cx="91.00" cy="81.31" r="4.69" fill="#ff00ff" data-name="STOPPED#MediumLight&lt;RedLight&gt;"/>
+<circle cx="120.20" cy="81.31" r="4.69" fill="#ff00ff" data-name="HEADID#MediumLight&lt;RedGreenBlueLight&gt;"/>
+<circle cx="149.41" cy="82.00" r="4.00" fill="#ff0000" data-name="DISPLAY#LEDButton"/>
+<circle cx="149.41" cy="81.31" r="4.69" fill="#ff00ff" data-name="DISPLAY#MediumLight&lt;RedLight&gt;"/>
+<circle cx="134.38" cy="123.86" r="7.38" fill="#ff0000" data-name="ADDR_CONTINUOUS#headui::LatchSpringToggle"/>
+<circle cx="35.09" cy="132.59" r="14.17" fill="#ff0000" data-name="ADDRESS#RoundBlackKnob"/>
+<circle cx="89.65" cy="132.59" r="7.00" fill="#ff0000" data-name="ADDR_SOURCE#CKSS"/>
+<circle cx="134.73" cy="141.86" r="7.38" fill="#ff0000" data-name="ADDR_STROBE#headui::DualSpringButton"/>
+<circle cx="35.43" cy="181.17" r="14.17" fill="#ff0000" data-name="DIRECTION#RoundBlackKnob"/>
+<circle cx="145.16" cy="181.17" r="14.17" fill="#ff0000" data-name="CLK_DIV#RoundBlackKnob"/>
+<circle cx="90.00" cy="190.45" r="7.38" fill="#ff0000" data-name="CLK_SOURCE#headui::Switch4"/>
+<circle cx="35.43" cy="223.43" r="8.93" fill="#ff0000" data-name="TIMECV#Trimpot"/>
+<circle cx="146.48" cy="221.32" r="14.17" fill="#ff0000" data-name="TIME_MULT#RoundBlackKnob"/>
+<circle cx="90.00" cy="230.31" r="6.73" fill="#ff0000" data-name="LOOP#CKSSThree"/>
+<circle cx="24.04" cy="271.48" r="10.83" fill="#00ff00" data-name="START#PJ301MPort"/>
+<circle cx="56.93" cy="271.48" r="10.83" fill="#00ff00" data-name="STOP#PJ301MPort"/>
+<circle cx="89.83" cy="271.48" r="10.83" fill="#00ff00" data-name="ADVANCE#PJ301MPort"/>
+<circle cx="122.72" cy="271.48" r="10.83" fill="#00ff00" data-name="STROBE#PJ301MPort"/>
+<circle cx="155.61" cy="271.48" r="10.83" fill="#00ff00" data-name="ADDRESS#PJ301MPort"/>
+<circle cx="24.04" cy="308.78" r="10.83" fill="#00ff00" data-name="CLK#PJ301MPort"/>
+<circle cx="56.93" cy="308.78" r="10.83" fill="#00ff00" data-name="TIMECV#PJ301MPort"/>
+<circle cx="89.83" cy="308.78" r="10.83" fill="#00ff00" data-name="RESET#PJ301MPort"/>
+<circle cx="122.72" cy="308.78" r="10.83" fill="#0000ff" data-name="CV#PJ301MPort"/>
+<circle cx="155.61" cy="308.78" r="10.83" fill="#0000ff" data-name="TIME#PJ301MPort"/>
+<circle cx="24.04" cy="339.54" r="10.83" fill="#0000ff" data-name="REF#PJ301MPort"/>
+<circle cx="56.93" cy="339.54" r="10.83" fill="#0000ff" data-name="ALL#PJ301MPort"/>
+<circle cx="89.83" cy="339.54" r="10.83" fill="#0000ff" data-name="PULSE1#PJ301MPort"/>
+<circle cx="122.72" cy="339.54" r="10.83" fill="#0000ff" data-name="PULSE2#PJ301MPort"/>
+<circle cx="155.61" cy="339.54" r="10.83" fill="#0000ff" data-name="EOC#PJ301MPort"/>
+</g>
+</svg>

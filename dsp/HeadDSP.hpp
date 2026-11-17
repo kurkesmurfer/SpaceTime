@@ -63,12 +63,11 @@ enum LoopMode {
 
 static const float kGateThreshold = 1.f;     // start/stop/advance/strobe gates
 static const float kEnableThreshold = 5.f;   // enable: START > 5 V (manual)
-static const float kTrigDuration = 1e-3f;    // ALL/EOC trigger length, seconds
+static const float kDefaultPulseTime = 1e-3f; // ALL/EOC default and P1/P2 gap, seconds
 static const float kMinInterval = 1e-4f;     // clamp for interval time
 // Hardware-verified (Peet, 2026-07-11): P1/P2 RETRIGGER per stage — between
-// two consecutive flagged stages the gate drops for a short notch so every
-// stage produces a fresh edge. Notch length is hardware-observable.
-static const float kPulseRetrig = 1e-3f;
+// two consecutive flagged stages the gate drops for a short configurable
+// notch so every stage can produce a fresh edge.
 // VCV extension: a head on EXT clock with no incoming edges is starving, not
 // fine — show HOLD (yellow) after this long without an edge (or 4x the last
 // measured period, whichever is longer) instead of a misleading green.
@@ -120,12 +119,13 @@ struct HeadConfig {          // panel controls
 	uint8_t clockSource;     // 0 Internal, 1 External, 2 MIDI, 3 Virtual
 	uint8_t clkDivIndex;     // 0..8 -> /16 /8 /4 /2 x1 x2 x4 x8 x16 (4 = x1)
 	float timeCvAmount;      // -1..1 attenuverter
+	float timeMultiplier;    // 0.5..4, unity at 1
 	uint8_t loopMode;        // LoopMode
 
 	HeadConfig()
 		: continuous(false), addrExt(false), addressKnob(0.f),
 		  direction(DIR_FORWARD), clkExt(false), clockSource(0), clkDivIndex(4),
-		  timeCvAmount(0.f), loopMode(LOOP_FIRST_LAST) {}
+		  timeCvAmount(0.f), timeMultiplier(1.f), loopMode(LOOP_FIRST_LAST) {}
 };
 
 struct HeadSignals {         // jack/button inputs, volts
@@ -184,11 +184,13 @@ public:
 		edgeCount_ = 0;
 		clockStage_ = -1;
 		clockDivision_ = 0xFF;
+		clockHeadDivision_ = 0xFF;
 		clockSync_ = false;
 		allTimer_ = eocTimer_ = 0.f;
 		retrig1_ = retrig2_ = 0.f;
 		prevContStage_ = -1;
 		pulseRetrigEnabled_ = true;
+		pulseTime_ = kDefaultPulseTime;
 	}
 
 	// One control tick of dt seconds.
@@ -201,6 +203,7 @@ public:
 		retrig1_ = std::fmax(0.f, retrig1_ - dt);
 		retrig2_ = std::fmax(0.f, retrig2_ - dt);
 		pulseRetrigEnabled_ = g.pulseRetrig;
+		pulseTime_ = std::fmax(0.0001f, std::fmin(0.015f, g.pulseTime));
 		if (!pulseRetrigEnabled_)
 			retrig1_ = retrig2_ = 0.f;
 
@@ -362,11 +365,13 @@ private:
 	int edgeCount_;
 	int clockStage_;
 	uint8_t clockDivision_;
+	uint8_t clockHeadDivision_;
 	bool clockSync_;
 	float allTimer_, eocTimer_;
 	float retrig1_, retrig2_;
 	int prevContStage_;
 	bool pulseRetrigEnabled_;
+	float pulseTime_;
 
 	static bool edge(bool now, bool& prev) {
 		bool e = now && !prev;
@@ -381,8 +386,8 @@ private:
 		return rng_;
 	}
 
-	void fireAll() { allTimer_ = kTrigDuration; }
-	void fireEoc() { eocTimer_ = kTrigDuration; }
+	void fireAll() { allTimer_ = pulseTime_; }
+	void fireEoc() { eocTimer_ = pulseTime_; }
 
 	// REGIONAL bounds (hardware, cf. multiple First/Last pairs): the cycle is
 	// bounded by the First at/below and the Last at/above the head's CURRENT
@@ -433,9 +438,9 @@ private:
 		if (oldStage < 0 || oldStage >= t.count || newStage < 0 || newStage >= t.count)
 			return;
 		if (t.program[oldStage].pulse1() && t.program[newStage].pulse1())
-			retrig1_ = kPulseRetrig;
+			retrig1_ = pulseTime_;
 		if (t.program[oldStage].pulse2() && t.program[newStage].pulse2())
-			retrig2_ = kPulseRetrig;
+			retrig2_ = pulseTime_;
 	}
 
 	void enterStage(const StageTable& t, int s) {
@@ -558,12 +563,14 @@ private:
 		subTimer_ += dt;
 		const ProgramWord& word = t.program[stage_];
 		bool stageSync = word.timeSync();
-		int idx = stageSync ? (int)timeDivisionIndex(t.time[stage_])
-			: (cfg.clkDivIndex <= 8 ? cfg.clkDivIndex : 4);
-		if (clockStage_ != stage_ || clockSync_ != stageSync || clockDivision_ != idx) {
+		int idx = stageSync ? (int)timeDivisionIndex(t.time[stage_]) : 4;
+		int headIdx = cfg.clkDivIndex <= 8 ? cfg.clkDivIndex : 4;
+		if (clockStage_ != stage_ || clockSync_ != stageSync || clockDivision_ != idx ||
+		    clockHeadDivision_ != headIdx) {
 			clockStage_ = stage_;
 			clockSync_ = stageSync;
 			clockDivision_ = (uint8_t)idx;
+			clockHeadDivision_ = (uint8_t)headIdx;
 			edgeCount_ = 0;
 			subTimer_ = 0.f;
 		}
@@ -571,13 +578,20 @@ private:
 			clockPeriod_ = clockTimer_;
 			clockTimer_ = 0.f;
 		}
-		if (stageSync) {
-			static const float quarterNotes[9] = {
-				16.f, 8.f, 4.f, 2.f, 1.f, 0.5f, 0.25f, 0.125f, 0.0625f
-			};
-			float sourcePulsesPerQuarter = cfg.clockSource == 2 ? 24.f : 1.f;
-			float pulses = quarterNotes[idx] * sourcePulsesPerQuarter;
-			if (pulses >= 1.f && pulses == std::floor(pulses)) {
+		static const float quarterNotes[9] = {
+			16.f, 8.f, 4.f, 2.f, 1.f, 0.5f, 0.25f, 0.125f, 0.0625f
+		};
+		float sourcePulsesPerQuarter = cfg.clockSource == 2 ? 24.f : 1.f;
+		float pulses;
+		if (stageSync)
+			pulses = quarterNotes[headIdx] * quarterNotes[idx] * sourcePulsesPerQuarter;
+		else if (headIdx <= 4)
+			pulses = (float)(1 << (4 - headIdx));
+		else
+			pulses = 1.f / (float)(1 << (headIdx - 4));
+		float multiplier = clampTimeMultiplier(cfg.timeMultiplier);
+		float duration = clockPeriod_ * pulses * multiplier;
+		if (stageSync && multiplier == 1.f && pulses >= 1.f && pulses == std::floor(pulses)) {
 				if (clockEdge && ++edgeCount_ >= (int)pulses) {
 					edgeCount_ = 0;
 					endOfStage(t, in, cfg.direction, cfg.loopMode);
@@ -586,49 +600,33 @@ private:
 				if (clockPeriod_ > 0.f)
 					phase_ = std::fmin(1.f, ((float)edgeCount_ * clockPeriod_ + clockTimer_) /
 						(pulses * clockPeriod_));
+		}
+		else if (duration > 0.f && !stageSync && multiplier == 1.f) {
+			if (headIdx <= 4) {
+				int divide = 1 << (4 - headIdx);
+				if (clockEdge && ++edgeCount_ >= divide) {
+					edgeCount_ = 0;
+					endOfStage(t, in, cfg.direction, cfg.loopMode);
+					phase_ = 0.f;
+				}
+				phase_ = std::fmin(1.f, ((float)edgeCount_ * clockPeriod_ + clockTimer_) / duration);
+			} else {
+				if (clockEdge) {
+					subTimer_ = 0.f;
+					endOfStage(t, in, cfg.direction, cfg.loopMode);
+					phase_ = 0.f;
+				} else {
+					phase_ = std::fmin(1.f, subTimer_ / duration);
+				}
 			}
-			else if (clockPeriod_ > 0.f) {
-				float duration = pulses * clockPeriod_;
+		}
+		else if (duration > 0.f) {
 				int guard = 0;
 				while (subTimer_ >= duration && running_ && !holding_ && guard++ <= 256) {
 					subTimer_ -= duration;
 					endOfStage(t, in, cfg.direction, cfg.loopMode);
 				}
 				phase_ = std::fmin(1.f, subTimer_ / duration);
-			}
-			return;
-		}
-		if (idx <= 4) {
-			int divide = 1 << (4 - idx);  // 16,8,4,2,1
-			if (clockEdge) {
-				if (++edgeCount_ >= divide) {
-					edgeCount_ = 0;
-					endOfStage(t, in, cfg.direction, cfg.loopMode);
-					phase_ = 0.f;
-				}
-			}
-			if (clockPeriod_ > 0.f) {
-				float total = (float)divide * clockPeriod_;
-				phase_ = std::fmin(1.f,
-					((float)edgeCount_ * clockPeriod_ + clockTimer_) / total);
-			}
-		}
-		else {
-			int mult = 1 << (idx - 4);  // 2,4,8,16
-			if (clockEdge) {
-				subTimer_ = 0.f;
-				endOfStage(t, in, cfg.direction, cfg.loopMode);
-				phase_ = 0.f;
-			}
-			else if (clockPeriod_ > 0.f) {
-				float sub = clockPeriod_ / (float)mult;
-				int guard = 0;
-				while (subTimer_ >= sub && running_ && !holding_ && guard++ <= mult) {
-					subTimer_ -= sub;
-					endOfStage(t, in, cfg.direction, cfg.loopMode);
-				}
-				phase_ = std::fmin(1.f, subTimer_ / sub);
-			}
 		}
 	}
 
@@ -657,10 +655,15 @@ private:
 		}
 		if (!cfg.clkExt && w.timeSync())
 			T *= timeDivisionFactor(timeDivisionIndex(t.time[s]));
+		T *= clampTimeMultiplier(cfg.timeMultiplier);
 		// Head-level time CV: exponential; +2.5 V at amount 1 halves the time.
 		if (cfg.timeCvAmount != 0.f && in.timeCv != 0.f)
 			T *= std::exp2(-(in.timeCv * cfg.timeCvAmount) / 2.5f);
 		return T < kMinInterval ? kMinInterval : T;
+	}
+
+	static float clampTimeMultiplier(float value) {
+		return value < 0.5f ? 0.5f : (value > 4.f ? 4.f : value);
 	}
 
 	// Stage voltage after the voltage modifiers (before slew).

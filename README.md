@@ -61,10 +61,26 @@ preview package with the same version number.
 | **PROGRAM** | 18 | The programming section: stage select, voltage/time/mode modifiers, pulses, Clear, presets + key/scale, external inputs A–D, poly output |
 | **STAGE4** | 10 | Four stages: voltage slider, time slider, LED cluster. Chain up to 16 blocks (4–64 stages) |
 | **STAGE TIME** | 10 | Selects Free or Sync timing for the PROGRAM-selected stage; the STAGE4 time slider chooses its note division |
-| **HEAD** | 10 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
+| **HEAD** | 12 | One function generator: transport, addressing, direction, clocking, full output complement. Chain up to 8 |
 | **HEAD ALL** | 10 | Common transport, playback modes and normalled CV inputs for every connected HEAD |
-| **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM |
+| **MIDI** | 4 | Transparent controller/MIDI gateway between HEAD and PROGRAM; configurable HEAD start, PROGRAM, and Stage MIDI channels |
 | **GLUE RIGHT / LEFT** | 2 each | Paired SpaceTime-only virtual expander bridge for separating chain fragments |
+
+### MIDI routing
+
+The MIDI module defaults to HEAD channels 1-8, Stage channel 15, and PROGRAM
+channel 16. Its context menu sets a contiguous **HEAD channel start** for the
+instance, alongside the PROGRAM and Stage channels. PROGRAM may share a channel
+with one of its own Heads; Stage must use a distinct channel. The menu keeps
+all active Heads within channels 1-16. For example, a two-Head instance can use
+Head channels 13-14, PROGRAM channel 13, and Stage channel 12. For multiple
+instances, assign each a unique Head range, PROGRAM route, and Stage route.
+Each Head's MIDI output mode, channel, note gate source, and CC number are
+configured in its **HEAD N output** submenu on the MIDI module. HEAD ALL uses
+PROGRAM-channel CC 32-44, and feedback follows each configured route. Pulse
+Time uses PROGRAM CC 93 and is reported at CC 113. The development feedback
+probe responds on CC 117 with version byte 2; the first release version byte
+is still to be chosen.
 
 Placement: `[HEAD ALL][HEAD]…[HEAD][PROGRAM][STAGE4]…[STAGE4]`, all touching — a gap or
 foreign module ends the chain on that side. Stage numbering runs
@@ -161,10 +177,14 @@ stage's **time slider selects the input**, and an unpatched input gives the
 fastest value of the range.
 
 **Pulses.** PULSE 1/2 add a gate on the stage, high for the stage's full
-interval. PROGRAM's PULSE RETRIG switch defaults to a short low-going notch
-between consecutive flagged stages, so each stage produces a fresh edge
-(hardware-verified). Switch it off to merge adjacent pulse stages into one
-continuous gate.
+interval. PROGRAM's PULSE RETRIG switch enables a low-going notch between
+consecutive flagged stages, so each stage can produce a fresh edge
+(hardware-verified). Its TIME control sets that notch and the high pulse
+lengths of ALL and EOC together: 0.1 ms at minimum, 1 ms at midpoint, and
+15 ms at maximum. At the default midpoint, all three event durations remain
+1 ms. Pulse Time is also available at PROGRAM-channel MIDI CC 93 and feedback
+CC 113. Switch retrigger off to merge adjacent Pulse 1/2 stages into one
+continuous gate; ALL and EOC keep using the selected high-pulse length.
 
 **Presets, key, scale.** LOAD or SAVE, then a numbered button (12 slots,
 stored in the patch). KEY then 1–12 selects C…B; SCALE then 10/11/12 selects
@@ -220,8 +240,12 @@ by the region containing the head.
 
 **Playback extensions (not on the hardware):** DIRECTION
 (forward/reverse/pendulum/random/brownian), clock source INT/EXT/MIDI/VIRTUAL with
-/16…×16 DIV/MULT, TIME CV attenuverter scaling all stage times, and a loop
-lever: ALL (full chain) / F-L (obey First/Last) / 1-SHOT.
+/16…×16 DIV/MULT, TIME CV attenuverter scaling all stage times, a continuous
+per-Head TIME MULT control (×0.5 to ×4, with ×1 at center), and a loop lever:
+ALL (full chain) / F-L (obey First/Last) / 1-SHOT. With EXT/MIDI/VIRTUAL clock
+and stage SYNC, DIV/MULT selects the base clock rate and the stage note division
+scales it; TIME MULT then scales the resulting interval. In Internal mode it
+scales the slider-derived interval after the selected stage division.
 After a 1-SHOT run completes and parks on its final stage, the next START
 returns to the region's First stage and begins a fresh pass.
 
@@ -253,11 +277,11 @@ jack overrides the common signal for that HEAD. The common STROBE input and
 momentary address lever strobe every HEAD. HEAD ALL may sit across a correctly
 paired HEAD-side GLUE link and must remain the far-left terminal.
 
-MIDI channel 9 addresses all HEADs directly through the MIDI module, whether
-or not HEAD ALL is installed. When HEAD ALL is present, persistent channel-9
-controls also move its panel controls so the common state remains visible. It
-reuses HEAD CC 0-12. CC 13 Display is excluded because SpaceTime Display
-ownership is intentionally exclusive.
+The configurable HEAD channel range addresses individual HEADs. PROGRAM-channel
+CC 32-44 addresses all HEADs directly, whether or not HEAD ALL is installed.
+When HEAD ALL is present, persistent controls also move its panel controls so
+the common state remains visible. CC 45 (HEAD Display) is ignored because
+SpaceTime Display ownership is intentionally exclusive.
 
 ## Deviations from the hardware
 
@@ -266,12 +290,12 @@ per-HEAD Reset inputs; optional HEAD ALL common control;
 direction modes; external clock with div/mult; per-head TIME CV; loop mode
 selection; EOC output; POLY OUT; presets stored per patch; DISP is latching
 instead of momentary; bulk edit via context menu. Dropped: ART outputs and
-auto-tune (259t-specific), time multiplier knob (TIME CV covers it).
+auto-tune (259t-specific).
 Scaling is 1 V/oct (originals used 2.4 V/oct; the 248t already converts).
 Undocumented behaviours pending hardware measurement are named constants:
 slew fractions (menu), continuous-mode interpolation (off), pendulum
-endpoint repeat (off), limited-range octave offsets (−2…+2 assumed), pulse
-retrigger notch length (1 ms).
+endpoint repeat (off), limited-range octave offsets (−2…+2 assumed). Pulse
+event and retrigger timing is adjustable from 0.1–15 ms, with 1 ms at midpoint.
 
 ## Licence and credits
 
