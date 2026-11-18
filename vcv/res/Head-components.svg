@@ -2,7 +2,7 @@
 <!-- PanelGenerator components layer for "Head".
      helper.py createmodule Head <this file> <YourModule.cpp>
      Positions only; the panel artwork is in the companion SVG. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="60.96mm" height="128.69mm" viewBox="0 0 180.00 380.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="60.96mm" height="128.5mm" viewBox="0 0 180.00 380.00">
 <g id="components">
 <circle cx="32.72" cy="58.11" r="9.00" fill="#ff0000" data-name="START#VCVButton"/>
 <circle cx="71.70" cy="58.11" r="9.00" fill="#ff0000" data-name="STOP#VCVButton"/>
